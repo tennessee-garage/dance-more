@@ -706,13 +706,13 @@
 		(descr "DBZ")
 		(tags "Power Supply")
 		(property "Reference" "PS1"
-			(at 2.855 -0.1 90)
+			(at 2.655 -0.1 90)
 			(layer "F.SilkS")
 			(uuid "7e1d8315-1460-40a8-a3d8-3eeb0391643e")
 			(effects
 				(font
-					(size 1.27 1.27)
-					(thickness 0.254)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -962,13 +962,13 @@
 			(uuid "22bf75ad-84e5-4e24-b329-05742743f1b3")
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
+			(at -1.2 0 0)
 			(layer "F.Fab")
 			(uuid "b4a75f39-5240-44af-b640-8cac68a4f72b")
 			(effects
 				(font
-					(size 1.27 1.27)
-					(thickness 0.254)
+					(size 0.5 0.5)
+					(thickness 0.08)
 				)
 			)
 		)
@@ -5181,7 +5181,7 @@
 		)
 		(polygon
 			(pts
-				(xy 157.8 84.2) (xy 157.8 87.58) (xy 157.8 87.58) (xy 155.875 87.58) (xy 155.875 84.2)
+				(xy 157.8 84.2) (xy 157.8 87.58) (xy 155.875 87.58) (xy 155.875 84.2)
 			)
 		)
 		(filled_polygon
@@ -5212,7 +5212,7 @@
 		)
 		(polygon
 			(pts
-				(xy 155.875 79.62) (xy 155.875 83.2) (xy 157.755 83.2) (xy 157.755 83.2) (xy 157.755 79.62)
+				(xy 155.875 79.62) (xy 155.875 83.2) (xy 157.755 83.2) (xy 157.755 79.62)
 			)
 		)
 		(filled_polygon
@@ -5256,8 +5256,7 @@
 		)
 		(polygon
 			(pts
-				(xy 159.635 79.62) (xy 159.635 87.58) (xy 158.016252 87.58) (xy 158.016252 87.58) (xy 158.016252 79.62)
-				(xy 158.016252 79.62)
+				(xy 159.635 79.62) (xy 159.635 87.58) (xy 158.016252 87.58) (xy 158.016252 79.62)
 			)
 		)
 		(filled_polygon
