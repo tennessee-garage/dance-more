@@ -10,6 +10,7 @@ from moderngl_window import geometry
 import numpy as np
 from pathlib import Path
 import sys
+from PIL import Image, ImageDraw, ImageFont
 
 # Setup logging to file
 logfile = open('/tmp/simulator_debug.log', 'w')
@@ -264,16 +265,19 @@ class AcrylicSimulator(mglw.WindowConfig):
     
     def setup_ui(self):
         """Setup 2D UI rendering for sliders and text"""
-        # Create 2D shader for rectangles
+        # Create 2D shader for rectangles and text
         ui_vertex = """
             #version 330
             in vec2 in_position;
             in vec4 in_color;
+            in vec2 in_uv;
             out vec4 v_color;
+            out vec2 v_uv;
             uniform mat4 m_proj;
             
             void main() {
                 v_color = in_color;
+                v_uv = in_uv;
                 gl_Position = m_proj * vec4(in_position, 0.0, 1.0);
             }
         """
@@ -281,10 +285,17 @@ class AcrylicSimulator(mglw.WindowConfig):
         ui_fragment = """
             #version 330
             in vec4 v_color;
+            in vec2 v_uv;
             out vec4 fragColor;
+            uniform sampler2D tex;
+            uniform int use_texture;
             
             void main() {
-                fragColor = v_color;
+                if (use_texture == 1) {
+                    fragColor = texture(tex, v_uv) * v_color;
+                } else {
+                    fragColor = v_color;
+                }
             }
         """
         
@@ -292,6 +303,40 @@ class AcrylicSimulator(mglw.WindowConfig):
             vertex_shader=ui_vertex,
             fragment_shader=ui_fragment
         )
+        
+        # Text texture cache
+        self.text_textures = {}
+    
+    def render_text_texture(self, text, color=(255, 255, 255), bg_color=(0, 0, 0, 0)):
+        """Render text to PIL image and return texture"""
+        # Force regenerate (ignore cache) to pick up font size changes
+        # if text in self.text_textures:
+        #     return self.text_textures[text]
+        
+        # Create image
+        font_size = 24
+        img = Image.new('RGBA', (250, 30), bg_color)
+        draw = ImageDraw.Draw(img)
+        
+        # Try to use a system font, fall back to default
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Menlo.ttc", font_size)
+        except:
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+            except:
+                font = ImageFont.load_default(size=font_size)
+        
+        # Draw text
+        draw.text((5, -2), text, fill=color, font=font)
+        
+        # Convert to texture
+        img_data = np.array(img, dtype='uint8')
+        tex = self.ctx.texture(img.size, 4, img_data.tobytes())
+        tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        
+        self.text_textures[text] = tex
+        return tex
     
     def create_ui_ortho(self, width, height):
         """Create orthographic projection matrix for UI (0,0 at top-left)"""
@@ -338,7 +383,7 @@ class AcrylicSimulator(mglw.WindowConfig):
         margin = 20
         bar_width = 200
         bar_height = 20
-        bar_spacing = 45
+        bar_spacing = 50  # Increased from 45 for better spacing
         start_y = margin
         
         # Define parameters to display with colors
@@ -350,7 +395,7 @@ class AcrylicSimulator(mglw.WindowConfig):
         ]
         
         # Calculate bar position
-        label_width = 140
+        label_width = 280
         bar_x = margin + label_width
         
         for i, (label, keys, value, min_val, max_val, bar_color) in enumerate(params_display):
@@ -376,15 +421,61 @@ class AcrylicSimulator(mglw.WindowConfig):
             # Right border
             self.draw_rect(bar_x + bar_width - border_thickness, y, border_thickness, bar_height, border_color)
         
-        # Console output for current values (since text rendering needs more work)
-        if not hasattr(self, '_last_ui_print') or hasattr(self, '_frametime') and self._frametime:
-            # Print once every 30 frames to avoid spam
-            if not hasattr(self, '_frame_counter'):
-                self._frame_counter = 0
-            self._frame_counter += 1
+        # Draw text labels for each slider
+        for i, (label, keys, value, min_val, max_val, bar_color) in enumerate(params_display):
+            y = start_y + i * bar_spacing
             
-            if self._frame_counter % 30 == 0:
-                print(f"\\rLEDs:{self.params['leds_per_side']:2d} Bright:{self.params['led_brightness']:.2f} Haze:{self.params['haziness']:.2f} Scatter:{self.params['scattering_strength']:.2f}  Keys: Q/W A/S Z/X C/V", end='', flush=True)
+            # Label text - positioned left, centered vertically with bar
+            label_text = f"{label} [{keys}]"
+            self.draw_text_overlay(label_text, margin, y - 5, (0.9, 0.9, 0.9, 1.0))
+            
+            # Value text - positioned right of bar, centered vertically
+            if isinstance(value, int):
+                value_text = f"{value}"
+            else:
+                value_text = f"{value:.2f}"
+            self.draw_text_overlay(value_text, bar_x + bar_width + 20, y - 5, (1.0, 1.0, 1.0, 1.0))
+        
+        # Console output for current values
+        if not hasattr(self, '_frame_counter'):
+            self._frame_counter = 0
+        self._frame_counter += 1
+        
+        if self._frame_counter % 30 == 0:
+            print(f"\rLEDs:{self.params['leds_per_side']:2d} Bright:{self.params['led_brightness']:.2f} Haze:{self.params['haziness']:.2f} Scatter:{self.params['scattering_strength']:.2f}", end='', flush=True)
+    
+    def draw_text_overlay(self, text, x, y, color):
+        """Draw text as a textured quad overlay"""
+        # Create text texture
+        tex = self.render_text_texture(text, (int(color[0]*255), int(color[1]*255), int(color[2]*255), int(color[3]*255)))
+        
+        # Draw textured quad - correct UV mapping for PIL-to-OpenGL
+        # PIL top-left = (0,0), OpenGL texture bottom-left = (0,0)
+        # So v=0 at screen top maps to GL bottom = PIL top (correct)
+        width, height = 250, 30
+        vertices = np.array([
+            x, y, 0, 0,
+            x + width, y, 1, 0,
+            x, y + height, 0, 1,
+            x + width, y, 1, 0,
+            x + width, y + height, 1, 1,
+            x, y + height, 0, 1,
+        ], dtype='f4')
+        
+        colors = np.array([color] * 6, dtype='f4')
+        
+        vbo = self.ctx.buffer(vertices.tobytes())
+        vao = self.ctx.vertex_array(
+            self.ui_program,
+            [(vbo, '2f 2f', 'in_position', 'in_uv'), (self.ctx.buffer(colors.tobytes()), '4f', 'in_color')]
+        )
+        
+        self.ui_program['use_texture'].value = 1
+        tex.use()
+        vao.render(moderngl.TRIANGLES)
+        self.ui_program['use_texture'].value = 0
+        vbo.release()
+        vao.release()
         
     def on_render(self, time: float, frametime: float):
         """Main render loop"""
