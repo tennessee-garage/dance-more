@@ -1,0 +1,4 @@
+moderngl>=5.8.0
+moderngl-window>=2.4.0
+numpy>=1.24.0
+PyGLM>=2.7.0
