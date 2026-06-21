@@ -80,11 +80,11 @@
 			(sketchdnponfab yes)
 			(crossoutdnponfab yes)
 			(subtractmaskfromsilk no)
-			(outputformat 1)
+			(outputformat 4)
 			(mirror no)
 			(drillshape 0)
 			(scaleselection 1)
-			(outputdirectory "gerber-1.1a/")
+			(outputdirectory "images/v1.2/")
 		)
 	)
 	(footprint "Package_SO:TSSOP-14_4.4x5mm_P0.65mm"
