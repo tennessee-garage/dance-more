@@ -2612,6 +2612,26 @@
 		)
 		(uuid "fc9d2b14-c801-4de6-b398-ba2e0f6c4d85")
 	)
+	(text "TODO: Add series 330-470ohm \nresistor to LED_Data to \ndampen ringing"
+		(exclude_from_sim no)
+		(at 197.358 52.578 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "0244ddbe-d292-4b77-bf97-192f6e4e36d0")
+	)
+	(text "TODO: Add 1k resistor on both \nSENSE lines for protection"
+		(exclude_from_sim no)
+		(at 145.796 101.092 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "14b49d94-c95b-4896-8bca-285786c06e94")
+	)
 	(text "UPDI Connection"
 		(exclude_from_sim no)
 		(at 146.812 21.59 0)
@@ -2631,6 +2651,16 @@
 			)
 		)
 		(uuid "2c51761e-d114-4271-82b9-d71ecca74b39")
+	)
+	(text "TODO: Add 100-470uF bulk caps"
+		(exclude_from_sim no)
+		(at 250.952 49.022 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "364d9c0c-9511-4b12-87f9-d252bf886d4c")
 	)
 	(text "RS-485 Jack"
 		(exclude_from_sim no)
