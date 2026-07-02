@@ -1,6 +1,1 @@
-#include "command_handler.h"
-
-// Implemented in issue #4.
-const Frame *handle_command(const Frame &, PixelBuffer &, ISenseControl &, uint8_t) {
-    return nullptr;
-}
+// Implementation moved to lib/df2_core/command_handler.cpp
