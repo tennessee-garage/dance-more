@@ -4,6 +4,6 @@
 class TransportAT : public ITransport {
 public:
     void init() override;
-    void poll(FrameParser &parser) override;
+    bool poll(FrameParser &parser, Frame *out) override;
     void send(const Frame &frame) override;
 };
