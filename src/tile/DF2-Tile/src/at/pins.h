@@ -3,16 +3,19 @@
 // These are tentative values from the issue spec — verify against
 // pcb/tile/tile.kicad_sch and update before flashing hardware.
 
+// WS2815 LED data line (800 KHz, GRB)
+#define PIN_LED_DATA  PIN_PA1
+
 // RS-485 direction control (THVD1420DR XDIR/DE)
 // HIGH = TX (driver enabled), LOW = RX (default)
-#define PIN_DE          PIN_PB0
+#define PIN_DE        PIN_PB0
 
 // SENSE chain GPIO
 // SENSE_IN:  driven LOW by the upstream node to signal this tile
 // SENSE_OUT: driven LOW by this tile to signal the downstream node;
 //            released by returning the pin to high-impedance input
-#define PIN_SENSE_IN    PIN_PA2
-#define PIN_SENSE_OUT   PIN_PA3
+#define PIN_SENSE_IN  PIN_PA2
+#define PIN_SENSE_OUT PIN_PA3
 
 // UART0 pin selection (ATtiny3224 datasheet Table 6-1, PORTMUX.USARTROUTEA).
 // megaTinyCore maps USART0 pins via Serial.swap(n) before Serial.begin():
