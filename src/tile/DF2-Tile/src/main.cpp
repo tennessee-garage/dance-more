@@ -22,9 +22,13 @@ void setup() {
 }
 
 void loop() {
-    transport.poll(parser);
-    // TODO (issue #3): wire parser.feed() result → handle_command → response TX
-
+    Frame f;
+    if (transport.poll(parser, &f)) {
+        if (f.addr == MY_ADDR || f.addr == ADDR_BROADCAST) {
+            const Frame *resp = handle_command(f, pixel_buf, sense, MY_ADDR);
+            if (resp) transport.send(*resp);
+        }
+    }
     if (pixel_buf.latch_pending) {
         led_driver.push(pixel_buf);
         pixel_buf.latch_pending = false;
