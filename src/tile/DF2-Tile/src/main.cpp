@@ -16,9 +16,13 @@ static PixelBuffer pixel_buf;
 static FrameParser parser;
 
 void setup() {
-    sense.init();
+    sense.init();  
     transport.init();
+
+    delay(100);
+
     led_driver.init();
+    led_driver.test_pattern();
 }
 
 void loop() {

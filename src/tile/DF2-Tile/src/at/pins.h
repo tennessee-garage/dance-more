@@ -23,4 +23,3 @@
 //   swap 1 (alt):     TX=PB2, RX=PB3
 #define PIN_UART_TX   PIN_PB2
 #define PIN_UART_RX   PIN_PB3
-#define UART0_SWAP    1

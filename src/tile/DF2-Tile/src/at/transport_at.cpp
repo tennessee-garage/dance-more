@@ -4,8 +4,6 @@
 #include "protocol.h"
 
 void TransportAT::init() {
-    // Select USART0 pin mapping before opening the port.
-    Serial.swap(UART0_SWAP);
     Serial.begin(1000000, SERIAL_8N1);
 
     // DE starts low: RS-485 transceiver in RX mode.
