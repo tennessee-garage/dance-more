@@ -16,7 +16,7 @@ static PixelBuffer pixel_buf;
 static FrameParser parser;
 
 void setup() {
-    sense.init();  
+    sense.init();
     transport.init();
 
     delay(100);
