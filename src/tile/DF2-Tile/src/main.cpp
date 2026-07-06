@@ -18,7 +18,11 @@ static FrameParser parser;
 void setup() {
     sense.init();
     transport.init();
+
+    delay(100);
+
     led_driver.init();
+    led_driver.test_pattern();
 }
 
 void loop() {
