@@ -1,0 +1,4 @@
+Host-side (macOS/Linux) mock implementations of the common interfaces
+(e.g. IStatusLed, IPowerMonitor), built under env:native so shared
+protocol/logic code can be compiled and unit-tested without RP2350
+hardware. Mirrors src/tile/DF2-Tile/src/native/.
