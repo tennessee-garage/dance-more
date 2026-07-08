@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "status_led_rp2350.h"
+#include "rp2350/status_led_rp2350.h"
 
 // Standalone status-LED connectivity test — no protocol, no RS-485.
 // Blinks PIN_LED_READY and PIN_LED_DATA independently, then together,
