@@ -1,0 +1,8 @@
+Standalone, flash-and-observe hardware bring-up sketches (each its own
+main_*.cpp with setup()/loop() and its own platformio.ini env) — for
+example main_led_test.cpp blinking the status LEDs to confirm wiring.
+
+Not PlatformIO's test/ directory: these are full firmware images you
+flash and watch, not Unity unit tests run via `pio test`. See test/
+for those, and test/integration/ for host-side scripts driving the
+native mocks.
