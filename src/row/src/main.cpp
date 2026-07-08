@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "rp2350/pins.h"
 
 void setup() {
     Serial.begin(115200);
