@@ -1,3 +1,4 @@
 #pragma once
-// Implementation lives in lib/df2_core/ so it is available to both builds and tests.
-#include "../lib/df2_core/protocol.h"
+// Implementation lives in src/common/tile_bus_protocol/ so it is shared with
+// src/row/ (the row controller is the other side of this same wire protocol).
+#include "../../../common/tile_bus_protocol/protocol.h"
