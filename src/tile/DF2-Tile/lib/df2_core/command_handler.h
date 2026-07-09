@@ -1,5 +1,8 @@
 #pragma once
-#include "protocol.h"
+// protocol.h now lives in src/common/tile_bus_protocol/ (shared with src/row/);
+// a relative include is needed here since PlatformIO's LDF doesn't propagate
+// lib_extra_dirs include paths into other lib/ folders' own compile steps.
+#include "../../../../common/tile_bus_protocol/protocol.h"
 #include "pixel_buffer.h"
 #include "sense.h"
 
