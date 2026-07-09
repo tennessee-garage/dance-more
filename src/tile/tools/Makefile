@@ -1,7 +1,7 @@
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra \
             -I../lib/df2_core \
-            -I../../../common/tile_bus_protocol \
+            -I../../common/tile_bus_protocol \
             -I../include \
             -I../src \
             -I../src/native
