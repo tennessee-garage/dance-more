@@ -69,9 +69,8 @@ void SenseMapper::advance_to_next_slot(uint32_t now_ms) {
         return;
     }
 
-    send_detect_sense();
+    step_ = Step::SETTLE;
     request_sent_ms_ = now_ms;
-    step_ = Step::WAIT_DETECT_RESP;
 }
 
 void SenseMapper::poll(uint32_t now_ms) {
@@ -81,9 +80,16 @@ void SenseMapper::poll(uint32_t now_ms) {
 
     case Step::START:
         sense_.assert_out();
-        send_detect_sense();
+        step_ = Step::SETTLE;
         request_sent_ms_ = now_ms;
-        step_ = Step::WAIT_DETECT_RESP;
+        break;
+
+    case Step::SETTLE:
+        if (now_ms - request_sent_ms_ >= SETTLE_MS) {
+            send_detect_sense();
+            request_sent_ms_ = now_ms;
+            step_ = Step::WAIT_DETECT_RESP;
+        }
         break;
 
     case Step::WAIT_DETECT_RESP: {
