@@ -20,13 +20,19 @@ public:
     const TileMap &result() const { return map_; }
 
 private:
-    enum class Step : uint8_t { START, WAIT_DETECT_RESP, WAIT_ACTIVATE_ACK };
+    enum class Step : uint8_t { START, SETTLE, WAIT_DETECT_RESP, WAIT_ACTIVATE_ACK };
 
     // 3 total attempts per docs/tile-bus-protocol.md §7 (1 initial + 2 retries).
     static constexpr uint8_t  MAX_RETRIES = 2;
     // 5ms placeholder per docs/tile-bus-protocol.md §7's "Response timeout
     // value: 5ms is a placeholder" note.
     static constexpr uint32_t TIMEOUT_MS  = 5;
+    // Settle time after asserting/releasing a SENSE line before broadcasting
+    // the next DETECT_SENSE, so the just-released tile's sense_in has time
+    // to actually go low/deassert before we ask again. Without this, a not-
+    // yet-released tile can still answer alongside the newly-revealed one.
+    // Matches test_sense_mapping.py's proven time.sleep(0.02) between steps.
+    static constexpr uint32_t SETTLE_MS = 20;
 
     void send_detect_sense();
     void send_activate_sense(uint8_t addr);
