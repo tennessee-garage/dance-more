@@ -7,10 +7,11 @@ project), then runs this project's own native row-controller binary against
 the same broker socket, exercising the real TileTransportNative +
 RowSenseNative + SenseMapper stack end to end - no hardware, no mocked RC.
 
-Requires (build before running):
-  cd ../../../tile && pio run -e native   ->  .pio/build/native/program (mock-tile)
-  cd ../../../tile/tools && make          ->  tools/bin/tile-bus-broker
-  pio run -e native                       ->  .pio/build/native/program (row controller)
+Always rebuilds all three artifacts first (tile-bus-broker via `make`, both
+native binaries via `pio run -e native`) rather than just checking they
+exist - `pio test -e native` overwrites the same binary path with its own
+test binary, so an existing file is not proof it's the right program.
+`make`/`pio run` are incremental, so this is cheap when nothing's changed.
 
 Usage:
   python3 test/integration/test_native_discovery.py
@@ -42,6 +43,35 @@ TILES = [(0x01 + i, i) for i in range(8)]
 ROW_BIN_TIMEOUT = 5.0  # seconds to let the row controller finish discovery
 
 _SLOT_LINE = re.compile(r'slot (\d+) -> addr 0x([0-9A-Fa-f]+)')
+
+
+def ensure_built() -> bool:
+    """Always (re)build all three artifacts - never just check for
+    presence. `pio test -e native` overwrites the same
+    .pio/build/native/program path with its own test binary, so a file that
+    merely *exists* isn't proof it's the right one; `make`/`pio run` are
+    incremental and near-instant when nothing's actually changed, so paying
+    for a real build here is cheap and guarantees freshness either way.
+    Returns False (with an error printed) if a build step fails."""
+    print('Building tile-bus-broker...')
+    result = subprocess.run(['make'], cwd=os.path.join(_TILE_PROJECT, 'tools'))
+    if result.returncode != 0 or not os.path.isfile(BROKER):
+        print(f'ERROR: failed to build {BROKER}')
+        return False
+
+    print('Building tile project native mock (pio run -e native)...')
+    result = subprocess.run(['pio', 'run', '-e', 'native'], cwd=_TILE_PROJECT)
+    if result.returncode != 0 or not os.path.isfile(TILE_BIN):
+        print(f'ERROR: failed to build {TILE_BIN}')
+        return False
+
+    print('Building row controller native binary (pio run -e native)...')
+    result = subprocess.run(['pio', 'run', '-e', 'native'], cwd=_ROW_PROJECT)
+    if result.returncode != 0 or not os.path.isfile(ROW_BIN):
+        print(f'ERROR: failed to build {ROW_BIN}')
+        return False
+
+    return True
 
 
 def run_discovery() -> bool:
@@ -85,15 +115,8 @@ def run_discovery() -> bool:
 
 
 def main() -> int:
-    for path, hint in [
-        (BROKER,   'run: make -C ../tile/tools'),
-        (TILE_BIN, 'run: (cd ../tile && pio run -e native)'),
-        (ROW_BIN,  'run: pio run -e native'),
-    ]:
-        if not os.path.isfile(path):
-            print(f'ERROR: binary not found: {path}')
-            print(f'       {hint}')
-            return 1
+    if not ensure_built():
+        return 1
 
     try:
         os.unlink(SOCK)
