@@ -3412,6 +3412,16 @@
 		)
 		(uuid "69a06b7d-f843-4de9-89b8-fa32be88cc06")
 	)
+	(text "TODO: Mount the RP2350 to the\nfront side of the board. It will\njust clear the LDO and the power\ncap and save space"
+		(exclude_from_sim no)
+		(at 94.996 81.28 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "71fe111f-14c5-42db-b7e8-34b7f1883f24")
+	)
 	(text "Comms to Row"
 		(exclude_from_sim no)
 		(at 186.436 71.628 0)
