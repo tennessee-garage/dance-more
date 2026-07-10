@@ -48,12 +48,19 @@ static bool wait_for(uint8_t expected_cmd, Frame *out) {
     return false;
 }
 
+static constexpr uint32_t PROMPT_REPEAT_MS = 5000;
+
 static void wait_for_continue() {
-    Serial.println("  Press [c] to continue...");
+    uint32_t last_prompt = 0;
     while (true) {
-        while (!Serial.available()) { /* wait */ }
-        char c = (char)Serial.read();
-        if (c == 'c' || c == 'C') return;
+        if (millis() - last_prompt >= PROMPT_REPEAT_MS) {
+            Serial.println("  Press [c] to continue...");
+            last_prompt = millis();
+        }
+        if (Serial.available()) {
+            char c = (char)Serial.read();
+            if (c == 'c' || c == 'C') return;
+        }
     }
 }
 
@@ -106,19 +113,32 @@ static void run_sense_test(bool step) {
 }
 
 static char prompt_menu() {
-    Serial.println();
-    Serial.println("Press [r] to run automatically, [s] to step through interactively:");
+    uint32_t last_prompt = 0;
     while (true) {
-        while (!Serial.available()) { /* wait */ }
-        char c = (char)Serial.read();
-        if (c == 'r' || c == 'R') return 'r';
-        if (c == 's' || c == 'S') return 's';
+        if (millis() - last_prompt >= PROMPT_REPEAT_MS) {
+            Serial.println();
+            Serial.println("Press [r] to run automatically, [s] to step through interactively:");
+            last_prompt = millis();
+        }
+        if (Serial.available()) {
+            char c = (char)Serial.read();
+            if (c == 'r' || c == 'R') return 'r';
+            if (c == 's' || c == 'S') return 's';
+        }
     }
 }
 
 void setup() {
     Serial.begin(115200);
+    // Native USB serial: begin() returns immediately, before the host has
+    // actually opened the port. Anything printed before that happens is
+    // silently dropped. Block here so setup's messages aren't lost - this
+    // is exactly the interactive point of this tool, so waiting is fine.
+    while (!Serial) delay(10);
+
+    Serial.println("Initializing transport...");
     transport.init();
+    Serial.println("Initializing SENSE line...");
     sense.init();
     Serial.println("SENSE chain test - assumes exactly one tile wired at slot 0");
 }
