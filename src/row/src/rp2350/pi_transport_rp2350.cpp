@@ -30,6 +30,7 @@ bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
     // Drain all available RX bytes. Return true on the first complete frame.
     while (Serial2.available()) {
         uint8_t byte = (uint8_t)Serial2.read();
+        last_rx_byte_us_ = micros();
         if (parser.feed(byte, out)) return true;
     }
     return false;
@@ -40,6 +41,15 @@ void PiTransportRP2350::send(const RowBusFrame &frame) {
     int len = row_bus_frame_encode(frame, buf, sizeof(buf));
     if (len <= 0) return;
 
+    // Guard: don't key up until >= 100 us have passed since the Pi's last
+    // byte, so its transceiver has fully released the line before we drive
+    // it (docs/row-bus-protocol.md §9 "Bus turnaround timing"). Timed from
+    // the incoming frame, not our own transmission - unsigned subtraction
+    // wraps correctly across a micros() rollover.
+    uint32_t elapsed = micros() - last_rx_byte_us_;
+    if (elapsed < TURNAROUND_GUARD_US)
+        delayMicroseconds(TURNAROUND_GUARD_US - elapsed);
+
     // Assert XDIR: switch transceiver to TX.
     digitalWrite(PIN_PI_XDIR, HIGH);
 
@@ -47,9 +57,6 @@ void PiTransportRP2350::send(const RowBusFrame &frame) {
 
     // Wait for the last stop bit to leave the wire, not just FIFO-empty.
     Serial2.flush();
-
-    // Hold the bus idle past the turnaround guard before releasing it.
-    delayMicroseconds(TURNAROUND_GUARD_US);
 
     // Return transceiver to RX mode.
     digitalWrite(PIN_PI_XDIR, LOW);
