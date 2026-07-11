@@ -71,4 +71,10 @@ void loop1() {
         const RowBusFrame *response = row_cmd_handler.handle(frame);
         if (response) response_queue.try_push(*response);
     }
+
+    // Advances any in-flight SEND_DATA forwarding by one tile slot. Runs
+    // after draining the queue above so that a LATCH already queued behind
+    // a SEND_DATA in the same batch is dispatched (and, if forwarding isn't
+    // done yet, deferred - see #46) before any slots advance this iteration.
+    row_cmd_handler.poll(millis());
 }
