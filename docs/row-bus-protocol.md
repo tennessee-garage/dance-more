@@ -12,7 +12,7 @@ wiring, topology, and the overall addressing model see
 | Parameter      | Value                                         |
 | -------------- | --------------------------------------------- |
 | Medium         | RS-485, half-duplex, multidrop                |
-| Baud rate      | **4 Mbps minimum; 8 Mbps recommended**        |
+| Baud rate      | **3,125,000 (hardware maximum — see below)**  |
 | UART framing   | 8N1 (8 data bits, no parity, 1 stop bit)      |
 | Master         | Raspberry Pi                                  |
 | Slaves         | 8 row controllers (Xiao RP2350)               |
@@ -20,21 +20,41 @@ wiring, topology, and the overall addressing model see
 
 ### Baud rate rationale
 
+**The Raspberry Pi's UART sets a hard ceiling of 3,125,000 baud.** The Pi 5's
+RP1 UART is clocked at 50 MHz (`/sys/class/tty/ttyAMA0/uartclk`) and a PL011
+derives its rate as `uartclk / (16 × divisor)` with `divisor >= 1`, so
+`50e6 / 16 = 3,125,000` is the maximum. That rate divides exactly on both
+ends — Pi `50e6/16`, RP2350 `150e6/48` — so neither side accumulates error.
+
+Requesting a higher rate does **not** fail loudly. The Pi silently clamps to
+its maximum while the row controller runs at whatever it was asked for; every
+byte then arrives mis-timed and is rejected as a framing error by the
+RP2350's UART IRQ handler, which discards bad characters without counting
+them. The result is a completely mute bus, indistinguishable from a broken
+wire. An earlier revision of this document specified 4 Mbps, which is
+unreachable, and cost a full bring-up session to diagnose.
+
 A full-row `SEND_DATA` frame with all tiles using `SET_LEDS` carries 968 bytes
-of pixel data plus frame overhead (~976 bytes total). Updating all 8 rows
-before a latch takes 8 such frames.
+of pixel data plus frame overhead (976 bytes total). Updating all 8 rows
+before a latch takes 8 such frames. At 8N1 each byte occupies **10 bit-times**
+on the wire (1 start + 8 data + 1 stop), so a row frame is 9,760 bits and a
+full sweep of 8 rows is 78,080 bits.
 
-| Baud rate | Time per row | 8 rows total | Slack (33 ms frame) |
-| --------- | ------------ | ------------ | ------------------- |
-| 1 Mbps    | 7.8 ms       | 62 ms        | —  (over budget)    |
-| 2 Mbps    | 3.9 ms       | 31 ms        | 2 ms (too tight)    |
-| **4 Mbps**| **2.0 ms**   | **15.6 ms**  | **~17 ms**          |
-| 8 Mbps    | 1.0 ms       | 7.8 ms       | ~25 ms              |
+| Baud rate       | Time per row | 8 rows total | Slack (33 ms frame) |
+| --------------- | ------------ | ------------ | ------------------- |
+| 1 Mbps          | 9.8 ms       | 78.1 ms      | — (over budget)     |
+| 2 Mbps          | 4.9 ms       | 39.0 ms      | — (over budget)     |
+| **3.125 Mbps**  | **3.1 ms**   | **25.0 ms**  | **~8 ms**           |
+| 4 Mbps          | 2.4 ms       | 19.5 ms      | ~13 ms (unreachable)|
+| 8 Mbps          | 1.2 ms       | 9.8 ms       | ~23 ms (unreachable)|
 
-4 Mbps is the minimum for reliable 30 FPS operation. 8 Mbps is preferred for
-headroom. Neither the Pi's UART nor the RP2350's PIO is a practical constraint
-at these speeds; the transceiver choice and cable quality are the limiting
-factors.
+3.125 Mbps sustains 30 FPS with roughly 8 ms of slack in the worst case (all
+64 tiles using `SET_LEDS`). Typical frames mixing `SET_COLOR`/`SET_PATTERN`
+are far smaller and leave much more.
+
+Going faster requires different host hardware — the Pi's UART, not the
+transceiver or cable, is the binding constraint. The THVD1420DR is rated to
+12 Mbps and the RP2350's PIO could clock well past that.
 
 ---
 
