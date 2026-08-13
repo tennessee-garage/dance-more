@@ -2,19 +2,39 @@
 #include "pi_transport_rp2350.h"
 #include "pins.h"
 
-// Row Bus baud rate. 4 Mbps is the documented minimum for 30 FPS headroom
-// (docs/row-bus-protocol.md §1); bump to 8_000_000 here if throughput needs
-// it later - the driver shape doesn't change.
-static constexpr unsigned long ROW_BUS_BAUD = 4000000;
+// Row Bus baud rate (docs/row-bus-protocol.md §1). 3,125,000 is the fastest
+// rate this link can actually run: the Raspberry Pi 5's RP1 UART is clocked
+// at 50 MHz and a PL011 needs a divisor >= 1, so the Pi tops out at
+// 50e6/16 = 3.125 Mbps. It divides exactly on both ends - Pi 50e6/16,
+// RP2350 150e6/48 - so neither side accumulates baud error.
+//
+// Do not raise this without changing hardware. Asking for more fails
+// silently rather than loudly: the Pi clamps to its maximum, the RP2350
+// happily runs at whatever it was told, and every byte then dies as a
+// framing error inside the core's UART IRQ handler, which drops bad chars
+// without counting them. The symptom is a totally mute bus, identical to a
+// broken wire. Overridable via -DROW_BUS_BAUD for bring-up experiments.
+#ifndef ROW_BUS_BAUD
+#define ROW_BUS_BAUD 3125000UL
+#endif
 
 // Bus turnaround guard: hold the bus idle for >= 100 us after the last stop
 // bit before releasing XDIR back to RX, same guard used on Tile Bus
 // (docs/row-bus-protocol.md §9 "Bus turnaround timing").
 static constexpr unsigned int TURNAROUND_GUARD_US = 100;
 
-// PIN_PI_TX/PIN_PI_RX (D10/D9) are not this board's default Serial2 (UART1)
+// PIN_PI_TX/PIN_PI_RX (D9/D3) are not this board's default Serial2 (UART1)
 // pins, so they need an explicit remap before begin() - unlike the Tile Bus
 // side (PIN_ROW_TX/PIN_ROW_RX), which uses Serial1's defaults as-is.
+//
+// setTX()/setRX() return false for a GPIO that UART1 can't reach and
+// begin() then quietly uses the variant defaults instead, so a bad remap
+// produces a board that transmits and receives on unconnected pins with no
+// error anywhere. Assert the valid sets (SerialUART.cpp) at compile time.
+static_assert(PIN_PI_TX == 4 || PIN_PI_TX == 8 || PIN_PI_TX == 20 || PIN_PI_TX == 24,
+              "PIN_PI_TX must be a UART1 TX-capable GPIO (4, 8, 20, 24)");
+static_assert(PIN_PI_RX == 5 || PIN_PI_RX == 9 || PIN_PI_RX == 21 || PIN_PI_RX == 25,
+              "PIN_PI_RX must be a UART1 RX-capable GPIO (5, 9, 21, 25)");
 
 void PiTransportRP2350::init() {
     Serial2.setTX(PIN_PI_TX);
@@ -31,7 +51,11 @@ bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
     while (Serial2.available()) {
         uint8_t byte = (uint8_t)Serial2.read();
         last_rx_byte_us_ = micros();
-        if (parser.feed(byte, out)) return true;
+        rx_bytes++;
+        if (parser.feed(byte, out)) {
+            rx_frames++;
+            return true;
+        }
     }
     return false;
 }
@@ -60,4 +84,6 @@ void PiTransportRP2350::send(const RowBusFrame &frame) {
 
     // Return transceiver to RX mode.
     digitalWrite(PIN_PI_XDIR, LOW);
+
+    tx_frames++;
 }
