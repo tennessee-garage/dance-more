@@ -188,6 +188,25 @@ void RowCommandHandler::poll(uint32_t now_ms) {
 }
 
 const RowBusFrame *RowCommandHandler::handle(const RowBusFrame &in) {
+    // Admin commands are unicast-only (docs/row-bus-protocol.md §3:
+    // broadcast "all row controllers accept; none respond"). With every row
+    // on the bus, a broadcast admin command would have all 8 try to answer
+    // the same frame simultaneously - a real collision on shared RS-485,
+    // not a hypothetical one - so these are rejected outright rather than
+    // processed-but-silent.
+    if (in.addr == ROWBUS_ADDR_BROADCAST) {
+        switch ((RowBusCmd)in.cmd) {
+        case RowBusCmd::TEST:
+        case RowBusCmd::STATUS:
+        case RowBusCmd::POWER:
+        case RowBusCmd::RE_DISCOVER:
+        case RowBusCmd::ERROR_LOG:
+            return nullptr;
+        default:
+            break;
+        }
+    }
+
     switch ((RowBusCmd)in.cmd) {
     case RowBusCmd::TEST:         handle_test();         return &response_;
     case RowBusCmd::STATUS:       handle_status();       return &response_;
