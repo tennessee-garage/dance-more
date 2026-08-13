@@ -15,11 +15,11 @@ Steps:
      STATUS, POWER, RE_DISCOVER, ERROR_LOG), the fire-and-forget display
      commands (SEND_DATA, LATCH, BLACKOUT), and a few protocol-robustness
      cases (unrecognized command, address filtering, corrupt CRC).
-  3. Report, informationally, whether a broadcast admin command gets a
-     response - docs/row-bus-protocol.md's address space table says
-     broadcast should get none, but nothing in main.cpp's address filter
-     distinguishes admin commands from display commands, so this is worth
-     surfacing rather than assuming either way.
+  3. Assert every admin command gets no response when sent as a broadcast
+     (docs/row-bus-protocol.md §3: "all row controllers accept; none
+     respond") - RowCommandHandler::handle() enforces this independently of
+     the host, so this goes around Floor.broadcast()'s own guard against
+     constructing such a frame to test the row controller's side of it.
 
 With no tiles attached, a healthy row controller is expected to settle into
 STATUS state=0x02 ("running", i.e. discovery finished) with tiles_found=0
@@ -276,24 +276,34 @@ def check_row_controller(floor: Floor, row: int, present: set[int]) -> Results:
     return results
 
 
-def check_broadcast_admin_behavior(floor: Floor) -> None:
-    print("\n=== Informational: broadcast admin-command behavior ===")
-    floor.broadcast(Cmd.STATUS)
-    responders = []
-    for chain in range(floor.chain_count):
-        frame = floor.bus_for_chain(chain).read_frame(timeout=0.2)
-        if frame is not None:
-            responders.append((chain, frame.addr))
+def check_broadcast_admin_rejected(floor: Floor) -> Results:
+    """docs/row-bus-protocol.md §3: broadcast "all row controllers accept;
+    none respond". Row controller firmware enforces this in
+    RowCommandHandler::handle() - a real assertion, not a note, now that
+    it's a documented invariant rather than an open question.
 
-    if responders:
-        who = ", ".join(f"0x{addr:02X} on chain {c}" for c, addr in responders)
-        print(f"  NOTE: broadcast STATUS got a response from {who}. "
-              "docs/row-bus-protocol.md's address space table says broadcast "
-              "should get none - main.cpp's address filter doesn't currently "
-              "distinguish admin commands from display commands, so this is "
-              "expected given the current firmware, not a bug in this script.")
-    else:
-        print("  broadcast STATUS: no response (matches documented behavior)")
+    Goes around Floor.broadcast()'s own guard (RowBus.broadcast() directly,
+    same trick as check_corrupt_crc's send_raw()) specifically to prove the
+    row controller enforces this independently of the host being polite -
+    Floor's guard alone wouldn't catch a bug here, since it would stop the
+    frame from ever being sent.
+    """
+    print("\n=== Broadcast admin commands must get no response ===")
+    results = Results()
+    admin_cmds = [
+        ("TEST", Cmd.TEST), ("STATUS", Cmd.STATUS), ("POWER", Cmd.POWER),
+        ("RE_DISCOVER", Cmd.RE_DISCOVER), ("ERROR_LOG", Cmd.ERROR_LOG),
+    ]
+    for name, cmd in admin_cmds:
+        for chain in range(floor.chain_count):
+            bus = floor.bus_for_chain(chain)
+            bus.broadcast(cmd)
+            frame = bus.read_frame(timeout=0.15)
+            ok = frame is None
+            note = "" if ok else f"unexpected response from 0x{frame.addr:02X} on chain {chain}"
+            results.record(f"broadcast {name} on chain {chain}: no response", ok, note)
+    print(f"  -- {results.summary()}")
+    return results
 
 
 def parse_chain(spec: str, baudrate: int) -> ChainConfig:
@@ -337,7 +347,7 @@ def main() -> int:
 
         present = set(found)
         all_results = [check_row_controller(floor, row, present) for row in sorted(found)]
-        check_broadcast_admin_behavior(floor)
+        all_results.append(check_broadcast_admin_rejected(floor))
 
     overall_ok = all(r.ok for r in all_results)
     print("\n" + ("ALL CHECKS PASSED" if overall_ok else "SOME CHECKS FAILED"))

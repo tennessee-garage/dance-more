@@ -38,6 +38,15 @@ RESPONSE_TIMEOUT_S: dict[int, float] = {
 DEFAULT_RESPONSE_TIMEOUT_S = 0.020
 MAX_ATTEMPTS = 3  # 1 initial + 2 retries, per §7
 
+# Commands documented as broadcast, docs/row-bus-protocol.md §5.2. Admin
+# commands (TEST/STATUS/POWER/RE_DISCOVER/ERROR_LOG) always reply, and with
+# every row on the bus a broadcast admin command would have all 8 try to
+# answer the same frame at once - a real collision on shared RS-485. Row
+# controller firmware now refuses these outright (row_command_handler.cpp),
+# so Floor.broadcast() rejecting them here is a fail-fast API guard, not the
+# thing that actually prevents the collision.
+BROADCAST_SAFE_CMDS = frozenset({Cmd.LATCH, Cmd.BLACKOUT})
+
 
 @dataclass(frozen=True)
 class ChainConfig:
@@ -165,7 +174,21 @@ class Floor:
         -digit microseconds) rather than a full frame time per chain. That
         matters for LATCH, which is what makes every tile across the floor
         illuminate together.
+
+        Raises ValueError for anything not in BROADCAST_SAFE_CMDS - an admin
+        command here would have every row try to reply to the same frame at
+        once. Row controller firmware rejects this independently; this is a
+        second, earlier check so a caller finds out at the call site rather
+        than via a silently-dropped frame or a bus collision on older
+        firmware. Use RowBus.broadcast() directly to bypass this for
+        protocol-robustness testing.
         """
+        if cmd not in BROADCAST_SAFE_CMDS:
+            raise ValueError(
+                f"cmd 0x{cmd:02X} is not broadcast-safe (only LATCH/BLACKOUT are) - "
+                "every row would try to reply to the same frame at once"
+            )
+
         data = Frame(ADDR_BROADCAST, cmd, payload).encode()
 
         deadlines = [bus.start_write(data) for bus in self._buses]
