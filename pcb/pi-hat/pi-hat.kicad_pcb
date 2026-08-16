@@ -2338,7 +2338,7 @@
 	(footprint "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 		(layer "F.Cu")
 		(uuid "5281b535-05ea-42a4-b0b3-ad5c5865ef20")
-		(at 118.95 64.75 -90)
+		(at 119.2 64.75 -90)
 		(descr "Resistor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal with elongated pad for handsoldering. (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf)")
 		(tags "resistor handsolder")
 		(property "Reference" "R13"
@@ -3253,7 +3253,7 @@
 	(footprint "Garth:SOT95P230X117-3N"
 		(layer "F.Cu")
 		(uuid "c03404a5-d378-41b4-ab68-06242ab7033e")
-		(at 115.65 55.5)
+		(at 115.85 55.5)
 		(descr "sot-23-sm")
 		(tags "Diode")
 		(property "Reference" "D5"
@@ -3573,7 +3573,7 @@
 	(footprint "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 		(layer "F.Cu")
 		(uuid "f144b397-55ae-4242-9183-a4c995bc2fa5")
-		(at 118.95 55.5 -90)
+		(at 119.2 55.5 -90)
 		(descr "Resistor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal with elongated pad for handsoldering. (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf)")
 		(tags "resistor handsolder")
 		(property "Reference" "R16"
@@ -3889,7 +3889,7 @@
 	(footprint "Garth:SOT95P230X117-3N"
 		(layer "F.Cu")
 		(uuid "fdf5e8fa-9059-4035-96d5-8afe0d168b3a")
-		(at 115.65 64.75)
+		(at 115.85 64.75)
 		(descr "sot-23-sm")
 		(tags "Diode")
 		(property "Reference" "D4"
@@ -5485,7 +5485,7 @@
 		(uuid "2b739161-2667-4403-aa5f-e6d62d4bac6e")
 	)
 	(via
-		(at 117.7 55.5)
+		(at 117.9 55.5)
 		(size 0.9)
 		(drill 0.6)
 		(layers "F.Cu" "B.Cu")
@@ -5517,7 +5517,7 @@
 		(uuid "c0c0237e-0898-48eb-81d7-38dc4e02eb85")
 	)
 	(via
-		(at 117.7 64.75)
+		(at 117.9 64.75)
 		(size 0.9)
 		(drill 0.6)
 		(layers "F.Cu" "B.Cu")
@@ -5733,12 +5733,12 @@
 		(uuid "dac8dea7-7caa-45ad-8082-b2f015f38f78")
 	)
 	(segment
-		(start 118.95 63.75)
-		(end 120.58 63.75)
+		(start 119.15 63.8)
+		(end 119.2 63.75)
 		(width 0.2)
 		(layer "F.Cu")
 		(net "/orange_A")
-		(uuid "0737d76c-9362-4d72-b0bf-cdc4c9c13dd0")
+		(uuid "1c903cfb-5ae5-43ed-a599-2365d48ae240")
 	)
 	(segment
 		(start 114.65 63.8)
@@ -5765,6 +5765,14 @@
 		(uuid "51cb1f8d-fa77-41eb-b50c-bbfc126bc975")
 	)
 	(segment
+		(start 119.2 63.75)
+		(end 120.58 63.75)
+		(width 0.2)
+		(layer "F.Cu")
+		(net "/orange_A")
+		(uuid "5b0bda22-1f79-46cd-96f2-df29cdf0b500")
+	)
+	(segment
 		(start 110.2 63.85)
 		(end 110.2 63.4)
 		(width 0.1524)
@@ -5779,14 +5787,6 @@
 		(layer "F.Cu")
 		(net "/orange_A")
 		(uuid "82604b38-74b7-47b5-9ddd-127856b0b4b1")
-	)
-	(segment
-		(start 114.65 63.8)
-		(end 118.9 63.8)
-		(width 0.2)
-		(layer "F.Cu")
-		(net "/orange_A")
-		(uuid "a7a7a557-42d6-4baa-bc7f-6e8a7ed8a421")
 	)
 	(segment
 		(start 110.2 63.4)
@@ -5805,12 +5805,36 @@
 		(uuid "bc9c746a-f2fa-4a33-8a86-62e3b6b13092")
 	)
 	(segment
+		(start 114.85 63.8)
+		(end 119.15 63.8)
+		(width 0.2)
+		(layer "F.Cu")
+		(net "/orange_A")
+		(uuid "d4ec759e-e086-4b2f-aed9-95ea9620b124")
+	)
+	(segment
 		(start 120.58 63.75)
 		(end 121.2 63.13)
 		(width 0.2)
 		(layer "F.Cu")
 		(net "/orange_A")
-		(uuid "c88c8608-8368-40a8-b39c-c41410fe9a3a")
+		(uuid "e0f6a8c0-67e7-4a07-a067-0f4c09f8b3e0")
+	)
+	(segment
+		(start 119.2 65.75)
+		(end 120.58 65.75)
+		(width 0.2)
+		(layer "F.Cu")
+		(net "/orange_B")
+		(uuid "1c82d4fa-369f-4836-bb5b-40a2245c27d6")
+	)
+	(segment
+		(start 120.58 65.75)
+		(end 121.2 66.37)
+		(width 0.2)
+		(layer "F.Cu")
+		(net "/orange_B")
+		(uuid "29561427-1505-42f3-95c8-b41c1a9ccd13")
 	)
 	(segment
 		(start 118.9 65.7)
@@ -5821,12 +5845,20 @@
 		(uuid "2ef3490f-152a-4a17-ab02-9969e2d7dd40")
 	)
 	(segment
-		(start 120.58 65.75)
-		(end 121.2 66.37)
+		(start 119.15 65.7)
+		(end 119.2 65.75)
 		(width 0.2)
 		(layer "F.Cu")
 		(net "/orange_B")
-		(uuid "64e57e82-93cf-414a-9189-a8c09edb36cb")
+		(uuid "70e5be70-a09e-4e87-8f3f-89c5dd2a57de")
+	)
+	(segment
+		(start 114.85 65.7)
+		(end 119.15 65.7)
+		(width 0.2)
+		(layer "F.Cu")
+		(net "/orange_B")
+		(uuid "d64aec42-31d4-4e79-b52c-7f6eccb93738")
 	)
 	(segment
 		(start 108.36 63.72)
@@ -5835,22 +5867,6 @@
 		(layer "F.Cu")
 		(net "/orange_B")
 		(uuid "dab496e3-3d8c-4b7d-acb8-8e59caa67490")
-	)
-	(segment
-		(start 114.65 65.7)
-		(end 118.9 65.7)
-		(width 0.2)
-		(layer "F.Cu")
-		(net "/orange_B")
-		(uuid "ea8eea0c-ec81-44f2-bcb0-d7b33eed28ea")
-	)
-	(segment
-		(start 118.95 65.75)
-		(end 120.58 65.75)
-		(width 0.2)
-		(layer "F.Cu")
-		(net "/orange_B")
-		(uuid "ec0495e7-58cb-45db-b85b-29328e754c5c")
 	)
 	(segment
 		(start 110.34 65.7)
