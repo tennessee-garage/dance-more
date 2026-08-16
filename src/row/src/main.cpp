@@ -30,6 +30,44 @@ static TileMap             tile_map;
 static SenseMapper         sense_mapper(tile_transport, row_sense, tile_map);
 static RowCommandHandler   row_cmd_handler(tile_transport, sense_mapper, power_monitor, MY_ROW_ADDR);
 
+// ---- Watchdog ----
+// A Row Bus RX overrun used to wedge this board hard enough that only a power
+// cycle recovered it. Sizing the RX FIFO (pi_transport_rp2350.cpp) raised the
+// rate needed to trigger that by orders of magnitude - from a single 184-byte
+// frame to sustained 120 fps of maximum-size ones - but it did not change the
+// failure *mode*: past the limit the core still stops dead rather than
+// dropping frames. For fire-and-forget display data that trade is backwards.
+// A missed frame should cost one flicker, not the row until somebody walks
+// over and power-cycles it.
+//
+// The watchdog makes any such stall self-correcting, and deliberately does
+// not depend on knowing which core stalled or why - useful, because the
+// mechanism that turns an overrun into a wedge rather than dropped bytes is
+// still not understood. Candidates include a stuck uart_tx_wait_blocking()
+// in flush() (which would also strand XDIR high, jamming the bus), so the
+// recovery is designed to need no such diagnosis.
+//
+// Core 1 publishes a heartbeat and core 0 feeds the watchdog only while that
+// heartbeat advances, so a hang on *either* core stops the feed. Both numbers
+// sit two orders of magnitude above the longest legitimate stall (a 127-byte
+// Tile Bus frame at 1 Mbps is 1.3 ms; the largest Row Bus response, a full
+// 32-entry ERROR_LOG_RESP, is 169 bytes = 0.54 ms at 3.125 Mbps), so neither
+// can fire on a merely busy row.
+//
+// A reset re-runs setup()/setup1(), re-initialising both UARTs and restarting
+// discovery. That is safe here in a way it would not be at cold boot: the
+// tiles are long past their startup animation by then, so discovery finds
+// them rather than hitting the cold-boot deafness window.
+static constexpr uint32_t WATCHDOG_TIMEOUT_MS = 500;
+static constexpr uint32_t CORE1_STALL_MS      = 250;
+static volatile uint32_t  core1_heartbeat     = 0;
+
+// Set by core 0 when the Pi-facing UART overflows, consumed by core 1, which
+// owns the error log. A flag rather than a count: consecutive overruns
+// collapse into one entry instead of flooding a 32-deep log, and "we overran
+// at all" is the fact worth having.
+static volatile bool rx_overflow_pending = false;
+
 // core 0 -> core 1: validated (CRC-good, addressed to us or broadcast) frames
 static RowBusFrameQueue ingest_queue;
 // core 1 -> core 0: RowCommandHandler responses to admin commands, bound for the Pi
@@ -142,6 +180,23 @@ static void debug_report(uint32_t now_ms, SenseMapState state) {
 void setup() {
     status_led.init();
     pi_transport.init();
+    rp2040.wdt_begin(WATCHDOG_TIMEOUT_MS);
+}
+
+// Feeds the watchdog only while core 1 is also making progress, so a stall on
+// either core reboots the chip. Until core 1 has ticked even once its setup1()
+// is still running concurrently with our first loops, so feed unconditionally
+// during that window rather than letting start-up trip the watchdog.
+static void feed_watchdog(uint32_t now_ms) {
+    static uint32_t last_heartbeat    = 0;
+    static uint32_t last_heartbeat_ms = 0;
+
+    uint32_t beat = core1_heartbeat;
+    if (beat != last_heartbeat) {
+        last_heartbeat    = beat;
+        last_heartbeat_ms = now_ms;
+    }
+    if (beat == 0 || (now_ms - last_heartbeat_ms) < CORE1_STALL_MS) rp2040.wdt_reset();
 }
 
 void loop() {
@@ -175,10 +230,17 @@ void loop() {
 
     drive_data_led(now, data_led_until_ms);
 
+    // Hand any RX overrun to core 1 to log. Checked once per loop rather
+    // than per byte: overflow() pumps the FIFO internally, and the flag is
+    // sticky until read, so nothing is missed by sampling at this rate.
+    if (pi_transport.take_rx_overflow()) rx_overflow_pending = true;
+
     RowBusFrame response;
     while (response_queue.try_pop(&response)) {
         pi_transport.send(response);
     }
+
+    feed_watchdog(now);
 }
 
 // ---- Core 1 : Tile Bus egress + dispatch ----
@@ -191,6 +253,13 @@ void setup1() {
 }
 
 void loop1() {
+    core1_heartbeat++;  // liveness for core 0's watchdog feed
+
+    if (rx_overflow_pending) {
+        rx_overflow_pending = false;
+        row_cmd_handler.log_row_bus_overflow(millis());
+    }
+
     sense_mapper.poll(millis());
     drive_ready_led(millis(), sense_mapper.state());
 

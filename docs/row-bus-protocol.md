@@ -242,8 +242,15 @@ Response payload:
 | 0         | `entry_count` | Number of log entries that follow (0–32) |
 | 1 + 5×i   | `slot`        | Tile slot (0–7) that failed; see note for `LATCH_OVERRUN` |
 | 2 + 5×i   | `tile_bus_cmd`   | Tile Bus command code involved; see note for `LATCH_OVERRUN` |
-| 3 + 5×i   | `error_type`  | `0x01` = no ACK after 3 retries, `0x02` = CRC failure, `0x03` = sense collision, `0x04` = LATCH overrun |
+| 3 + 5×i   | `error_type`  | `0x01` = no ACK after 3 retries, `0x02` = CRC failure, `0x03` = sense collision, `0x04` = LATCH overrun, `0x05` = Row Bus RX overflow |
 | 4–5 + 5×i | `timestamp`   | Seconds since row controller boot (uint16, big-endian) |
+
+`ROW_BUS_RX_OVERFLOW` (`error_type = 0x05`) reports a receive overrun on the
+**Pi-facing** link rather than a Tile Bus fault: the row controller's UART
+dropped inbound bytes, so whichever frame was in flight failed CRC and was
+discarded. `slot` and `tile_bus_cmd` describe Tile Bus faults and carry no
+meaning here, so both are logged as `0`. Consecutive overruns collapse into a
+single entry rather than flooding the 32-deep log.
 
 For `LATCH_OVERRUN` entries (`error_type = 0x04`) the fields are repurposed:
 - `slot` — number of tile slots that had been forwarded when `LATCH` arrived

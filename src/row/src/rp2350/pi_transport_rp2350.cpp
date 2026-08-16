@@ -80,6 +80,11 @@ bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
     return false;
 }
 
+bool PiTransportRP2350::take_rx_overflow() {
+    // SerialUART::overflow() is itself read-and-clear.
+    return Serial2.overflow();
+}
+
 void PiTransportRP2350::send(const RowBusFrame &frame) {
     uint8_t buf[ROWBUS_MAX_FRAME];
     int len = row_bus_frame_encode(frame, buf, sizeof(buf));

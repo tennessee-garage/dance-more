@@ -89,6 +89,13 @@ void RowCommandHandler::handle_error_log() {
     }
 }
 
+void RowCommandHandler::log_row_bus_overflow(uint32_t now_ms) {
+    // slot/tile_bus_cmd describe Tile Bus faults; neither applies to an
+    // overrun on the Pi-facing link, so both are zero (see the error_type
+    // comment in row_command_handler.h).
+    log_error(0, 0, ERROR_TYPE_ROW_BUS_RX_OVERFLOW, now_ms);
+}
+
 void RowCommandHandler::log_error(uint8_t slot, uint8_t tile_bus_cmd, uint8_t error_type, uint32_t now_ms) {
     ErrorLogEntry &e = error_log_[error_log_next_];
     e.slot         = slot;
