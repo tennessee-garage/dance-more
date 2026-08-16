@@ -64,7 +64,8 @@ from df2_pi.transport.row_bus import DEFAULT_BAUDRATE
 
 STATUS_STATE_NAMES = {0x00: "idle", 0x01: "discovering", 0x02: "running", 0x03: "error"}
 TILE_STATUS_NAMES = {0x00: "not_discovered", 0x01: "ok", 0x02: "non_responsive", 0x03: "test_failed"}
-ERROR_TYPE_NAMES = {0x01: "no_ack_after_retries", 0x02: "crc_failure", 0x03: "sense_collision", 0x04: "latch_overrun"}
+ERROR_TYPE_NAMES = {0x01: "no_ack_after_retries", 0x02: "crc_failure", 0x03: "sense_collision",
+                    0x04: "latch_overrun", 0x05: "row_bus_rx_overflow"}
 TEST_FAULT_BIT_NAMES = ["row_bus_uart", "tile_bus_xcvr", "sram"]
 
 

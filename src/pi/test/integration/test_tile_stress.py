@@ -216,7 +216,8 @@ def stress(floor: Floor, row: int, soak_s: float) -> bool:
     for i in range(errs[0]):
         kinds[errs[3 + i * 5]] = kinds.get(errs[3 + i * 5], 0) + 1
     names = {0x01: "no_ack_after_retries", 0x02: "crc_failure",
-             0x03: "sense_collision", 0x04: "latch_overrun"}
+             0x03: "sense_collision", 0x04: "latch_overrun",
+             0x05: "row_bus_rx_overflow"}
     summary = ", ".join(f"{names.get(k, hex(k))}={v}" for k, v in sorted(kinds.items()))
     print(f"    error log: {errs[0]} entries" + (f" ({summary})" if summary else ""))
     if kinds and set(kinds) - {0x04}:
