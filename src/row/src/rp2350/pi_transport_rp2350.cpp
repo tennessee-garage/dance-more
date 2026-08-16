@@ -37,6 +37,26 @@ static_assert(PIN_PI_RX == 5 || PIN_PI_RX == 9 || PIN_PI_RX == 21 || PIN_PI_RX =
               "PIN_PI_RX must be a UART1 RX-capable GPIO (5, 9, 21, 25)");
 
 void PiTransportRP2350::init() {
+    // Size the RX FIFO to hold a whole maximum-size frame.
+    //
+    // arduino-pico's SerialUART defaults to a 32-byte software FIFO - about
+    // 100 us of buffering at 3.125 Mbps. A full SEND_DATA frame is 976 bytes
+    // arriving back-to-back over 3.1 ms, some 30x longer than that window,
+    // and poll() below costs two _pumpFIFO() round trips per byte (one in
+    // available(), one in read()) against a 3.2 us/byte arrival rate. Core 0
+    // cannot keep up, the FIFO overruns, and the core wedges hard enough to
+    // need a power cycle - not merely dropped bytes.
+    //
+    // Measured on the bench: continuous frames died above ~170 bytes, while
+    // the same 976-byte frame paced at 16 bytes per 400 us survived intact.
+    // That is what makes this a receive-rate problem rather than a frame-size
+    // one, and why the fix is buffer depth rather than anything in the parser.
+    //
+    // Sized for one max frame plus the LATCH and admin command that can
+    // legitimately follow it back-to-back in the same burst. Must precede
+    // begin(): setFIFOSize() returns false once the port is running, and it
+    // is begin() that actually allocates the buffer.
+    Serial2.setFIFOSize(2048);
     Serial2.setTX(PIN_PI_TX);
     Serial2.setRX(PIN_PI_RX);
     Serial2.begin(ROW_BUS_BAUD, SERIAL_8N1);
