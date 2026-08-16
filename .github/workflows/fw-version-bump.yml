@@ -1,0 +1,23 @@
+name: Firmware version bump check
+
+# Enforces the bump discipline from #55: a PR touching src/row, src/tile, or
+# the shared src/common/tile_bus_protocol/ must increment the affected
+# ROW_FW_VERSION / TILE_FW_VERSION constant(s). See
+# .github/scripts/check_fw_version_bump.py.
+on:
+  pull_request:
+    paths:
+      - "src/row/**"
+      - "src/tile/**"
+      - "src/common/tile_bus_protocol/**"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check ROW_FW_VERSION / TILE_FW_VERSION bump
+        run: python3 .github/scripts/check_fw_version_bump.py "origin/${{ github.base_ref }}"
