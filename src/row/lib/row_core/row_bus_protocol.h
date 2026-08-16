@@ -13,6 +13,7 @@ enum class RowBusCmd : uint8_t {
     POWER          = 0x03,
     RE_DISCOVER    = 0x04,
     ERROR_LOG      = 0x05,
+    VERSION        = 0x06,
     SEND_DATA      = 0x10,
     LATCH          = 0x11,
     BLACKOUT       = 0x12,
@@ -21,6 +22,7 @@ enum class RowBusCmd : uint8_t {
     POWER_RESP       = 0x83,
     RE_DISCOVER_RESP = 0x84,
     ERROR_LOG_RESP   = 0x85,
+    VERSION_RESP     = 0x86,
 };
 
 struct RowBusFrame {

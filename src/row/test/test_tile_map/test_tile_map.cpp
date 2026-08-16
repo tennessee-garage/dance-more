@@ -57,6 +57,30 @@ void test_discovered_count_counts_only_discovered_slots() {
     TEST_ASSERT_EQUAL(3, map.discovered_count());
 }
 
+void test_version_starts_invalid_and_is_set_per_slot() {
+    TileMap map;
+    map.reset();
+    TEST_ASSERT_FALSE(map.has_version(3));
+
+    FirmwareVersion v{12, 0x2b5c293c, 0};
+    map.set_version(3, v);
+
+    TEST_ASSERT_TRUE(map.has_version(3));
+    TEST_ASSERT_EQUAL_UINT16(12, map.version_for(3).version);
+    TEST_ASSERT_EQUAL_UINT32(0x2b5c293c, map.version_for(3).git_sha);
+    TEST_ASSERT_FALSE(map.has_version(4)); // untouched, confirms per-slot isolation
+}
+
+void test_reset_clears_version() {
+    TileMap map;
+    map.reset();
+    map.set_version(3, FirmwareVersion{12, 0x2b5c293c, 0});
+    TEST_ASSERT_TRUE(map.has_version(3));
+
+    map.reset();
+    TEST_ASSERT_FALSE(map.has_version(3));
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
 
@@ -65,6 +89,9 @@ int main(int, char **) {
     RUN_TEST(test_retry_count_is_per_slot);
     RUN_TEST(test_set_status_does_not_affect_address_or_retry_count);
     RUN_TEST(test_discovered_count_counts_only_discovered_slots);
+
+    RUN_TEST(test_version_starts_invalid_and_is_set_per_slot);
+    RUN_TEST(test_reset_clears_version);
 
     return UNITY_END();
 }
