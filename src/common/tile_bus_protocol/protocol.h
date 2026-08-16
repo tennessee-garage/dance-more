@@ -13,6 +13,7 @@ enum class Cmd : uint8_t {
     DETECT_SENSE   = 0x02,
     CLEAR_SENSE    = 0x03,
     TEST           = 0x04,
+    VERSION        = 0x05,
     SET_COLOR      = 0x10,
     SET_PATTERN    = 0x11,
     SET_LEDS       = 0x12,
@@ -20,6 +21,7 @@ enum class Cmd : uint8_t {
     // Responses: tile → row controller
     ACK            = 0x80,
     DETECT_RESP    = 0x82,
+    VERSION_RESP   = 0x85,
 };
 
 struct Frame {
