@@ -21,18 +21,28 @@ Steps:
      the host, so this goes around Floor.broadcast()'s own guard against
      constructing such a frame to test the row controller's side of it.
 
-With no tiles attached, a healthy row controller is expected to settle into
-STATUS state=0x02 ("running", i.e. discovery finished) with tiles_found=0
-shortly after boot or a RE_DISCOVER - see SenseMapper::finish_discovery()
-in src/row/lib/row_core/sense_mapper.cpp for why "found nothing" is treated
-as the expected end-of-chain result, not an error.
+A healthy row controller settles into STATUS state=0x02 ("running", i.e.
+discovery finished) shortly after boot or a RE_DISCOVER - see
+SenseMapper::finish_discovery() in src/row/lib/row_core/sense_mapper.cpp for
+why "found nothing" is treated as the expected end-of-chain result, not an
+error.
+
+Because "found nothing" is a legitimate end state, the tile count is not
+self-evident from the wire: a row controller reports tiles_found=0 just as
+happily when a tile is attached but mute as when no tile is attached at all.
+--expect-tiles is therefore how you tell the script what is physically
+plugged in; leave it at 0 only when the row really is bare, or the run will
+report all-pass over a tile that never answered.
 
 Usage:
-  # two-chain hat (defaults: ttyAMA0/GPIO17 + ttyAMA2/GPIO7)
+  # two-chain hat (defaults: ttyAMA0/GPIO17 + ttyAMA2/GPIO7), bare rows
   python3 test/integration/test_row_bus_scan.py
 
   # single-chain bench board, XDIR still on GPIO23
   python3 test/integration/test_row_bus_scan.py --chain /dev/ttyAMA0:23
+
+  # ...with one tile attached to the row controller
+  python3 test/integration/test_row_bus_scan.py --chain /dev/ttyAMA0:23 --expect-tiles 1
 """
 
 from __future__ import annotations
@@ -101,7 +111,7 @@ def check_test(floor: Floor, row: int, results: Results) -> None:
         results.record("TEST", False, f"result=0x{result:02X} fault_flags={bits}")
 
 
-def check_status(floor: Floor, row: int, results: Results, expect_no_tiles: bool = True) -> None:
+def check_status(floor: Floor, row: int, results: Results, expect_tiles: int = 0) -> None:
     frame = _try_request(floor, row, Cmd.STATUS)
     if frame is None:
         results.record("STATUS", False, "no valid STATUS_RESP")
@@ -116,13 +126,17 @@ def check_status(floor: Floor, row: int, results: Results, expect_no_tiles: bool
           f"tile_status={[TILE_STATUS_NAMES.get(s, hex(s)) for s in tile_status]}")
     results.record("STATUS", True)
 
-    if expect_no_tiles:
-        no_tiles = tiles_found == 0 and all(s == 0 for s in tile_status)
-        results.record(
-            "STATUS: no tiles discovered (expected - none attached)",
-            no_tiles,
-            "" if no_tiles else "expected 0 discovered tiles for this bench setup",
-        )
+    # Discovery walks the chain in slot order, so the first `expect_tiles`
+    # slots should read ok (0x01) and every slot beyond them not_discovered.
+    # Asserting the whole array, not just the count, catches a tile that
+    # answered from the wrong slot.
+    expected = [0x01] * expect_tiles + [0x00] * (len(tile_status) - expect_tiles)
+    matches = tiles_found == expect_tiles and tile_status == expected
+    if matches:
+        note = "none attached" if expect_tiles == 0 else f"slots 0-{expect_tiles - 1} ok"
+    else:
+        note = f"expected tiles_found={expect_tiles} and {expected}, got {tiles_found} and {tile_status}"
+    results.record(f"STATUS: {expect_tiles} tile(s) discovered", matches, note)
 
 
 def check_power(floor: Floor, row: int, results: Results) -> None:
@@ -160,7 +174,7 @@ def check_error_log(floor: Floor, row: int, results: Results, label: str = "ERRO
     results.record(label, True)
 
 
-def check_re_discover(floor: Floor, row: int, results: Results) -> None:
+def check_re_discover(floor: Floor, row: int, results: Results, expect_tiles: int = 0) -> None:
     frame = _try_request(floor, row, Cmd.RE_DISCOVER)
     if frame is None or len(frame.payload) != 1:
         results.record("RE_DISCOVER ack", False, "no valid RE_DISCOVER_RESP")
@@ -169,19 +183,28 @@ def check_re_discover(floor: Floor, row: int, results: Results) -> None:
 
     deadline = time.monotonic() + 2.0
     final_state = None
+    final_tiles = None
     while time.monotonic() < deadline:
         resp = _try_request(floor, row, Cmd.STATUS)
         if resp is not None and resp.payload[0] != 0x01:  # not still discovering
-            final_state = resp.payload[0]
+            final_state, final_tiles = resp.payload[0], resp.payload[1]
             break
         time.sleep(0.05)
 
     if final_state is None:
         results.record("RE_DISCOVER completes", False, "still discovering after 2s")
-    elif final_state == 0x02:
-        results.record("RE_DISCOVER completes", True, "state=running, 0 tiles as expected")
-    else:
+    elif final_state != 0x02:
         results.record("RE_DISCOVER completes", False, f"unexpected final state 0x{final_state:02X}")
+    else:
+        # Re-running discovery must find the same tiles it found at boot;
+        # a differing count here means the sense chain is marginal.
+        same = final_tiles == expect_tiles
+        results.record(
+            "RE_DISCOVER completes",
+            same,
+            f"state=running, {final_tiles} tile(s)"
+            + ("" if same else f" - expected {expect_tiles}"),
+        )
 
 
 def all_set_color_payload(r: int, g: int, b: int) -> bytes:
@@ -240,13 +263,13 @@ def check_corrupt_crc(floor: Floor, row: int, results: Results) -> None:
     results.record("drops frame with corrupt CRC", ok, note)
 
 
-def check_row_controller(floor: Floor, row: int, present: set[int]) -> Results:
+def check_row_controller(floor: Floor, row: int, present: set[int], expect_tiles: int = 0) -> Results:
     chain = floor.chain_map.chain_for(row)
     print(f"\n=== Row controller 0x{row:02X} (chain {chain}) ===")
     results = Results()
 
     check_test(floor, row, results)
-    check_status(floor, row, results)
+    check_status(floor, row, results, expect_tiles)
     check_power(floor, row, results)
     check_error_log(floor, row, results, label="ERROR_LOG (before)")
 
@@ -269,8 +292,8 @@ def check_row_controller(floor: Floor, row: int, present: set[int]) -> Results:
 
     # Last: RE_DISCOVER rebuilds the sense map, leaving the board freshly
     # discovered at the end of the run.
-    check_re_discover(floor, row, results)
-    check_status(floor, row, results)
+    check_re_discover(floor, row, results, expect_tiles)
+    check_status(floor, row, results, expect_tiles)
 
     print(f"  -- {results.summary()}")
     return results
@@ -321,6 +344,11 @@ def main() -> int:
                         help="repeatable; defaults to the two-chain hat's ttyAMA0:17 and ttyAMA2:7")
     parser.add_argument("--baudrate", type=int, default=DEFAULT_BAUDRATE,
                         help=f"default: {DEFAULT_BAUDRATE}")
+    parser.add_argument("--expect-tiles", type=int, default=0, choices=range(0, 9),
+                        metavar="N",
+                        help="tiles physically attached to each row controller (0-8, "
+                             "default 0). STATUS must report exactly this many, in "
+                             "slots 0..N-1; anything else fails.")
     args = parser.parse_args()
 
     if args.chain:
@@ -346,7 +374,9 @@ def main() -> int:
               + ", ".join(f"0x{r:02X}(chain {c})" for r, c in sorted(found.items())))
 
         present = set(found)
-        all_results = [check_row_controller(floor, row, present) for row in sorted(found)]
+        all_results = [
+            check_row_controller(floor, row, present, args.expect_tiles) for row in sorted(found)
+        ]
         all_results.append(check_broadcast_admin_rejected(floor))
 
     overall_ok = all(r.ok for r in all_results)
