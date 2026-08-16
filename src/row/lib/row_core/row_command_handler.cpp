@@ -1,4 +1,6 @@
 #include "row_command_handler.h"
+#include "firmware_version.h" // src/common/tile_bus_protocol/, via lib_extra_dirs
+#include "fw_version_info.h"
 
 RowCommandHandler::RowCommandHandler(ITransport &tile_transport, SenseMapper &sense,
                                       IPowerMonitor &power, uint8_t my_row_addr)
@@ -87,6 +89,30 @@ void RowCommandHandler::handle_error_log() {
         p[3] = (uint8_t)(e.timestamp_s >> 8);
         p[4] = (uint8_t)(e.timestamp_s & 0xFF);
     }
+}
+
+void RowCommandHandler::handle_version() {
+    response_.addr = my_row_addr_;
+    response_.cmd  = (uint8_t)RowBusCmd::VERSION_RESP;
+    response_.len  = 8 + TileMap::NUM_SLOTS * FW_VERSION_WIRE_SIZE; // 64
+
+    fw_version_encode(row_fw_version(), response_.payload);
+
+    // Answered entirely from SenseMapper's cache (filled at the end of
+    // discovery/RE_DISCOVER) - no Tile Bus traffic here, so this never
+    // competes with a display frame in flight.
+    const TileMap &map = sense_.result();
+    uint8_t tiles_valid = 0;
+    for (uint8_t slot = 0; slot < TileMap::NUM_SLOTS; slot++) {
+        uint8_t *entry = &response_.payload[8 + slot * FW_VERSION_WIRE_SIZE];
+        if (map.has_version(slot)) {
+            tiles_valid |= (uint8_t)(1u << slot);
+            fw_version_encode(map.version_for(slot), entry);
+        } else {
+            for (uint8_t i = 0; i < FW_VERSION_WIRE_SIZE; i++) entry[i] = 0;
+        }
+    }
+    response_.payload[7] = tiles_valid;
 }
 
 void RowCommandHandler::log_row_bus_overflow(uint32_t now_ms) {
@@ -208,6 +234,7 @@ const RowBusFrame *RowCommandHandler::handle(const RowBusFrame &in) {
         case RowBusCmd::POWER:
         case RowBusCmd::RE_DISCOVER:
         case RowBusCmd::ERROR_LOG:
+        case RowBusCmd::VERSION:
             return nullptr;
         default:
             break;
@@ -220,6 +247,7 @@ const RowBusFrame *RowCommandHandler::handle(const RowBusFrame &in) {
     case RowBusCmd::POWER:        handle_power();        return &response_;
     case RowBusCmd::RE_DISCOVER:  handle_re_discover();  return &response_;
     case RowBusCmd::ERROR_LOG:    handle_error_log();    return &response_;
+    case RowBusCmd::VERSION:      handle_version();      return &response_;
     case RowBusCmd::SEND_DATA:    handle_send_data(in);  return nullptr;
     case RowBusCmd::LATCH:        handle_latch();        return nullptr;
     case RowBusCmd::BLACKOUT:     handle_blackout();     return nullptr;

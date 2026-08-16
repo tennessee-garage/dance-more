@@ -58,6 +58,7 @@ private:
     void handle_power();
     void handle_re_discover();
     void handle_error_log();
+    void handle_version();
     void handle_send_data(const RowBusFrame &in);
     void handle_latch();
     void handle_blackout();
