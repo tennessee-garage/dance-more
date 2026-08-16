@@ -62,6 +62,34 @@ static constexpr uint32_t WATCHDOG_TIMEOUT_MS = 500;
 static constexpr uint32_t CORE1_STALL_MS      = 250;
 static volatile uint32_t  core1_heartbeat     = 0;
 
+// ---- Boot discovery retry ----
+// Discovery runs once from setup1(), finishing ~35 ms after power-up, but a
+// tile does not service the Tile Bus until its own start-up completes. On a
+// cold boot every row therefore came up reporting tiles_found = 0 and stayed
+// that way until the Pi issued an explicit RE_DISCOVER.
+//
+// Retrying is deliberately preferred over waiting a fixed settling time: it
+// couples to nothing about how long a tile takes to boot, so it keeps working
+// if the tile's start-up changes, and it also covers a slow-rising rail,
+// staggered supplies, and a tile that resets inside the window.
+//
+// Retried while all three hold:
+//   - not every slot is filled. "Retry only while zero found" would stop at
+//     the first gap: with tile 3 still booting, discovery ends the chain at
+//     3 tiles and slots 4-7 would never be looked at again.
+//   - still inside the boot window, so a legitimately short row (a bench with
+//     one tile, or a partly populated floor) settles instead of sweeping for
+//     ever.
+//   - no SEND_DATA has arrived yet. Pixel data means the show has started,
+//     and a discovery sweep would put ACTIVATE_SENSE/DETECT_SENSE traffic on
+//     the Tile Bus in the middle of SET_LEDS forwarding. After that point
+//     re-discovery is the Pi's call, via RE_DISCOVER.
+static constexpr uint32_t BOOT_DISCOVERY_WINDOW_MS    = 20000;
+static constexpr uint32_t DISCOVERY_RETRY_INTERVAL_MS = 1000;
+
+// Core 1 only: set when the first SEND_DATA arrives, never cleared.
+static bool display_data_seen = false;
+
 // Set by core 0 when the Pi-facing UART overflows, consumed by core 1, which
 // owns the error log. A flag rather than a count: consecutive overruns
 // collapse into one entry instead of flooding a 32-deep log, and "we overran
@@ -252,6 +280,22 @@ void setup1() {
     sense_mapper.start();
 }
 
+// Re-runs boot discovery while the row still looks incomplete. See
+// BOOT_DISCOVERY_WINDOW_MS for why each guard is here. Retries from the ERROR
+// state too, so a sweep that aborted on a mid-chain fault gets another go.
+static void maybe_retry_discovery(uint32_t now_ms) {
+    static uint32_t next_attempt_ms = DISCOVERY_RETRY_INTERVAL_MS;
+
+    if (display_data_seen) return;
+    if (now_ms >= BOOT_DISCOVERY_WINDOW_MS) return;
+    if (sense_mapper.state() == SenseMapState::DISCOVERING) return;
+    if (tile_map.discovered_count() >= TileMap::NUM_SLOTS) return;
+    if ((int32_t)(now_ms - next_attempt_ms) < 0) return;
+
+    next_attempt_ms = now_ms + DISCOVERY_RETRY_INTERVAL_MS;
+    sense_mapper.start();
+}
+
 void loop1() {
     core1_heartbeat++;  // liveness for core 0's watchdog feed
 
@@ -265,6 +309,7 @@ void loop1() {
 
     RowBusFrame frame;
     while (ingest_queue.try_pop(&frame)) {
+        if (frame.cmd == (uint8_t)RowBusCmd::SEND_DATA) display_data_seen = true;
         const RowBusFrame *response = row_cmd_handler.handle(frame);
         if (response) {
             response_queue.try_push(*response);
@@ -283,4 +328,6 @@ void loop1() {
     // a SEND_DATA in the same batch is dispatched (and, if forwarding isn't
     // done yet, deferred - see #46) before any slots advance this iteration.
     row_cmd_handler.poll(millis());
+
+    maybe_retry_discovery(millis());
 }
