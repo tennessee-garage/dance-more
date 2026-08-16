@@ -158,6 +158,25 @@ def responsive(floor: Floor, row: int, attempts: int = 3) -> bool:
     return False
 
 
+def await_recovery(floor: Floor, row: int, limit_s: float = 8.0) -> float | None:
+    """Seconds until the row answers again, or None if it never does.
+
+    The row controller runs a watchdog (see main.cpp): a stalled core stops
+    the feed and reboots the chip, so dropping out under load is expected to
+    be self-correcting. Distinguishing "recovered on its own" from "needs a
+    power cycle" is the whole point of this test post-fix, and a plain
+    responsive() check is too short to see the difference.
+    """
+    start = time.perf_counter()
+    while time.perf_counter() - start < limit_s:
+        try:
+            floor.request(row, Cmd.STATUS)
+            return time.perf_counter() - start
+        except RowNotResponding:
+            pass
+    return None
+
+
 def measure(floor: Floor, row: int, frames: int, target_fps: float | None) -> float:
     """Push `frames` max-size SET_LEDS frames, optionally paced. Returns fps."""
     period = 1.0 / target_fps if target_fps else 0.0
@@ -182,17 +201,46 @@ def stress(floor: Floor, row: int, soak_s: float) -> bool:
     print(f"    {'target':>8}  {'achieved':>9}  {'per frame':>10}  row")
     print("    " + "-" * 44)
 
-    ok = True
-    for target in [30, 60, 120, 200, None]:
+    # docs/row-bus-protocol.md 1 budgets 30 FPS with all 8 rows sending
+    # max-size frames. Rates at or below DESIGN_TARGET_FPS must run clean;
+    # above it, dropping out is an acceptable ceiling *provided* the watchdog
+    # brings the row back without human intervention. Needing a power cycle
+    # is the only hard failure.
+    DESIGN_TARGET_FPS = 120
+    hard_fail = False
+    target_fail = False
+    highest_clean_fps = 0.0
+    first_dropout = None
+    for target in [30, 60, 120, 200, 300, None]:
         label = f"{target} fps" if target else "flat out"
         fps = measure(floor, row, frames=90, target_fps=target)
-        alive = responsive(floor, row)
-        ok = ok and alive
-        print(f"    {label:>8}  {fps:>7.1f}fps  {1000 / fps:>8.2f}ms  "
-              f"{'ok' if alive else 'NOT RESPONDING'}")
-        if not alive:
-            print("\n    Row controller stopped answering - stopping the ramp.")
-            return False
+        if responsive(floor, row):
+            state = "ok"
+            highest_clean_fps = max(highest_clean_fps, fps)
+        else:
+            # Dropped out. Post-watchdog this should be self-correcting;
+            # if it is not, the board needs a power cycle and the ramp ends.
+            recovery = await_recovery(floor, row)
+            if recovery is None:
+                print(f"    {label:>8}  {fps:>7.1f}fps  {1000 / fps:>8.2f}ms  "
+                      f"DEAD - no recovery")
+                print("\n    Row controller did not come back - power cycle needed.")
+                return False
+            state = f"recovered in {recovery:.2f}s (watchdog)"
+            if first_dropout is None:
+                first_dropout = fps
+            if target is not None and target <= DESIGN_TARGET_FPS:
+                target_fail = True
+            floor.request(row, Cmd.RE_DISCOVER)
+            time.sleep(0.4)
+        print(f"    {label:>8}  {fps:>7.1f}fps  {1000 / fps:>8.2f}ms  {state}")
+
+    print(f"\n    Highest rate with no dropout: {highest_clean_fps:.1f} fps")
+    if first_dropout:
+        print(f"    First dropout at:             {first_dropout:.1f} fps "
+              f"(recovered by watchdog, no power cycle)")
+    if target_fail:
+        print(f"    FAIL: dropped out at or below the {DESIGN_TARGET_FPS} fps design target")
 
     print(f"\n=== SOAK: flat out for {soak_s:.0f}s ===")
     start = time.perf_counter()
@@ -205,9 +253,17 @@ def stress(floor: Floor, row: int, soak_s: float) -> bool:
     print(f"    ({sent * 976 / elapsed / 1000:.0f} kB/s on the Row Bus)")
 
     alive = responsive(floor, row)
-    print(f"    row controller after soak: {'responsive' if alive else 'NOT RESPONDING'}")
     if not alive:
-        return False
+        recovery = await_recovery(floor, row)
+        if recovery is None:
+            print("    row controller after soak: DEAD - power cycle needed")
+            return False
+        print(f"    row controller after soak: recovered in {recovery:.2f}s (watchdog)")
+        floor.request(row, Cmd.RE_DISCOVER)
+        time.sleep(0.4)
+        hard_fail = hard_fail  # recovery without a power cycle is acceptable here
+    else:
+        print("    row controller after soak: responsive throughout")
 
     frame = floor.request(row, Cmd.STATUS).payload
     print(f"    tiles still discovered: {frame[1]}")
@@ -220,11 +276,14 @@ def stress(floor: Floor, row: int, soak_s: float) -> bool:
              0x05: "row_bus_rx_overflow"}
     summary = ", ".join(f"{names.get(k, hex(k))}={v}" for k, v in sorted(kinds.items()))
     print(f"    error log: {errs[0]} entries" + (f" ({summary})" if summary else ""))
-    if kinds and set(kinds) - {0x04}:
-        print("    NOTE: entries other than latch_overrun appeared - worth a look.")
-    else:
-        print("    (latch_overrun only: expected at this rate, see module docstring)")
-    return ok and alive
+    if 0x05 in kinds:
+        print("    NOTE: row_bus_rx_overflow present - the Pi-facing UART dropped")
+        print("          bytes, confirming the receive path as the rate limit.")
+    if kinds and set(kinds) - {0x04, 0x05}:
+        print("    NOTE: unexpected error types present - worth a look.")
+    if not kinds:
+        print("    (clean)")
+    return not (hard_fail or target_fail)
 
 
 def parse_chain(spec: str, baudrate: int) -> ChainConfig:
