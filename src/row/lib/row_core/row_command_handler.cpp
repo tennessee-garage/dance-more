@@ -89,6 +89,13 @@ void RowCommandHandler::handle_error_log() {
     }
 }
 
+void RowCommandHandler::log_row_bus_overflow(uint32_t now_ms) {
+    // slot/tile_bus_cmd describe Tile Bus faults; neither applies to an
+    // overrun on the Pi-facing link, so both are zero (see the error_type
+    // comment in row_command_handler.h).
+    log_error(0, 0, ERROR_TYPE_ROW_BUS_RX_OVERFLOW, now_ms);
+}
+
 void RowCommandHandler::log_error(uint8_t slot, uint8_t tile_bus_cmd, uint8_t error_type, uint32_t now_ms) {
     ErrorLogEntry &e = error_log_[error_log_next_];
     e.slot         = slot;
@@ -188,6 +195,25 @@ void RowCommandHandler::poll(uint32_t now_ms) {
 }
 
 const RowBusFrame *RowCommandHandler::handle(const RowBusFrame &in) {
+    // Admin commands are unicast-only (docs/row-bus-protocol.md §3:
+    // broadcast "all row controllers accept; none respond"). With every row
+    // on the bus, a broadcast admin command would have all 8 try to answer
+    // the same frame simultaneously - a real collision on shared RS-485,
+    // not a hypothetical one - so these are rejected outright rather than
+    // processed-but-silent.
+    if (in.addr == ROWBUS_ADDR_BROADCAST) {
+        switch ((RowBusCmd)in.cmd) {
+        case RowBusCmd::TEST:
+        case RowBusCmd::STATUS:
+        case RowBusCmd::POWER:
+        case RowBusCmd::RE_DISCOVER:
+        case RowBusCmd::ERROR_LOG:
+            return nullptr;
+        default:
+            break;
+        }
+    }
+
     switch ((RowBusCmd)in.cmd) {
     case RowBusCmd::TEST:         handle_test();         return &response_;
     case RowBusCmd::STATUS:       handle_status();       return &response_;

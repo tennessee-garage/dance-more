@@ -16,11 +16,16 @@ struct ErrorLogEntry {
     uint16_t timestamp_s;
 };
 
-// error_type values (docs/row-bus-protocol.md §5.1). Only LATCH_OVERRUN has
-// a producer so far - the others describe future error sources (SenseMapper
-// retry exhaustion, CRC failures, sense collisions) with nothing wired up
-// to log them yet.
+// error_type values (docs/row-bus-protocol.md §5.1). LATCH_OVERRUN and
+// ROW_BUS_RX_OVERFLOW have producers; the others describe future error
+// sources (SenseMapper retry exhaustion, CRC failures, sense collisions)
+// with nothing wired up to log them yet.
 static constexpr uint8_t ERROR_TYPE_LATCH_OVERRUN = 0x04;
+// Row Bus receive overrun: the Pi-facing UART dropped bytes, so whatever
+// frame was in flight died on CRC. Unlike the types above this describes a
+// fault on the *upstream* link, so slot and tile_bus_cmd carry no meaning
+// and are logged as 0.
+static constexpr uint8_t ERROR_TYPE_ROW_BUS_RX_OVERFLOW = 0x05;
 
 // Dispatches Row Bus commands arriving from the Raspberry Pi
 // (docs/row-bus-protocol.md §5). in.addr must already be filtered by the
@@ -39,6 +44,11 @@ public:
     // this is what makes a LATCH arriving mid-forward observable/deferrable
     // rather than everything completing atomically within handle().
     void poll(uint32_t now_ms);
+
+    // Records a Row Bus receive overrun in the error log. Detected on core 0
+    // (which owns the Pi-facing UART) but logged here, because core 1 owns
+    // the error log - main.cpp carries the flag across.
+    void log_row_bus_overflow(uint32_t now_ms);
 
 private:
     static constexpr uint8_t ERROR_LOG_CAPACITY = 32;

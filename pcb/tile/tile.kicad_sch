@@ -2815,7 +2815,7 @@
 	)
 	(rectangle
 		(start 34.798 126.492)
-		(end 131.826 172.72)
+		(end 121.92 172.72)
 		(stroke
 			(width 0)
 			(type default)
@@ -2972,12 +2972,6 @@
 		(uuid "63dc2305-98b9-42d7-8c59-86c871cad8c5")
 	)
 	(junction
-		(at 107.95 157.48)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "772bd67d-1807-45bf-8b5c-5f553141cde0")
-	)
-	(junction
 		(at 170.18 96.52)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3018,12 +3012,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "d49f0041-51dd-4f3d-a142-0c1e8f20a473")
-	)
-	(junction
-		(at 107.95 137.16)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "ef0f97b3-6110-4201-84c5-01a538aa49ba")
 	)
 	(junction
 		(at 80.01 76.2)
@@ -3379,16 +3367,6 @@
 	)
 	(wire
 		(pts
-			(xy 120.65 148.59) (xy 120.65 157.48)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "548d5af1-9326-41ec-9a1d-c392ff1db9db")
-	)
-	(wire
-		(pts
 			(xy 60.96 149.86) (xy 64.77 149.86)
 		)
 		(stroke
@@ -3429,16 +3407,6 @@
 	)
 	(wire
 		(pts
-			(xy 120.65 140.97) (xy 120.65 137.16)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "60e267b2-9a40-4b56-9e2b-4ff3a490d265")
-	)
-	(wire
-		(pts
 			(xy 39.37 97.79) (xy 46.99 97.79)
 		)
 		(stroke
@@ -3456,16 +3424,6 @@
 			(type default)
 		)
 		(uuid "6421c9c1-ebe5-43dd-9fba-ad71a7ccd010")
-	)
-	(wire
-		(pts
-			(xy 120.65 157.48) (xy 107.95 157.48)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "72ab3846-3b73-43d4-b219-6b69e6a2ef87")
 	)
 	(wire
 		(pts
@@ -3906,16 +3864,6 @@
 			(type default)
 		)
 		(uuid "e9097f4d-768c-4a7b-8d52-9a9cf6905afd")
-	)
-	(wire
-		(pts
-			(xy 120.65 137.16) (xy 107.95 137.16)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ec23c15a-86c3-4b84-9fb1-820a72acd396")
 	)
 	(wire
 		(pts
@@ -5239,88 +5187,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:C")
-		(at 120.65 144.78 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "53b7d672-b89f-435b-8eea-3becdd1d5071")
-		(property "Reference" "C6"
-			(at 124.46 143.5099 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "100nF"
-			(at 124.46 146.0499 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
-			(at 121.6152 148.59 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 120.65 144.78 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Unpolarized capacitor"
-			(at 120.65 144.78 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "13c96bfa-51e5-4835-bd61-4f53e24f0024")
-		)
-		(pin "2"
-			(uuid "4bd7bed3-acb9-4da0-ab5f-a67fce1fdaaa")
-		)
-		(instances
-			(project "tile"
-				(path "/68eea85a-4a75-40a0-9423-1988556e9fbf"
-					(reference "C6")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "THVD1420DR:THVD1420DR")
 		(at 64.77 149.86 0)
 		(unit 1)
@@ -6530,7 +6396,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "100nF"
+		(property "Value" "0.1uF"
 			(at 111.76 146.0499 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7234,6 +7100,50 @@
 			)
 		)
 		(property "Description" "20MHz, 32kB Flash, 3kB SRAM, 256B EEPROM, TSSOP-14"
+			(at 80.01 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Name" "Microchip Technology"
+			(at 80.01 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer Part Number" "ATTINY3224-XF"
+			(at 80.01 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser Part Number" "579-ATTINY3224-XF"
+			(at 80.01 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser Price/Stock" "https://www.mouser.com/en/ProductDetail/579-ATTINY3224-XF"
 			(at 80.01 95.25 0)
 			(hide yes)
 			(show_name no)

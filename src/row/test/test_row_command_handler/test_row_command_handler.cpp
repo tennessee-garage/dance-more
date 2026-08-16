@@ -416,6 +416,68 @@ void test_error_log_returns_empty_when_no_errors_logged() {
 }
 
 // ---------------------------------------------------------------------------
+// Broadcast admin rejection (docs/row-bus-protocol.md §3: "all row
+// controllers accept; none respond"). All 5 admin commands, since a
+// switch-based guard is exactly the kind of thing that silently stops
+// covering a case when a new one is added.
+// ---------------------------------------------------------------------------
+
+void test_broadcast_admin_commands_get_no_response() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    const RowBusCmd admin_cmds[] = {
+        RowBusCmd::TEST, RowBusCmd::STATUS, RowBusCmd::POWER,
+        RowBusCmd::RE_DISCOVER, RowBusCmd::ERROR_LOG,
+    };
+    for (RowBusCmd cmd : admin_cmds) {
+        RowBusFrame req = make_frame(ROWBUS_ADDR_BROADCAST, cmd, nullptr, 0);
+        TEST_ASSERT_NULL_MESSAGE(handler.handle(req), "broadcast admin command should get no response");
+    }
+}
+
+void test_unicast_admin_commands_still_respond() {
+    // Companion to the above: proves the guard checks addr, not just cmd,
+    // and that unicast to our own address is unaffected by it.
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    const RowBusCmd admin_cmds[] = {
+        RowBusCmd::TEST, RowBusCmd::STATUS, RowBusCmd::POWER,
+        RowBusCmd::RE_DISCOVER, RowBusCmd::ERROR_LOG,
+    };
+    for (RowBusCmd cmd : admin_cmds) {
+        RowBusFrame req = make_frame(0x00, cmd, nullptr, 0);
+        TEST_ASSERT_NOT_NULL_MESSAGE(handler.handle(req), "unicast admin command should still respond");
+    }
+}
+
+void test_broadcast_display_commands_are_unaffected() {
+    // LATCH/BLACKOUT are documented broadcast commands and already return
+    // nullptr unconditionally - confirms the new guard didn't change that.
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    RowBusFrame latch = make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::LATCH, nullptr, 0);
+    TEST_ASSERT_NULL(handler.handle(latch));
+
+    RowBusFrame blackout = make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::BLACKOUT, nullptr, 0);
+    TEST_ASSERT_NULL(handler.handle(blackout));
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -434,6 +496,9 @@ int main(int, char **) {
     RUN_TEST(test_re_discover_starts_sense_mapping_and_acks);
     RUN_TEST(test_test_command_returns_always_pass_stub);
     RUN_TEST(test_error_log_returns_empty_when_no_errors_logged);
+    RUN_TEST(test_broadcast_admin_commands_get_no_response);
+    RUN_TEST(test_unicast_admin_commands_still_respond);
+    RUN_TEST(test_broadcast_display_commands_are_unaffected);
 
     return UNITY_END();
 }

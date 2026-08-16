@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "rp2350/power_monitor_rp2350.h"
 
-// Standalone INA220 connectivity test — polls the power monitor once a
+// Standalone INA226 connectivity test — polls the power monitor once a
 // second and prints readings to Serial.
 
 static PowerMonitorRP2350 power_monitor;

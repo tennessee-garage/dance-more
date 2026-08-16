@@ -14,6 +14,15 @@ The floor runs on **12 V**, supplied by two line-powered **Mean Well 12 V /
 - The **0.5 A/tile** figure is a measured worst case (40 WS2815 LEDs at full
   white). It is **LED current only** — it does not yet include the ATtiny3224,
   the Xiao row controllers, or transceivers.
+- A later, instrumented remeasurement — `tile_brightness_sweep.py`, see
+  [docs/measurements/](measurements/) — puts LED-only current at full white
+  closer to **~418 mA**, with the row controller + tile's own quiescent draw
+  (~108 mA) subtracted out explicitly rather than folded in. The provenance
+  of the original 0.5 A figure isn't known (likely different driving
+  hardware, possibly a different strip), so this isn't treated as a
+  correction, just corroboration - same order of magnitude, and **0.5 A is
+  kept as the figure used throughout this doc** (including the per-row/
+  per-floor rollups below) for its clean rounding and built-in headroom.
 - Full white is the worst case; typical animated content draws less, but the
   supply and wiring must be sized for the ~32 A peak (plus headroom).
 

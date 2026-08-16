@@ -1,0 +1,363 @@
+<title>Tile Brightness Sweep</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-1:      #fcfcfb;
+  --surface-2:      #f4f3f0;
+  --border:         #e3e1db;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #83817a;
+  --series-red:     #e34948;
+  --series-green:   #008300;
+  --series-blue:    #2a78d6;
+  --series-white:   #6b6a64;
+  --focus-ring:      #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232320;
+    --border:         #38372f;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8f8d82;
+    --series-red:     #e66767;
+    --series-green:   #008300;
+    --series-blue:    #3987e5;
+    --series-white:   #a9a89e;
+    --focus-ring:      #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1:      #1a1a19;
+  --surface-2:      #232320;
+  --border:         #38372f;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #8f8d82;
+  --series-red:     #e66767;
+  --series-green:   #008300;
+  --series-blue:    #3987e5;
+  --series-white:   #a9a89e;
+  --focus-ring:      #3987e5;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.viz-root {
+  padding: 28px 32px 32px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.viz-title { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+.viz-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; line-height: 1.5; max-width: 640px; }
+.viz-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 20px 8px;
+}
+.viz-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12.5px; }
+.viz-legend-item {
+  display: flex; align-items: center; gap: 6px; color: var(--text-secondary);
+  cursor: pointer; user-select: none; background: none; border: none; padding: 2px 0;
+  font: inherit; font-size: 12.5px;
+}
+.viz-legend-item[data-off="true"] { opacity: 0.35; }
+.viz-legend-swatch { width: 16px; height: 2px; border-radius: 1px; }
+.viz-legend-swatch.dashed { background: none; border-top: 2px dashed currentColor; height: 0; }
+.viz-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.viz-toggle {
+  font-size: 12px; color: var(--text-secondary); background: transparent;
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+.viz-toggle:hover { background: var(--surface-1); }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.grid-line { stroke: var(--border); stroke-width: 1; }
+.axis-text { fill: var(--text-muted); font-size: 11px; }
+.axis-label { fill: var(--text-secondary); font-size: 11.5px; }
+.series-line { fill: none; stroke-width: 2; }
+.series-line.dashed { stroke-dasharray: 5 4; }
+.end-label { font-size: 11px; font-weight: 600; }
+.leader-line { pointer-events: none; }
+.crosshair-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.hover-dot { pointer-events: none; }
+.tooltip {
+  position: absolute; pointer-events: none; background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 150px;
+  opacity: 0; transition: opacity 0.08s;
+}
+.tooltip-x { color: var(--text-secondary); font-size: 11px; margin-bottom: 5px; }
+.tooltip-row { display: flex; justify-content: space-between; gap: 14px; padding: 1.5px 0; }
+.tooltip-key { display: flex; align-items: center; gap: 5px; color: var(--text-secondary); }
+.tooltip-swatch { width: 10px; height: 2px; }
+.tooltip-val { font-weight: 600; color: var(--text-primary); }
+table.viz-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+table.viz-table th, table.viz-table td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+table.viz-table th:first-child, table.viz-table td:first-child { text-align: left; }
+table.viz-table th { color: var(--text-muted); font-weight: 500; }
+.viz-table-wrap { max-height: 420px; overflow-y: auto; overflow-x: auto; display: none; }
+.viz-hidden { display: none; }
+</style>
+
+<div class="viz-root">
+  <p class="viz-title">Tile brightness sweep — current draw vs. commanded intensity</p>
+  <p class="viz-subtitle">
+    Row 0x00, single tile, 0–100% in 5% steps, INA226-measured current with the
+    108 mA blacked-out baseline (row controller + tile quiescent draw)
+    subtracted. Red, green, and blue single-channel sweeps land on almost the
+    same curve as white (all three channels at once) — this tile's current
+    draw tracks <em>how bright</em>, not <em>how many channels are lit</em>.
+  </p>
+
+  <div class="viz-card">
+    <div class="viz-toolbar">
+      <div class="viz-legend" id="legend"></div>
+      <button class="viz-toggle" id="tableToggle">Show table</button>
+    </div>
+    <div id="chartWrap" style="position: relative;">
+      <svg id="chart" viewBox="0 0 900 380"></svg>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+    <div class="viz-table-wrap" id="tableWrap"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const data = [{"color": "red", "pct": 0, "level": 0, "current_mA": 107.75, "delta_mA": 0.0, "delta_mW": 0.0}, {"color": "red", "pct": 5, "level": 13, "current_mA": 113.5, "delta_mA": 5.75, "delta_mW": 70.0}, {"color": "red", "pct": 10, "level": 26, "current_mA": 129.75, "delta_mA": 22.0, "delta_mW": 261.2}, {"color": "red", "pct": 15, "level": 38, "current_mA": 150.25, "delta_mA": 42.5, "delta_mW": 510.0}, {"color": "red", "pct": 20, "level": 51, "current_mA": 173.25, "delta_mA": 65.5, "delta_mW": 777.5}, {"color": "red", "pct": 25, "level": 64, "current_mA": 194.25, "delta_mA": 86.5, "delta_mW": 1036.2}, {"color": "red", "pct": 30, "level": 76, "current_mA": 215.75, "delta_mA": 108.0, "delta_mW": 1288.8}, {"color": "red", "pct": 35, "level": 89, "current_mA": 238.5, "delta_mA": 130.75, "delta_mW": 1563.8}, {"color": "red", "pct": 40, "level": 102, "current_mA": 261.0, "delta_mA": 153.25, "delta_mW": 1835.0}, {"color": "red", "pct": 45, "level": 115, "current_mA": 284.75, "delta_mA": 177.0, "delta_mW": 2103.8}, {"color": "red", "pct": 50, "level": 128, "current_mA": 307.5, "delta_mA": 199.75, "delta_mW": 2380.0}, {"color": "red", "pct": 55, "level": 140, "current_mA": 326.5, "delta_mA": 218.75, "delta_mW": 2611.2}, {"color": "red", "pct": 60, "level": 153, "current_mA": 350.75, "delta_mA": 243.0, "delta_mW": 2895.0}, {"color": "red", "pct": 65, "level": 166, "current_mA": 372.0, "delta_mA": 264.25, "delta_mW": 3150.0}, {"color": "red", "pct": 70, "level": 178, "current_mA": 392.75, "delta_mA": 285.0, "delta_mW": 3386.2}, {"color": "red", "pct": 75, "level": 191, "current_mA": 416.0, "delta_mA": 308.25, "delta_mW": 3672.5}, {"color": "red", "pct": 80, "level": 204, "current_mA": 438.75, "delta_mA": 331.0, "delta_mW": 3940.0}, {"color": "red", "pct": 85, "level": 217, "current_mA": 461.25, "delta_mA": 353.5, "delta_mW": 4203.8}, {"color": "red", "pct": 90, "level": 230, "current_mA": 483.0, "delta_mA": 375.25, "delta_mW": 4465.0}, {"color": "red", "pct": 95, "level": 242, "current_mA": 504.0, "delta_mA": 396.25, "delta_mW": 4713.8}, {"color": "red", "pct": 100, "level": 255, "current_mA": 526.0, "delta_mA": 418.25, "delta_mW": 4983.8}, {"color": "green", "pct": 0, "level": 0, "current_mA": 110.0, "delta_mA": 2.25, "delta_mW": 28.8}, {"color": "green", "pct": 5, "level": 13, "current_mA": 114.25, "delta_mA": 6.5, "delta_mW": 82.5}, {"color": "green", "pct": 10, "level": 26, "current_mA": 130.25, "delta_mA": 22.5, "delta_mW": 272.5}, {"color": "green", "pct": 15, "level": 38, "current_mA": 150.5, "delta_mA": 42.75, "delta_mW": 517.5}, {"color": "green", "pct": 20, "level": 51, "current_mA": 173.0, "delta_mA": 65.25, "delta_mW": 780.0}, {"color": "green", "pct": 25, "level": 64, "current_mA": 195.5, "delta_mA": 87.75, "delta_mW": 1055.0}, {"color": "green", "pct": 30, "level": 76, "current_mA": 215.5, "delta_mA": 107.75, "delta_mW": 1286.2}, {"color": "green", "pct": 35, "level": 89, "current_mA": 239.25, "delta_mA": 131.5, "delta_mW": 1565.0}, {"color": "green", "pct": 40, "level": 102, "current_mA": 262.5, "delta_mA": 154.75, "delta_mW": 1847.5}, {"color": "green", "pct": 45, "level": 115, "current_mA": 283.75, "delta_mA": 176.0, "delta_mW": 2105.0}, {"color": "green", "pct": 50, "level": 128, "current_mA": 306.5, "delta_mA": 198.75, "delta_mW": 2368.8}, {"color": "green", "pct": 55, "level": 140, "current_mA": 327.25, "delta_mA": 219.5, "delta_mW": 2622.5}, {"color": "green", "pct": 60, "level": 153, "current_mA": 350.25, "delta_mA": 242.5, "delta_mW": 2890.0}, {"color": "green", "pct": 65, "level": 166, "current_mA": 373.25, "delta_mA": 265.5, "delta_mW": 3176.2}, {"color": "green", "pct": 70, "level": 178, "current_mA": 392.25, "delta_mA": 284.5, "delta_mW": 3382.5}, {"color": "green", "pct": 75, "level": 191, "current_mA": 416.25, "delta_mA": 308.5, "delta_mW": 3686.2}, {"color": "green", "pct": 80, "level": 204, "current_mA": 437.75, "delta_mA": 330.0, "delta_mW": 3925.0}, {"color": "green", "pct": 85, "level": 217, "current_mA": 460.75, "delta_mA": 353.0, "delta_mW": 4191.2}, {"color": "green", "pct": 90, "level": 230, "current_mA": 483.25, "delta_mA": 375.5, "delta_mW": 4470.0}, {"color": "green", "pct": 95, "level": 242, "current_mA": 503.75, "delta_mA": 396.0, "delta_mW": 4712.5}, {"color": "green", "pct": 100, "level": 255, "current_mA": 526.0, "delta_mA": 418.25, "delta_mW": 4977.5}, {"color": "blue", "pct": 0, "level": 0, "current_mA": 110.0, "delta_mA": 2.25, "delta_mW": 28.8}, {"color": "blue", "pct": 5, "level": 13, "current_mA": 115.0, "delta_mA": 7.25, "delta_mW": 90.0}, {"color": "blue", "pct": 10, "level": 26, "current_mA": 129.75, "delta_mA": 22.0, "delta_mW": 265.0}, {"color": "blue", "pct": 15, "level": 38, "current_mA": 150.75, "delta_mA": 43.0, "delta_mW": 520.0}, {"color": "blue", "pct": 20, "level": 51, "current_mA": 172.75, "delta_mA": 65.0, "delta_mW": 777.5}, {"color": "blue", "pct": 25, "level": 64, "current_mA": 195.25, "delta_mA": 87.5, "delta_mW": 1051.2}, {"color": "blue", "pct": 30, "level": 76, "current_mA": 216.5, "delta_mA": 108.75, "delta_mW": 1297.5}, {"color": "blue", "pct": 35, "level": 89, "current_mA": 240.0, "delta_mA": 132.25, "delta_mW": 1576.2}, {"color": "blue", "pct": 40, "level": 102, "current_mA": 260.75, "delta_mA": 153.0, "delta_mW": 1825.0}, {"color": "blue", "pct": 45, "level": 115, "current_mA": 284.25, "delta_mA": 176.5, "delta_mW": 2106.2}, {"color": "blue", "pct": 50, "level": 128, "current_mA": 305.0, "delta_mA": 197.25, "delta_mW": 2361.2}, {"color": "blue", "pct": 55, "level": 140, "current_mA": 325.75, "delta_mA": 218.0, "delta_mW": 2602.5}, {"color": "blue", "pct": 60, "level": 153, "current_mA": 350.5, "delta_mA": 242.75, "delta_mW": 2887.5}, {"color": "blue", "pct": 65, "level": 166, "current_mA": 372.0, "delta_mA": 264.25, "delta_mW": 3148.8}, {"color": "blue", "pct": 70, "level": 178, "current_mA": 392.5, "delta_mA": 284.75, "delta_mW": 3388.8}, {"color": "blue", "pct": 75, "level": 191, "current_mA": 415.75, "delta_mA": 308.0, "delta_mW": 3668.8}, {"color": "blue", "pct": 80, "level": 204, "current_mA": 438.5, "delta_mA": 330.75, "delta_mW": 3928.8}, {"color": "blue", "pct": 85, "level": 217, "current_mA": 459.0, "delta_mA": 351.25, "delta_mW": 4181.2}, {"color": "blue", "pct": 90, "level": 230, "current_mA": 483.0, "delta_mA": 375.25, "delta_mW": 4461.2}, {"color": "blue", "pct": 95, "level": 242, "current_mA": 503.25, "delta_mA": 395.5, "delta_mW": 4707.5}, {"color": "blue", "pct": 100, "level": 255, "current_mA": 526.0, "delta_mA": 418.25, "delta_mW": 4977.5}, {"color": "white", "pct": 0, "level": 0, "current_mA": 110.0, "delta_mA": 2.25, "delta_mW": 26.2}, {"color": "white", "pct": 5, "level": 13, "current_mA": 115.0, "delta_mA": 7.25, "delta_mW": 90.0}, {"color": "white", "pct": 10, "level": 26, "current_mA": 130.25, "delta_mA": 22.5, "delta_mW": 272.5}, {"color": "white", "pct": 15, "level": 38, "current_mA": 150.25, "delta_mA": 42.5, "delta_mW": 513.8}, {"color": "white", "pct": 20, "level": 51, "current_mA": 172.75, "delta_mA": 65.0, "delta_mW": 781.2}, {"color": "white", "pct": 25, "level": 64, "current_mA": 195.25, "delta_mA": 87.5, "delta_mW": 1046.2}, {"color": "white", "pct": 30, "level": 76, "current_mA": 216.0, "delta_mA": 108.25, "delta_mW": 1287.5}, {"color": "white", "pct": 35, "level": 89, "current_mA": 239.0, "delta_mA": 131.25, "delta_mW": 1563.8}, {"color": "white", "pct": 40, "level": 102, "current_mA": 261.0, "delta_mA": 153.25, "delta_mW": 1830.0}, {"color": "white", "pct": 45, "level": 115, "current_mA": 283.25, "delta_mA": 175.5, "delta_mW": 2093.8}, {"color": "white", "pct": 50, "level": 128, "current_mA": 305.0, "delta_mA": 197.25, "delta_mW": 2360.0}, {"color": "white", "pct": 55, "level": 140, "current_mA": 327.25, "delta_mA": 219.5, "delta_mW": 2621.2}, {"color": "white", "pct": 60, "level": 153, "current_mA": 348.25, "delta_mA": 240.5, "delta_mW": 2865.0}, {"color": "white", "pct": 65, "level": 166, "current_mA": 371.25, "delta_mA": 263.5, "delta_mW": 3136.2}, {"color": "white", "pct": 70, "level": 178, "current_mA": 392.0, "delta_mA": 284.25, "delta_mW": 3383.8}, {"color": "white", "pct": 75, "level": 191, "current_mA": 414.5, "delta_mA": 306.75, "delta_mW": 3660.0}, {"color": "white", "pct": 80, "level": 204, "current_mA": 437.5, "delta_mA": 329.75, "delta_mW": 3930.0}, {"color": "white", "pct": 85, "level": 217, "current_mA": 459.5, "delta_mA": 351.75, "delta_mW": 4185.0}, {"color": "white", "pct": 90, "level": 230, "current_mA": 481.5, "delta_mA": 373.75, "delta_mW": 4447.5}, {"color": "white", "pct": 95, "level": 242, "current_mA": 502.5, "delta_mA": 394.75, "delta_mW": 4687.5}, {"color": "white", "pct": 100, "level": 255, "current_mA": 524.5, "delta_mA": 416.75, "delta_mW": 4955.0}];
+
+  const seriesDef = [
+    { key: "red",   label: "Red",              color: "var(--series-red)",   dashed: false },
+    { key: "green", label: "Green",             color: "var(--series-green)", dashed: false },
+    { key: "blue",  label: "Blue",              color: "var(--series-blue)",  dashed: false },
+    { key: "white", label: "White (R+G+B)",     color: "var(--series-white)", dashed: true  },
+  ];
+
+  const byColor = {};
+  seriesDef.forEach(s => { byColor[s.key] = data.filter(d => d.color === s.key).sort((a,b)=>a.pct-b.pct); });
+
+  const W = 900, H = 380;
+  const M = { top: 16, right: 110, bottom: 40, left: 52 };
+  const plotW = W - M.left - M.right;
+  const plotH = H - M.top - M.bottom;
+
+  const xMax = 100;
+  const yMax = Math.ceil(Math.max(...data.map(d => d.delta_mA)) / 25) * 25;
+
+  const xScale = pct => M.left + (pct / xMax) * plotW;
+  const yScale = mA  => M.top + plotH - (mA / yMax) * plotH;
+
+  const svg = document.getElementById("chart");
+  const ns = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    const e = document.createElementNS(ns, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // gridlines + axes
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const val = (yMax / yTicks) * i;
+    const y = yScale(val);
+    svg.appendChild(el("line", { class: "grid-line", x1: M.left, x2: W - M.right, y1: y, y2: y }));
+    const t = el("text", { class: "axis-text", x: M.left - 8, y: y + 4, "text-anchor": "end" });
+    t.textContent = Math.round(val);
+    svg.appendChild(t);
+  }
+  const xTicks = [0, 20, 40, 60, 80, 100];
+  xTicks.forEach(pct => {
+    const x = xScale(pct);
+    const t = el("text", { class: "axis-text", x: x, y: H - M.bottom + 20, "text-anchor": "middle" });
+    t.textContent = pct + "%";
+    svg.appendChild(t);
+  });
+  const xLabel = el("text", { class: "axis-label", x: M.left + plotW / 2, y: H - 4, "text-anchor": "middle" });
+  xLabel.textContent = "Commanded brightness (% of full scale)";
+  svg.appendChild(xLabel);
+  const yLabel = el("text", { class: "axis-label", x: -(M.top + plotH / 2), y: 14, "text-anchor": "middle",
+                               transform: "rotate(-90)" });
+  yLabel.textContent = "Current above baseline (mA)";
+  svg.appendChild(yLabel);
+
+  // lines + end labels
+  const active = {};
+  seriesDef.forEach(s => { active[s.key] = true; });
+
+  const lineEls = {};
+  const dotEls = {};
+
+  function pathFor(key) {
+    const pts = byColor[key];
+    return pts.map((d, i) => `${i === 0 ? "M" : "L"}${xScale(d.pct).toFixed(2)},${yScale(d.delta_mA).toFixed(2)}`).join(" ");
+  }
+
+  seriesDef.forEach(s => {
+    const path = el("path", {
+      class: "series-line" + (s.dashed ? " dashed" : ""),
+      d: pathFor(s.key), stroke: s.color,
+    });
+    svg.appendChild(path);
+    lineEls[s.key] = path;
+  });
+
+  // End-of-line labels, decluttered: these four curves converge almost to a
+  // single point at 100% (that convergence is the finding), so naive labels
+  // at their true y would stack illegibly on top of each other. Sort by true
+  // endpoint position, then push apart top-to-bottom with a minimum gap,
+  // keeping each label's leader anchored to its actual data point.
+  const MIN_LABEL_GAP = 15;
+  const endPoints = seriesDef.map(s => {
+    const last = byColor[s.key][byColor[s.key].length - 1];
+    return { key: s.key, s, trueY: yScale(last.delta_mA), x: xScale(last.pct) };
+  }).sort((a, b) => a.trueY - b.trueY);
+  for (let i = 1; i < endPoints.length; i++) {
+    if (endPoints[i].trueY - endPoints[i - 1].trueY < MIN_LABEL_GAP) {
+      endPoints[i].trueY = endPoints[i - 1].trueY + MIN_LABEL_GAP;
+    }
+  }
+  endPoints.forEach(pt => {
+    if (Math.abs(pt.trueY - yScale(byColor[pt.key][byColor[pt.key].length - 1].delta_mA)) > 1) {
+      svg.appendChild(el("line", {
+        class: "leader-line", x1: pt.x + 4, x2: pt.x + 12,
+        y1: yScale(byColor[pt.key][byColor[pt.key].length - 1].delta_mA), y2: pt.trueY,
+        stroke: pt.s.color, "stroke-width": 1, opacity: 0.5,
+      }));
+    }
+    const labelText = el("text", { class: "end-label", x: pt.x + 14, y: pt.trueY + 4, fill: pt.s.color });
+    labelText.textContent = pt.s.label;
+    svg.appendChild(labelText);
+    lineEls[pt.key + "_label"] = labelText;
+  });
+
+  // hover crosshair + dots
+  const crosshair = el("line", { class: "crosshair-line", y1: M.top, y2: M.top + plotH, x1: -100, x2: -100 });
+  svg.appendChild(crosshair);
+  seriesDef.forEach(s => {
+    const dot = el("circle", { class: "hover-dot", r: 4, fill: s.color, cx: -100, cy: -100 });
+    svg.appendChild(dot);
+    dotEls[s.key] = dot;
+  });
+
+  const hitRect = el("rect", { x: M.left, y: M.top, width: plotW, height: plotH, fill: "transparent" });
+  svg.appendChild(hitRect);
+
+  const tooltip = document.getElementById("tooltip");
+  const chartWrap = document.getElementById("chartWrap");
+
+  function pctFromX(clientX) {
+    const rect = svg.getBoundingClientRect();
+    const svgX = ((clientX - rect.left) / rect.width) * W;
+    const pct = ((svgX - M.left) / plotW) * xMax;
+    const steps = byColor.red.map(d => d.pct);
+    return steps.reduce((a, b) => (Math.abs(b - pct) < Math.abs(a - pct) ? b : a));
+  }
+
+  function showTooltip(pct, clientX, clientY) {
+    const x = xScale(pct);
+    crosshair.setAttribute("x1", x);
+    crosshair.setAttribute("x2", x);
+
+    let rows = "";
+    seriesDef.forEach(s => {
+      if (!active[s.key]) { dotEls[s.key].setAttribute("cx", -100); return; }
+      const pt = byColor[s.key].find(d => d.pct === pct);
+      dotEls[s.key].setAttribute("cx", x);
+      dotEls[s.key].setAttribute("cy", yScale(pt.delta_mA));
+      rows += `<div class="tooltip-row">
+        <span class="tooltip-key"><span class="tooltip-swatch" style="background:${s.color}"></span>${s.label}</span>
+        <span class="tooltip-val">${pt.delta_mA.toFixed(1)} mA</span>
+      </div>`;
+    });
+
+    tooltip.innerHTML = `<div class="tooltip-x">${pct}% (level ${byColor.red.find(d=>d.pct===pct).level})</div>${rows}`;
+    const wrapRect = chartWrap.getBoundingClientRect();
+    let left = clientX - wrapRect.left + 14;
+    if (left + 170 > wrapRect.width) left = clientX - wrapRect.left - 170;
+    tooltip.style.left = left + "px";
+    tooltip.style.top = (clientY - wrapRect.top - 40) + "px";
+    tooltip.style.opacity = "1";
+  }
+  function hideTooltip() {
+    tooltip.style.opacity = "0";
+    crosshair.setAttribute("x1", -100); crosshair.setAttribute("x2", -100);
+    seriesDef.forEach(s => dotEls[s.key].setAttribute("cx", -100));
+  }
+
+  hitRect.addEventListener("pointermove", e => {
+    const pct = pctFromX(e.clientX);
+    showTooltip(pct, e.clientX, e.clientY);
+  });
+  hitRect.addEventListener("pointerleave", hideTooltip);
+
+  // legend (toggle series)
+  const legend = document.getElementById("legend");
+  seriesDef.forEach(s => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "viz-legend-item";
+    item.dataset.off = "false";
+    item.setAttribute("aria-pressed", "true");
+    const swatch = document.createElement("span");
+    swatch.className = "viz-legend-swatch" + (s.dashed ? " dashed" : "");
+    swatch.style.background = s.dashed ? "none" : s.color;
+    swatch.style.color = s.color;
+    const label = document.createElement("span");
+    label.textContent = s.label;
+    item.appendChild(swatch);
+    item.appendChild(label);
+    item.addEventListener("click", () => {
+      active[s.key] = !active[s.key];
+      item.dataset.off = (!active[s.key]).toString();
+      item.setAttribute("aria-pressed", active[s.key].toString());
+      lineEls[s.key].classList.toggle("viz-hidden", !active[s.key]);
+      lineEls[s.key + "_label"].classList.toggle("viz-hidden", !active[s.key]);
+    });
+    legend.appendChild(item);
+  });
+
+  // table view
+  const tableToggle = document.getElementById("tableToggle");
+  const tableWrap = document.getElementById("tableWrap");
+  let tableBuilt = false;
+  tableToggle.addEventListener("click", () => {
+    const showing = tableWrap.style.display === "block";
+    tableWrap.style.display = showing ? "none" : "block";
+    chartWrap.style.display = showing ? "block" : "none";
+    tableToggle.textContent = showing ? "Show table" : "Show chart";
+    if (!tableBuilt) {
+      const table = document.createElement("table");
+      table.className = "viz-table";
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Color</th><th>%</th><th>Level</th><th>Current (mA)</th><th>Δ Current (mA)</th><th>Δ Power (mW)</th></tr>";
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      data.forEach(d => {
+        const tr = document.createElement("tr");
+        [d.color, d.pct + "%", d.level, d.current_mA.toFixed(1), d.delta_mA.toFixed(1), d.delta_mW.toFixed(0)]
+          .forEach((v, i) => {
+            const td = document.createElement("td");
+            td.textContent = v;
+            if (i === 0) td.style.textTransform = "capitalize";
+            tr.appendChild(td);
+          });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      tableWrap.appendChild(table);
+      tableBuilt = true;
+    }
+  });
+})();
+</script>

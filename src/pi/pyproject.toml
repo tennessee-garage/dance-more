@@ -9,6 +9,10 @@ description = "Dance Floor v2 host controller - drives the Row Bus from a Raspbe
 requires-python = ">=3.10"
 dependencies = [
     "pyserial>=3.5",
+    "gpiozero>=2.0",
+    # lgpio is gpiozero's pin-factory backend on the Pi 5 (RP1) - Linux-only,
+    # so it's marked out on macOS/Windows dev machines.
+    "lgpio>=0.2.2.0; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
