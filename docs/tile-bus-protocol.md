@@ -162,6 +162,35 @@ Test status byte:
 
 ---
 
+#### `0x05 VERSION` — unicast
+
+Reports the addressed tile's own firmware identity. The row controller
+queries this once per tile, at the end of the SENSE auto-mapping sequence
+(and again on `RE_DISCOVER`), and caches the result to answer the Pi's Row
+Bus `VERSION` (`0x06`, see
+[row-bus-protocol.md](row-bus-protocol.md)) without a live Tile Bus round
+trip. Broadcast is invalid — a `VERSION` sent to `0xFF` would have every
+tile answer at once.
+
+| Field   | Value |
+| ------- | ----- |
+| `ADDR`  | target tile address |
+| `CMD`   | `0x05` |
+| `LEN`   | `0` |
+| Payload | none |
+| ACK     | **Yes** (`0x85 VERSION_RESP`) |
+
+Response payload (7 bytes, big-endian; shared encoding, defined once in
+`src/common/tile_bus_protocol/firmware_version.h`):
+
+| Bytes | Field | Description |
+| ----- | ----- | ----------- |
+| 0–1   | `version` | `TILE_FW_VERSION`, hand-bumped per build |
+| 2–5   | `git_sha` | First 4 bytes of the build's commit SHA |
+| 6     | `flags`   | Bit 0 = built from a dirty tree; bits 1–7 reserved (must be 0) |
+
+---
+
 ### 5.2 Display Commands
 
 Display commands are fire-and-forget (no ACK). The row controller does **not**
@@ -290,6 +319,18 @@ to `DETECT_SENSE`.
 | Payload | none |
 
 The tile address is carried in the `ADDR` field; no payload is needed.
+
+### `0x85 VERSION_RESP` — tile → row controller
+
+Sent in response to `VERSION (0x05)`. Payload layout is in §5.1's `VERSION`
+entry.
+
+| Field   | Value |
+| ------- | ----- |
+| `ADDR`  | responding tile's address |
+| `CMD`   | `0x85` |
+| `LEN`   | `7` |
+| Payload | this tile's `FirmwareVersion`, see §5.1 |
 
 ---
 

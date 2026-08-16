@@ -1,6 +1,9 @@
 #include <unity.h>
 #include <vector>
 #include "row_command_handler.h"
+#include "firmware_version.h"
+#include "fw_version_info.h"
+#include "../../include/fw_version.h"
 
 void setUp() {}
 void tearDown() {}
@@ -416,8 +419,62 @@ void test_error_log_returns_empty_when_no_errors_logged() {
 }
 
 // ---------------------------------------------------------------------------
+// VERSION
+// ---------------------------------------------------------------------------
+
+void test_version_reports_row_and_cached_tile_versions() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+
+    // Slots 0-2 discovered and versioned; slot 3 discovered but never
+    // answered VERSION (still valid per docs/row-bus-protocol.md); slots
+    // 4-7 never discovered at all.
+    map.set_discovered(0, 0x01);
+    map.set_version(0, FirmwareVersion{7, 0x2b5c293c, 0});
+    map.set_discovered(1, 0x02);
+    map.set_version(1, FirmwareVersion{7, 0x2b5c293c, 0});
+    map.set_discovered(2, 0x03);
+    map.set_version(2, FirmwareVersion{7, 0x2b5c293c, FW_VERSION_FLAG_DIRTY});
+    map.set_discovered(3, 0x04); // no set_version() - simulates a VERSION miss
+
+    RowCommandHandler handler(transport, sense, power, 0x05);
+    RowBusFrame req = make_frame(0x05, RowBusCmd::VERSION, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    TEST_ASSERT_NOT_NULL(resp);
+    TEST_ASSERT_EQUAL_HEX8(0x05, resp->addr);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)RowBusCmd::VERSION_RESP, resp->cmd);
+    TEST_ASSERT_EQUAL(8 + 8 * FW_VERSION_WIRE_SIZE, resp->len);
+
+    FirmwareVersion row_version{};
+    TEST_ASSERT_TRUE(fw_version_decode(resp->payload, &row_version));
+    TEST_ASSERT_EQUAL_UINT16(ROW_FW_VERSION, row_version.version);
+
+    TEST_ASSERT_EQUAL_HEX8(0b00000111, resp->payload[7]); // slots 0-2 valid
+
+    for (uint8_t slot = 0; slot < 3; slot++) {
+        FirmwareVersion tile_version{};
+        TEST_ASSERT_TRUE(
+            fw_version_decode(&resp->payload[8 + slot * FW_VERSION_WIRE_SIZE], &tile_version));
+        TEST_ASSERT_EQUAL_UINT16(7, tile_version.version);
+        TEST_ASSERT_EQUAL_UINT32(0x2b5c293c, tile_version.git_sha);
+    }
+    TEST_ASSERT_EQUAL_UINT8(FW_VERSION_FLAG_DIRTY, resp->payload[8 + 2 * FW_VERSION_WIRE_SIZE + 6]);
+
+    // Slots 3 (VERSION miss) and 4-7 (never discovered) come back zeroed.
+    for (uint8_t slot = 3; slot < 8; slot++) {
+        const uint8_t *entry = &resp->payload[8 + slot * FW_VERSION_WIRE_SIZE];
+        for (uint8_t i = 0; i < FW_VERSION_WIRE_SIZE; i++)
+            TEST_ASSERT_EQUAL_HEX8(0, entry[i]);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Broadcast admin rejection (docs/row-bus-protocol.md §3: "all row
-// controllers accept; none respond"). All 5 admin commands, since a
+// controllers accept; none respond"). All 6 admin commands, since a
 // switch-based guard is exactly the kind of thing that silently stops
 // covering a case when a new one is added.
 // ---------------------------------------------------------------------------
@@ -432,7 +489,7 @@ void test_broadcast_admin_commands_get_no_response() {
 
     const RowBusCmd admin_cmds[] = {
         RowBusCmd::TEST, RowBusCmd::STATUS, RowBusCmd::POWER,
-        RowBusCmd::RE_DISCOVER, RowBusCmd::ERROR_LOG,
+        RowBusCmd::RE_DISCOVER, RowBusCmd::ERROR_LOG, RowBusCmd::VERSION,
     };
     for (RowBusCmd cmd : admin_cmds) {
         RowBusFrame req = make_frame(ROWBUS_ADDR_BROADCAST, cmd, nullptr, 0);
@@ -452,7 +509,7 @@ void test_unicast_admin_commands_still_respond() {
 
     const RowBusCmd admin_cmds[] = {
         RowBusCmd::TEST, RowBusCmd::STATUS, RowBusCmd::POWER,
-        RowBusCmd::RE_DISCOVER, RowBusCmd::ERROR_LOG,
+        RowBusCmd::RE_DISCOVER, RowBusCmd::ERROR_LOG, RowBusCmd::VERSION,
     };
     for (RowBusCmd cmd : admin_cmds) {
         RowBusFrame req = make_frame(0x00, cmd, nullptr, 0);
@@ -496,6 +553,7 @@ int main(int, char **) {
     RUN_TEST(test_re_discover_starts_sense_mapping_and_acks);
     RUN_TEST(test_test_command_returns_always_pass_stub);
     RUN_TEST(test_error_log_returns_empty_when_no_errors_logged);
+    RUN_TEST(test_version_reports_row_and_cached_tile_versions);
     RUN_TEST(test_broadcast_admin_commands_get_no_response);
     RUN_TEST(test_unicast_admin_commands_still_respond);
     RUN_TEST(test_broadcast_display_commands_are_unaffected);

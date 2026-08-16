@@ -1,4 +1,5 @@
 #include "command_handler.h"
+#include "fw_version_info.h"
 
 const Frame *handle_command(const Frame &in, PixelBuffer &buf,
                              ISenseControl &sense, uint8_t my_addr) {
@@ -57,6 +58,13 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
         response.cmd        = (uint8_t)Cmd::ACK | in.cmd; // 0x84
         response.len        = 1;
         response.payload[0] = 0x00; // all tests passed
+        return &response;
+
+    case Cmd::VERSION:
+        response.addr = my_addr;
+        response.cmd  = (uint8_t)Cmd::VERSION_RESP;
+        response.len  = FW_VERSION_WIRE_SIZE;
+        fw_version_encode(tile_fw_version(), response.payload);
         return &response;
 
     default:

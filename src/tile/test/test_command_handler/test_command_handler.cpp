@@ -1,6 +1,8 @@
 #include <unity.h>
 #include <string.h>
 #include "command_handler.h"
+#include "fw_version_info.h"
+#include "../../include/fw_version.h"
 
 class MockSense : public ISenseControl {
 public:
@@ -208,6 +210,27 @@ void test_test_command_returns_ack() {
 }
 
 // ---------------------------------------------------------------------------
+// VERSION
+// ---------------------------------------------------------------------------
+
+void test_version_command_returns_version_resp() {
+    Frame in = {};
+    in.cmd = (uint8_t)Cmd::VERSION;
+    in.len = 0;
+
+    const Frame *resp = handle_command(in, buf, mock_sense, MY_ADDR);
+
+    TEST_ASSERT_NOT_NULL(resp);
+    TEST_ASSERT_EQUAL_HEX8(MY_ADDR, resp->addr);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::VERSION_RESP, resp->cmd);
+    TEST_ASSERT_EQUAL_HEX8(FW_VERSION_WIRE_SIZE, resp->len);
+
+    FirmwareVersion decoded{};
+    TEST_ASSERT_TRUE(fw_version_decode(resp->payload, &decoded));
+    TEST_ASSERT_EQUAL_UINT16(TILE_FW_VERSION, decoded.version);
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -234,6 +257,8 @@ int main(int, char **) {
     RUN_TEST(test_detect_sense_returns_null_when_not_asserted);
 
     RUN_TEST(test_test_command_returns_ack);
+
+    RUN_TEST(test_version_command_returns_version_resp);
 
     return UNITY_END();
 }

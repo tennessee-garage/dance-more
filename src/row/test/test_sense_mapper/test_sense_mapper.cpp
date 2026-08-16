@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "sense_mapper.h"
+#include "firmware_version.h"
 
 void setUp() {}
 void tearDown() {}
@@ -50,6 +51,20 @@ public:
             pending_ = true;
             active_slot_++; // this tile now asserts its own SENSE-out
 
+        } else if (cmd == Cmd::VERSION) {
+            if (fail_version_addr_ == frame.addr) {
+                pending_ = false; // simulate a tile that never answers VERSION
+                return;
+            }
+            // Deterministic per-address identity so tests can assert on it.
+            FirmwareVersion v{(uint16_t)(frame.addr * 10), (uint32_t)(0x100000 + frame.addr), 0};
+            pending_frame_ = Frame{};
+            pending_frame_.addr = frame.addr;
+            pending_frame_.cmd  = (uint8_t)Cmd::VERSION_RESP;
+            pending_frame_.len  = FW_VERSION_WIRE_SIZE;
+            fw_version_encode(v, pending_frame_.payload);
+            pending_ = true;
+
         } else {
             pending_ = false; // CLEAR_SENSE etc: no response expected
         }
@@ -64,10 +79,11 @@ public:
 
     void fail_first_detect_for_slot(uint8_t slot) { fail_detect_slot_ = slot; }
     void never_ack_activate() { never_ack_activate_ = true; }
+    void never_answer_version_for_addr(uint8_t addr) { fail_version_addr_ = addr; }
 
-private:
     static uint8_t tile_address(uint8_t slot) { return (uint8_t)(slot + 1); }
 
+private:
     uint8_t tile_count_;
     uint8_t active_slot_ = 0;
     bool    pending_ = false;
@@ -76,6 +92,7 @@ private:
     int     fail_detect_slot_ = -1;
     bool    detect_failed_once_ = false;
     bool    never_ack_activate_ = false;
+    int     fail_version_addr_ = -1;
 };
 
 class FakeRowSense : public IRowSenseControl {
@@ -170,6 +187,68 @@ void test_retry_is_tracked_per_slot() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Post-discovery VERSION sweep
+// ---------------------------------------------------------------------------
+
+void test_version_sweep_populates_cache_after_discovery() {
+    FakeChainTransport transport(4);
+    FakeRowSense sense;
+    TileMap map;
+    SenseMapper mapper(transport, sense, map);
+
+    mapper.start();
+    uint32_t now = 0;
+    run_to_completion(mapper, now);
+
+    TEST_ASSERT_EQUAL(SenseMapState::DONE, mapper.state());
+    for (uint8_t slot = 0; slot < 4; slot++) {
+        uint8_t addr = FakeChainTransport::tile_address(slot);
+        TEST_ASSERT_TRUE(map.has_version(slot));
+        TEST_ASSERT_EQUAL_UINT16(addr * 10, map.version_for(slot).version);
+        TEST_ASSERT_EQUAL_UINT32(0x100000 + addr, map.version_for(slot).git_sha);
+    }
+    // Slots past the end of the chain were never discovered, so the version
+    // sweep never touches them.
+    for (uint8_t slot = 4; slot < 8; slot++) TEST_ASSERT_FALSE(map.has_version(slot));
+}
+
+void test_version_sweep_leaves_cache_invalid_when_tile_does_not_answer() {
+    FakeChainTransport transport(4);
+    transport.never_answer_version_for_addr(FakeChainTransport::tile_address(2));
+    FakeRowSense sense;
+    TileMap map;
+    SenseMapper mapper(transport, sense, map);
+
+    mapper.start();
+    uint32_t now = 0;
+    run_to_completion(mapper, now);
+
+    TEST_ASSERT_EQUAL(SenseMapState::DONE, mapper.state());
+    TEST_ASSERT_TRUE(map.is_discovered(2));                // still passed SENSE mapping
+    TEST_ASSERT_FALSE(map.has_version(2));                 // but never got a version
+    TEST_ASSERT_EQUAL(TileStatus::OK, map.status_for(2));  // untouched by the miss
+    // Its neighbours still completed.
+    TEST_ASSERT_TRUE(map.has_version(0));
+    TEST_ASSERT_TRUE(map.has_version(1));
+    TEST_ASSERT_TRUE(map.has_version(3));
+}
+
+void test_re_discover_clears_stale_version_cache() {
+    FakeChainTransport transport(4);
+    FakeRowSense sense;
+    TileMap map;
+    SenseMapper mapper(transport, sense, map);
+
+    mapper.start();
+    uint32_t now = 0;
+    run_to_completion(mapper, now);
+    TEST_ASSERT_TRUE(map.has_version(0));
+
+    mapper.start(); // map_.reset() runs synchronously inside start()
+    TEST_ASSERT_FALSE(map.has_version(0));
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
 
@@ -177,6 +256,10 @@ int main(int, char **) {
     RUN_TEST(test_short_chain_ends_via_timeout_not_error);
     RUN_TEST(test_activate_sense_never_acked_reaches_error);
     RUN_TEST(test_retry_is_tracked_per_slot);
+
+    RUN_TEST(test_version_sweep_populates_cache_after_discovery);
+    RUN_TEST(test_version_sweep_leaves_cache_invalid_when_tile_does_not_answer);
+    RUN_TEST(test_re_discover_clears_stale_version_cache);
 
     return UNITY_END();
 }

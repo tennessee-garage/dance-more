@@ -20,7 +20,9 @@ public:
     const TileMap &result() const { return map_; }
 
 private:
-    enum class Step : uint8_t { START, SETTLE, WAIT_DETECT_RESP, WAIT_ACTIVATE_ACK };
+    enum class Step : uint8_t {
+        START, SETTLE, WAIT_DETECT_RESP, WAIT_ACTIVATE_ACK, WAIT_VERSION_RESP
+    };
 
     // 3 total attempts per docs/tile-bus-protocol.md §7 (1 initial + 2 retries).
     static constexpr uint8_t  MAX_RETRIES = 2;
@@ -38,8 +40,14 @@ private:
     void send_activate_sense(uint8_t addr);
     void send_clear_sense(uint8_t addr);
     void broadcast_clear_sense();
+    void send_version_query(uint8_t addr);
     void advance_to_next_slot(uint32_t now_ms);
-    void finish_discovery();
+    // Starts (or continues) the post-discovery version sweep: finds the next
+    // discovered slot from version_slot_ onward and queries it, or - once
+    // every discovered slot has been tried - transitions to DONE
+    // (docs/row-bus-protocol.md's VERSION command).
+    void advance_version_query(uint32_t now_ms);
+    void finish_discovery(uint32_t now_ms);
     void fail_discovery();
 
     ITransport       &transport_;
@@ -50,4 +58,6 @@ private:
     Step             step_          = Step::START;
     uint8_t          current_slot_  = 0;
     uint32_t         request_sent_ms_ = 0;
+    uint8_t          version_slot_         = 0;
+    uint8_t          version_retry_count_  = 0;
 };

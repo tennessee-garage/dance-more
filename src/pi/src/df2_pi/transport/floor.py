@@ -34,6 +34,10 @@ RESPONSE_TIMEOUT_S: dict[int, float] = {
     Cmd.POWER: 0.020,
     Cmd.RE_DISCOVER: 0.020,
     Cmd.ERROR_LOG: 0.020,
+    # Answered entirely from the row's cache (filled at discovery/
+    # RE_DISCOVER, docs/row-bus-protocol.md's VERSION) - no Tile Bus
+    # round trip, so this is a STATUS-sized timeout, not TEST-sized.
+    Cmd.VERSION: 0.020,
 }
 DEFAULT_RESPONSE_TIMEOUT_S = 0.020
 MAX_ATTEMPTS = 3  # 1 initial + 2 retries, per §7

@@ -9,6 +9,7 @@ from .protocol.constants import Cmd
 from .transport.chain_map import RowChainMap
 from .transport.floor import ChainConfig, Floor, RowNotResponding, default_chain_configs
 from .transport.row_bus import DEFAULT_BAUDRATE
+from .version_report import RowVersionReport, format_version_report
 
 STATUS_STATE_NAMES = {0x00: "idle", 0x01: "discovering", 0x02: "running", 0x03: "error"}
 
@@ -57,6 +58,27 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         return 0
 
 
+def _cmd_version(args: argparse.Namespace) -> int:
+    with _open_floor(args) as floor:
+        found = floor.scan()
+        if not found:
+            print("no row controllers responded", file=sys.stderr)
+            return 1
+
+        row_reports: dict[int, RowVersionReport | None] = {}
+        for row in sorted(found):
+            try:
+                frame = floor.request(row, Cmd.VERSION)
+                row_reports[row] = RowVersionReport.decode(frame.payload)
+            except (RowNotResponding, ValueError) as exc:
+                print(f"row 0x{row:02X}: {exc}", file=sys.stderr)
+                row_reports[row] = None
+
+        text, ok = format_version_report(row_reports)
+        print(text)
+        return 0 if ok else 1
+
+
 def _cmd_blackout(args: argparse.Namespace) -> int:
     with _open_floor(args) as floor:
         floor.blackout()
@@ -86,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="query STATUS from a row controller")
     status.add_argument("row", type=int, help="logical row (0-7)")
     status.set_defaults(func=_cmd_status)
+
+    version = sub.add_parser(
+        "version", help="query VERSION from every row/tile and flag anything out of step"
+    )
+    version.set_defaults(func=_cmd_version)
 
     blackout = sub.add_parser("blackout", help="black out the whole floor")
     blackout.set_defaults(func=_cmd_blackout)
