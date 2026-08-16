@@ -263,6 +263,53 @@ Maximum response payload: `1 + 32 × 5 = 161 bytes`.
 
 ---
 
+#### `0x06 VERSION` — unicast
+
+Reports the row controller's own firmware identity plus the cached identity
+of each of its tiles (see [tile-bus-protocol.md](tile-bus-protocol.md)'s
+`VERSION`). The row answers entirely from a cache filled at the end of the
+SENSE auto-mapping sequence (and again on `RE_DISCOVER`) — it does **not**
+query tiles over Tile Bus in response to this command, so it never competes
+with a display frame in flight and carries the same 20 ms timeout as
+`STATUS` rather than `TEST`'s 200 ms.
+
+Because the cache is filled at discovery time, a tile reflashed in place
+without a subsequent `RE_DISCOVER` will keep reporting its previous
+version here until one runs.
+
+Broadcast (`0xFF`) is invalid — see §4/§3, same as every other admin command.
+
+| Field   | Value |
+| ------- | ----- |
+| `ADDR`  | target row address |
+| `CMD`   | `0x06` |
+| `LEN`   | `0` |
+| Payload | none |
+| ACK     | **Yes** (`0x86 VERSION_RESP`); allow up to 20 ms |
+
+Response payload (fixed 64 bytes):
+
+| Bytes | Field | Description |
+| ----- | ----- | ----------- |
+| 0–6   | `row_version` | This row controller's own identity, 7-byte `FirmwareVersion` encoding (see below) |
+| 7     | `tiles_valid` | Bitmask; bit N set = `tile_version[N]` holds a real value |
+| 8–63  | `tile_version[0..7]` | 8 × 7-byte `FirmwareVersion` entries, slot 0 first. An entry whose `tiles_valid` bit is clear is transmitted as seven `0x00` bytes and **must** be ignored by the reader — it means the slot was never discovered, or was discovered but never answered `VERSION`. |
+
+**`FirmwareVersion` wire encoding** (7 bytes, big-endian; shared with Tile
+Bus's `VERSION_RESP` and defined once in
+`src/common/tile_bus_protocol/firmware_version.h`):
+
+| Bytes | Field | Description |
+| ----- | ----- | ----------- |
+| 0–1   | `version` | Hand-bumped `ROW_FW_VERSION`/`TILE_FW_VERSION` constant |
+| 2–5   | `git_sha` | First 4 bytes of the build's commit SHA |
+| 6     | `flags`   | Bit 0 = built from a dirty tree; bits 1–7 reserved (must be 0) |
+
+At 3.125 Mbps a 64-byte response is well under a millisecond on the wire, so
+this is safe to issue between display frames.
+
+---
+
 ### 5.2 Display Commands
 
 Display commands are fire-and-forget. The Pi does **not** retry them.
@@ -373,6 +420,7 @@ Response `CMD` codes have bit 7 set (`0x80 | original_cmd`).
 | `0x83`        | `POWER_RESP`       | `POWER` |
 | `0x84`        | `RE_DISCOVER_RESP` | `RE_DISCOVER` |
 | `0x85`        | `ERROR_LOG_RESP`   | `ERROR_LOG` |
+| `0x86`        | `VERSION_RESP`     | `VERSION` |
 
 All response frames carry the responding row controller's address in the `ADDR`
 field. See §5 for per-command payload layouts.
@@ -395,6 +443,7 @@ field. See §5 for per-command payload layouts.
 | `POWER`       | 20 ms           |
 | `RE_DISCOVER` | 20 ms (immediate ACK only) |
 | `ERROR_LOG`   | 20 ms           |
+| `VERSION`     | 20 ms (answered from cache, no Tile Bus round trip) |
 
 `RE_DISCOVER` gets a short timeout because the ACK should arrive before the
 mapping procedure begins. Use `STATUS` polls (with the 20 ms timeout and 3
