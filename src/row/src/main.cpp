@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "rp2350/pins.h"
-#include "row_address_generated.h"
+#include "row_address.h"
 #include "rp2350/pi_transport_rp2350.h"
 #include "rp2350/tile_transport_rp2350.h"
 #include "rp2350/row_sense_rp2350.h"
