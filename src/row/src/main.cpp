@@ -9,6 +9,7 @@
 #include "rp2350/status_led_rp2350.h"
 #include "sense_mapper.h"
 #include "row_command_handler.h"
+#include "fw_version_info.h"
 
 // Core 0 - Row Bus ingest: owns PiTransportRP2350, validates and address-
 // filters incoming frames, forwards responses back out over Row Bus.
@@ -168,6 +169,11 @@ static void debug_report(uint32_t now_ms, SenseMapState state) {
     if ((int32_t)(now_ms - next_ms) < 0) return;
     next_ms = now_ms + 1000;
 
+    // Fixed for the life of the process - states this board's version on the
+    // bench without needing the Pi (see docs/row-bus-protocol.md's VERSION
+    // command, #56, for how the Pi reads the same identity over the wire).
+    static const FirmwareVersion fw = row_fw_version();
+
     // Key up the Tile Bus transceiver for the duration of the write, then
     // release it - safe only because no tiles share this bus yet.
     digitalWrite(PIN_ROW_XDIR, HIGH);
@@ -182,6 +188,11 @@ static void debug_report(uint32_t now_ms, SenseMapState state) {
     uint32_t actual_baud = (64u * ibrd + fbrd)
                          ? (uint32_t)(((uint64_t)periclk * 4u) / (64u * ibrd + fbrd))
                          : 0;
+
+    Serial1.printf("[row 0x%02X] fw=v%u+%08lx%s\r\n",
+                   (unsigned)MY_ROW_ADDR, (unsigned)fw.version,
+                   (unsigned long)fw.git_sha,
+                   (fw.flags & FW_VERSION_FLAG_DIRTY) ? "-dirty" : "");
 
     Serial1.printf("[row 0x%02X] clk_peri=%lu baud_set=%lu baud_actual=%lu\r\n",
                    (unsigned)MY_ROW_ADDR, (unsigned long)periclk,
