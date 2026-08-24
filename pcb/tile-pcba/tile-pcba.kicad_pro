@@ -495,7 +495,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "tile.kicad_pro",
+    "filename": "tile-pcba.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -651,6 +651,24 @@
           "label": "#",
           "name": "${ITEM_NUMBER}",
           "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Manufacturer Name",
+          "name": "Manufacturer Name",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Manufacturer Part Number",
+          "name": "Manufacturer Part Number",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "LCSC Part #",
+          "name": "LCSC",
+          "show": false
         }
       ],
       "filter_string": "",
@@ -704,8 +722,8 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "tile.kicad_sch",
-        "name": "tile",
+        "filename": "tile-pcba.kicad_sch",
+        "name": "tile-pcba",
         "uuid": "68eea85a-4a75-40a0-9423-1988556e9fbf"
       }
     ],
@@ -715,7 +733,7 @@
   "sheets": [
     [
       "68eea85a-4a75-40a0-9423-1988556e9fbf",
-      "tile"
+      "tile-pcba"
     ]
   ],
   "text_variables": {},

@@ -1,0 +1,13 @@
+"Id";"Designator";"Footprint";"Quantity";"Designation";"Supplier and ref";
+1;"C1, C2, C3, C5";"C_0805_2012Metric_Pad1.18x1.45mm_HandSolder";4;"0.1uF";;;
+2;"C4";"C_0805_2012Metric_Pad1.18x1.45mm_HandSolder";1;"10uF";;;
+3;"C7";"CAPAE530X550N";1;"865080342006";;;
+4;"IC1";"SOIC127P600X175-8N";1;"THVD1420DR";;;
+5;"J1";"PinHeader_1x03_P2.54mm_Vertical";1;"LED Strip";;;
+6;"J2";"PinHeader_1x03_P2.54mm_Vertical";1;"UPDI";;;
+7;"J5";"JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical";1;"12V";;;
+8;"J6";"6P6C RA RJ45 Jack";1;"RS-485 Jack";;;
+9;"PS1";"SOT95P237X112-3N";1;"TLV76050DBZR";;;
+10;"R1, R2";"R_0805_2012Metric_Pad1.20x1.40mm_HandSolder";2;"10K";;;
+11;"R3";"R_0805_2012Metric_Pad1.20x1.40mm_HandSolder";1;"330";;;
+12;"U1";"TSSOP-14_4.4x5mm_P0.65mm";1;"ATtiny3224-X";;;
