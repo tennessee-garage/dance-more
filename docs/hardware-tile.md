@@ -12,10 +12,11 @@ A **tile** is one square section of the floor. The floor has 64 tiles in an
 - **Top surface:** a **3/8" acrylic sheet** that rests on the corners of the
   wood frame.
 - **Lighting:** **WS2815 LEDs** arranged around the **square perimeter** of the
-  tile beneath the acrylic — **at least 10 LEDs per side, 40 per tile** — to
-  edge-light the sheet. (Frosted/translucent acrylic diffuses the LED light —
-  see the simulators in `src/simulation/` and `src/native-simulator/` for
-  light-propagation studies.)
+  tile beneath the acrylic — **exactly 10 LEDs per side, 40 per tile**, with the
+  **corners unpopulated** — to edge-light the sheet. (Frosted/translucent
+  acrylic diffuses the LED light — see the simulators in `src/simulation/` and
+  `src/native-simulator/` for light-propagation studies.) See
+  [LED layout and chain order](#led-layout-and-chain-order) below.
 
 ## Electronics
 
@@ -105,10 +106,56 @@ Each tile is wired into the row's daisy chain with two cables that run "in" and
   tiles' push windows, e.g., at a fixed point after all tiles have been
   addressed.
 
+## LED layout and chain order
+
+Fixed 2026-08-22. The host driver models the floor on these numbers, so they are
+a build specification rather than a preference — see the driver's
+[floor geometry issue](https://github.com/tennessee-garage/dance-more/issues/59)
+and [epic](https://github.com/tennessee-garage/dance-more/issues/58).
+
+**10 LEDs per side, corners unpopulated, 40 per tile.** Each side is an
+independent run of 10; no LED sits on a corner. The driver models a tile as a
+12 × 12 cell block whose 44-cell perimeter ring carries the 40 LEDs with the 4
+corner cells dark, which is what makes each side a clean run of 10 — a 10 × 10
+block would offer only 36 perimeter cells, because corners are shared between
+adjacent sides.
+
+**Chain index 0 is at the lower-left of the tile.** Since that corner is
+unpopulated, LED 0 is the bottom-most LED of the **left** side, and the strip
+runs **up** the left side from there:
+
+```
+              0     1     2    ...    10    11
+            +--------------------------------------
+        11  |  .    10    11    ...   19     .
+        10  |  9                            20
+         9  |  8                            21
+         :  |  :                             :
+         1  |  0                            29
+         0  |  .    39    38    ...   30     .
+               ^
+               LED 0: bottom of the left side
+```
+
+| LEDs | Side | Direction |
+| ---- | ---- | --------- |
+| 0–9   | left   | bottom → top |
+| 10–19 | top    | left → right |
+| 20–29 | right  | top → bottom |
+| 30–39 | bottom | right → left |
+
+"Left" and "bottom" are as seen **looking down at the floor**, with the tile in
+its installed orientation. The strip therefore passes each unpopulated corner as
+a diagonal step: LED 9 → 10, 19 → 20, 29 → 30 and 39 → 0.
+
+Nothing on the tile PCB constrains this — the board exposes only a `LED_Data`
+net and a "LED Strip" connector — so it is an **assembly instruction**. Lay the
+strip in starting at the lower-left, heading up. `df2-pi ledwalk` lights LEDs
+0 → 39 one at a time to verify a built tile matches; a tile that walks any other
+way has its strip in backwards.
+
 ## Open Questions
 
-- **LED placement detail:** exact per-side spacing and whether the corners are
-  populated (≥10/side × 4 = 40, but corner handling affects the exact count).
 - **Acrylic finish:** frosting/diffusion spec and standoff height between LEDs
   and acrylic.
 - **Mounting:** how the LEDs are fixed beneath the acrylic / to the frame.
