@@ -40,23 +40,28 @@ void PiTransportRP2350::init() {
     // Size the RX FIFO to hold a whole maximum-size frame.
     //
     // arduino-pico's SerialUART defaults to a 32-byte software FIFO - about
-    // 100 us of buffering at 3.125 Mbps. A full SEND_DATA frame is 976 bytes
-    // arriving back-to-back over 3.1 ms, some 30x longer than that window,
-    // and poll() below costs two _pumpFIFO() round trips per byte (one in
-    // available(), one in read()) against a 3.2 us/byte arrival rate. Core 0
-    // cannot keep up, the FIFO overruns, and the core wedges hard enough to
-    // need a power cycle - not merely dropped bytes.
+    // 100 us of buffering at 3.125 Mbps. A full SEND_DATA frame is
+    // ROWBUS_MAX_FRAME bytes arriving back-to-back over ~4.7 ms, some 45x
+    // longer than that window, and poll() below costs two _pumpFIFO() round
+    // trips per byte (one in available(), one in read()) against a 3.2 us/byte
+    // arrival rate. Core 0 cannot keep up, the FIFO overruns, and the core
+    // wedges hard enough to need a power cycle - not merely dropped bytes.
     //
-    // Measured on the bench: continuous frames died above ~170 bytes, while
-    // the same 976-byte frame paced at 16 bytes per 400 us survived intact.
-    // That is what makes this a receive-rate problem rather than a frame-size
-    // one, and why the fix is buffer depth rather than anything in the parser.
+    // Measured on the bench (at the 976-byte frame size of the 40-LED build):
+    // continuous frames died above ~170 bytes, while the same 976-byte frame
+    // paced at 16 bytes per 400 us survived intact. That is what makes this a
+    // receive-rate problem rather than a frame-size one, and why the fix is
+    // buffer depth rather than anything in the parser.
     //
     // Sized for one max frame plus the LATCH and admin command that can
-    // legitimately follow it back-to-back in the same burst. Must precede
-    // begin(): setFIFOSize() returns false once the port is running, and it
-    // is begin() that actually allocates the buffer.
-    Serial2.setFIFOSize(2048);
+    // legitimately follow it back-to-back in the same burst. 2048 was ~2.1x a
+    // 976-byte frame; at 60 LEDs/tile the frame is 1456 bytes and that same
+    // 2048 would leave only 1.4x - so this scales with ROWBUS_MAX_FRAME rather
+    // than sitting at a literal. Given the failure mode is a wedge and not a
+    // dropped frame, this is the wrong margin to shave. Must precede begin():
+    // setFIFOSize() returns false once the port is running, and it is begin()
+    // that actually allocates the buffer.
+    Serial2.setFIFOSize(2 * ROWBUS_MAX_FRAME + 512);  // 3520 at 60 LEDs/tile
     Serial2.setTX(PIN_PI_TX);
     Serial2.setRX(PIN_PI_RX);
     Serial2.begin(ROW_BUS_BAUD, SERIAL_8N1);

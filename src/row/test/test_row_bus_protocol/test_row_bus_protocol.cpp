@@ -81,14 +81,14 @@ void test_encode_max_payload_frame() {
     RowBusFrame f = {};
     f.addr = 0x02;
     f.cmd  = (uint8_t)RowBusCmd::SEND_DATA;
-    f.len  = ROWBUS_MAX_PAYLOAD; // 968, a full SEND_DATA frame
+    f.len  = ROWBUS_MAX_PAYLOAD; // a full SEND_DATA frame: 8 x SET_LEDS
     for (uint16_t i = 0; i < ROWBUS_MAX_PAYLOAD; i++) f.payload[i] = (uint8_t)i;
 
     uint8_t buf[ROWBUS_MAX_FRAME];
     int n = row_bus_frame_encode(f, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL(ROWBUS_MAX_FRAME, n); // 8 + 968 = 976
-    TEST_ASSERT_EQUAL_HEX8(0x03, buf[4]); // LEN_H: 968 = 0x03C8
-    TEST_ASSERT_EQUAL_HEX8(0xC8, buf[5]); // LEN_L
+    TEST_ASSERT_EQUAL(ROWBUS_MAX_FRAME, n); // ROWBUS_FRAME_OVERHEAD + ROWBUS_MAX_PAYLOAD
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)(ROWBUS_MAX_PAYLOAD >> 8), buf[4]); // LEN_H
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)(ROWBUS_MAX_PAYLOAD & 0xFF), buf[5]); // LEN_L
 }
 
 void test_encode_returns_minus1_when_buf_too_small() {
@@ -160,8 +160,9 @@ void test_parser_roundtrip_with_payload() {
         TEST_ASSERT_EQUAL_HEX8(tx.payload[i], rx.payload[i]);
 }
 
-// Per #27's acceptance criteria: round-trip a full SEND_DATA-sized (968-byte)
-// frame specifically, not just a small payload.
+// Per #27's acceptance criteria: round-trip a full SEND_DATA-sized frame
+// specifically (ROWBUS_MAX_PAYLOAD, i.e. all 8 slots sending SET_LEDS), not
+// just a small payload.
 void test_parser_roundtrip_send_data_max_payload() {
     RowBusFrame tx = {};
     tx.addr = 0x07;

@@ -141,7 +141,7 @@ bool RowCommandHandler::parse_entry(uint16_t offset, uint8_t *tile_cmd_out, uint
     switch ((Cmd)tile_cmd) {
     case Cmd::SET_COLOR:   data_len = 3;   break;
     case Cmd::SET_PATTERN: data_len = 5;   break;
-    case Cmd::SET_LEDS:    data_len = 120; break;
+    case Cmd::SET_LEDS:    data_len = MAX_PAYLOAD; break;  // LEDS_PER_TILE * 3
     default: return false; // unrecognized tile_cmd - can't know its size
     }
 

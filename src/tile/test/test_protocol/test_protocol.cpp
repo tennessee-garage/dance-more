@@ -81,12 +81,12 @@ void test_encode_max_payload_frame() {
     Frame f = {};
     f.addr = 0x01;
     f.cmd  = (uint8_t)Cmd::SET_LEDS;
-    f.len  = MAX_PAYLOAD; // 120
+    f.len  = MAX_PAYLOAD; // 180 at 60 LEDs/tile
     for (uint8_t i = 0; i < MAX_PAYLOAD; i++) f.payload[i] = i;
 
     uint8_t buf[MAX_FRAME_SIZE];
     int n = frame_encode(f, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL(MAX_FRAME_SIZE, n); // 7 + 120 = 127
+    TEST_ASSERT_EQUAL(MAX_FRAME_SIZE, n); // FRAME_OVERHEAD + MAX_PAYLOAD
 }
 
 void test_encode_returns_minus1_when_buf_too_small() {
@@ -217,7 +217,7 @@ void test_parser_rejects_corrupted_payload() {
 }
 
 void test_parser_rejects_invalid_len() {
-    // Hand-craft a frame with LEN = MAX_PAYLOAD + 1 (121)
+    // Hand-craft a frame with LEN = MAX_PAYLOAD + 1
     const uint8_t stream[] = {
         0xAA, 0x55,
         0x01,                   // ADDR

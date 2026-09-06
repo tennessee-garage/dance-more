@@ -5,7 +5,8 @@
 LedDriverNative::LedDriverNative(uint8_t addr) : tile_addr(addr) {}
 
 void LedDriverNative::init() {
-    printf("[tile 0x%02X] LED driver ready (40 LEDs, native/log mode)\n", tile_addr);
+    printf("[tile 0x%02X] LED driver ready (%u LEDs, native/log mode)\n", tile_addr,
+           (unsigned)PixelBuffer::NUM_LEDS);
 }
 
 void LedDriverNative::push(const PixelBuffer &buf) {

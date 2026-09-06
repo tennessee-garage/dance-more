@@ -1,12 +1,13 @@
 #include <Arduino.h>
 #include <tinyNeoPixel.h>
 #include "at/pins.h"
+#include "protocol.h"   // src/common/tile_bus_protocol/, for LEDS_PER_TILE
 
 // Standalone LED connectivity test — no protocol, no RS-485.
 // Cycles through solid colours, a chase, and a rainbow to verify
 // the MCU → WS2815 data line and each colour channel are working.
 
-static constexpr uint8_t NUM_LEDS = 40;
+static constexpr uint8_t NUM_LEDS = LEDS_PER_TILE;
 static tinyNeoPixel strip(NUM_LEDS, PIN_LED_DATA, NEO_GRB + NEO_KHZ800);
 
 // ---------------------------------------------------------------------------

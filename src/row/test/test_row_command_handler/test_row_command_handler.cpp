@@ -116,7 +116,7 @@ void test_send_data_forwards_mixed_commands_to_correct_addresses() {
     for (uint8_t i = 0; i < 8; i++) map.set_discovered(i, (uint8_t)(i + 1));
 
     // slots 0-6: SET_COLOR: slot 7: SET_LEDS.
-    uint8_t payload[8 * 121] = {};
+    uint8_t payload[ROWBUS_MAX_PAYLOAD] = {};
     uint16_t offset = 0;
     for (uint8_t slot = 0; slot < 7; slot++) {
         payload[offset++] = (uint8_t)Cmd::SET_COLOR;
@@ -125,7 +125,7 @@ void test_send_data_forwards_mixed_commands_to_correct_addresses() {
         payload[offset++] = (uint8_t)(slot * 10 + 2);
     }
     payload[offset++] = (uint8_t)Cmd::SET_LEDS;
-    for (uint16_t i = 0; i < 120; i++) payload[offset++] = (uint8_t)i;
+    for (uint16_t i = 0; i < MAX_PAYLOAD; i++) payload[offset++] = (uint8_t)i;
 
     RowCommandHandler handler(transport, sense, power, 0x00);
     RowBusFrame req = make_frame(0x00, RowBusCmd::SEND_DATA, payload, offset);
@@ -150,8 +150,8 @@ void test_send_data_forwards_mixed_commands_to_correct_addresses() {
     const Frame &last = transport.sent[7];
     TEST_ASSERT_EQUAL_HEX8(8, last.addr);
     TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_LEDS, last.cmd);
-    TEST_ASSERT_EQUAL(120, last.len);
-    for (uint16_t i = 0; i < 120; i++)
+    TEST_ASSERT_EQUAL(MAX_PAYLOAD, last.len);
+    for (uint16_t i = 0; i < MAX_PAYLOAD; i++)
         TEST_ASSERT_EQUAL_HEX8((uint8_t)i, last.payload[i]);
 }
 

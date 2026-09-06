@@ -2,6 +2,7 @@ CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra \
             -I../include \
             -I../lib/row_core \
+            -I../../common/tile_bus_protocol \
             -I../src/native
 
 BIN := bin

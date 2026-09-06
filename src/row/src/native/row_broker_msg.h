@@ -8,7 +8,7 @@
 //  FRAME     0x01  [len_h:1] [len_l:1] [frame bytes:len]  — raw Row Bus frame
 //  IDENTIFY  0x02  [row_addr:1]                           — sent once on connect
 //
-// RowBusFrame is up to ROWBUS_MAX_FRAME (976) bytes, so FRAME needs a 2-byte
+// RowBusFrame is up to ROWBUS_MAX_FRAME (1456 at 60 LEDs/tile) bytes, so FRAME needs a 2-byte
 // length prefix - unlike tile_bus_protocol's broker_msg.h, which fits its
 // 127-byte MAX_FRAME_SIZE in one byte.
 //

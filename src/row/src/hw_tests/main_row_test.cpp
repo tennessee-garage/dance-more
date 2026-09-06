@@ -94,16 +94,16 @@ static void run_set_color_phase() {
 }
 
 static constexpr uint16_t LEDS_HOLD_MS = 3000;
-static constexpr uint8_t  NUM_LEDS     = 40;
+static constexpr uint8_t  NUM_LEDS     = LEDS_PER_TILE;
 
 static void run_set_leds_phase() {
     const TileMap &result = mapper.result();
     Serial.println("[SET_LEDS] displaying gradient...");
 
-    // Linear gradient from red (LED 0) to blue (LED 39) - deterministic and
-    // easy to verify by eye that every one of the 40 LEDs got its own
-    // distinct value (i.e. the full 120-byte SET_LEDS payload arrived
-    // intact, not truncated).
+    // Linear gradient from red (LED 0) to blue (the last LED) - deterministic
+    // and easy to verify by eye that every one of the NUM_LEDS LEDs got its
+    // own distinct value (i.e. the full MAX_PAYLOAD-byte SET_LEDS payload
+    // arrived intact, not truncated).
     uint8_t payload[NUM_LEDS * 3];
     for (uint8_t i = 0; i < NUM_LEDS; i++) {
         uint8_t r = (uint8_t)(255 - (255 * i) / (NUM_LEDS - 1));

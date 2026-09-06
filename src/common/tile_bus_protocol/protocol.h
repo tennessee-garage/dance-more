@@ -4,8 +4,30 @@
 static constexpr uint8_t PROTO_SYNC1    = 0xAA;
 static constexpr uint8_t PROTO_SYNC2    = 0x55;
 static constexpr uint8_t ADDR_BROADCAST = 0xFF;
-static constexpr uint8_t MAX_PAYLOAD    = 120;
-static constexpr uint8_t MAX_FRAME_SIZE = 127;
+// ---- LED geometry ----
+// A build specification, not a preference: the strip is 300 LED/5m and the
+// wooden frame's ledge gives ~10" of the tile's 15" side to lay it on, so
+// 15 per side is what physically fits. See docs/hardware-tile.md's "LED
+// layout and chain order". Both wire protocols size themselves from here -
+// Tile Bus's MAX_PAYLOAD below, Row Bus's ROWBUS_MAX_PAYLOAD in
+// src/row/lib/row_core/row_bus_protocol.h.
+static constexpr uint8_t LEDS_PER_SIDE = 15;
+static constexpr uint8_t LEDS_PER_TILE = 4 * LEDS_PER_SIDE;  // 60, corners dark
+static constexpr uint8_t BYTES_PER_LED = 3;                  // RGB888
+
+// SYNC1 SYNC2 ADDR CMD LEN + payload + CRC_H CRC_L
+static constexpr uint8_t FRAME_OVERHEAD = 7;
+static constexpr uint8_t MAX_PAYLOAD    = LEDS_PER_TILE * BYTES_PER_LED;   // 180
+static constexpr uint8_t MAX_FRAME_SIZE = FRAME_OVERHEAD + MAX_PAYLOAD;    // 187
+
+// LEN is one byte on Tile Bus, and frame_encode()/crc16() take uint8_t
+// lengths - so the whole frame, not just the payload, has to stay under 256.
+// Written against LEDS_PER_SIDE rather than MAX_PAYLOAD because the latter is
+// itself a uint8_t and would silently wrap before the check ran. At 3 bytes
+// per LED this caps a side at 20; going past that means a 2-byte LEN on Tile
+// Bus, or fewer bytes per LED (RGB565).
+static_assert(FRAME_OVERHEAD + 4 * LEDS_PER_SIDE * BYTES_PER_LED <= 255,
+              "Tile Bus frame no longer fits a uint8_t length");
 
 enum class Cmd : uint8_t {
     // Commands: row controller → tile
