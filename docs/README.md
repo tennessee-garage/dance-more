@@ -15,6 +15,7 @@ placeholders to be resolved as the design firms up.
 | [communication.md](communication.md) | Bus topologies, RS-485 layering, addressing, SENSE auto-mapping protocol |
 | [row-bus-protocol.md](row-bus-protocol.md) | Row Bus (Pi ↔ Row Controller) command protocol: frame format, command set, timing |
 | [tile-bus-protocol.md](tile-bus-protocol.md) | Tile Bus (Row Controller ↔ Tile) command protocol: frame format, command set, timing |
+| [tile-patterns.md](tile-patterns.md) | `SET_PATTERN` ids and parameters: tile-local animation, and why it exists |
 | [hardware-tile.md](hardware-tile.md) | Tile: wood frame, acrylic, WS2815 LEDs, ATtiny3224, connectors |
 | [hardware-row-controller.md](hardware-row-controller.md) | Row controller: Xiao RP2350, dual RS-485 buses, connectors |
 | [power.md](power.md) | 12 V distribution and daisy-chain power architecture |

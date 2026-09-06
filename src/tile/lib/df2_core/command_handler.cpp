@@ -2,12 +2,16 @@
 #include "fw_version_info.h"
 
 const Frame *handle_command(const Frame &in, PixelBuffer &buf,
-                             ISenseControl &sense, uint8_t my_addr) {
+                             ISenseControl &sense, uint8_t my_addr,
+                             PatternEngine *pattern) {
     static Frame response;
 
     switch (static_cast<Cmd>(in.cmd)) {
 
     case Cmd::SET_COLOR:
+        // Explicit pixel data always wins - the host must be able to take a
+        // tile back from a running pattern.
+        if (pattern) pattern->cancel();
         if (in.len >= 3) {
             for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++)
                 buf.leds[i] = {in.payload[0], in.payload[1], in.payload[2]};
@@ -15,6 +19,7 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
         return nullptr;
 
     case Cmd::SET_LEDS:
+        if (pattern) pattern->cancel();
         if (in.len >= PixelBuffer::NUM_LEDS * 3) {
             for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++) {
                 buf.leds[i].r = in.payload[i * 3];
@@ -25,7 +30,12 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
         return nullptr;
 
     case Cmd::SET_PATTERN:
-        // Pattern rendering deferred; payload ignored until pattern library is defined.
+        // Staged, not started: the pattern begins on the next LATCH so a row's
+        // tiles can be armed one at a time and started together. Malformed or
+        // unimplemented ids are ignored - display commands carry no ACK, so
+        // there is nothing to report and the tile keeps what it has.
+        // See docs/tile-patterns.md.
+        if (pattern) pattern->arm(in.payload, in.len);
         return nullptr;
 
     case Cmd::LATCH:
