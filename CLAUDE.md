@@ -49,13 +49,20 @@ driving native mocks through a Unix-socket broker, no hardware required.
 
 ## Bench setup
 
-A live Pi 5 is at **`garth@testing-pi`**, project synced to
-`/home/garth/dance-floor` with a venv there.
+A live Pi 5 is at **`garth@testing-pi`**. It is `src/pi` that syncs there, so
+`~/dance-floor` is the *package* root — `test/` and `src/df2_pi/` sit directly
+under it, not under a `src/pi/`. The venv is `venv`, not `.venv`.
 
 ```bash
 src/pi/tools/sync-to-pi.sh          # watch + rsync on change
 src/pi/tools/sync-to-pi.sh --once
+ssh garth@testing-pi 'cd ~/dance-floor && ./venv/bin/pytest -q'
 ```
+
+The venv is long-lived and does **not** track `pyproject.toml`. Adding a
+dependency means `./venv/bin/pip install -e ".[dev]"` there before tests will
+collect — otherwise the failure is a `ModuleNotFoundError` at import time that
+looks like a broken test rather than a stale environment.
 
 **The bench pi-hat is the old single-chain revision** — one transceiver, XDIR
 on GPIO23. Host code defaults to the two-chain board (GPIO17/GPIO7), so bench
