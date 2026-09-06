@@ -26,6 +26,33 @@ static constexpr uint8_t ERROR_TYPE_LATCH_OVERRUN = 0x04;
 // fault on the *upstream* link, so slot and tile_bus_cmd carry no meaning
 // and are logged as 0.
 static constexpr uint8_t ERROR_TYPE_ROW_BUS_RX_OVERFLOW = 0x05;
+// Diagnostic, not a fault: one entry per boot carrying the RP2350's sticky
+// reset-cause bits, so a restart says *why* it happened rather than just
+// that it did. slot/tile_bus_cmd are the high/low bytes of
+// POWMAN_CHIP_RESET >> 16, which is where every HAD_* cause bit lives
+// (POR, BOR, RUN_LOW, the four watchdog flavours, GLITCH_DETECT, ...).
+//
+// Added to explain a restart ~3.6 s into every power-up that neither bus
+// showed the cause of, and it earned its keep immediately: POR with no
+// watchdog, BOR or glitch bit set is what pointed at the supply rather than
+// the firmware, and the row was in fact browning out. A plain
+// watchdog_caused_reboot() bool could not have told those apart.
+static constexpr uint8_t ERROR_TYPE_ROW_BOOT = 0x06;
+// Discovery assigned a tile to slot 1 or higher. On a one-tile bench that
+// should never happen, and the row intermittently comes up claiming all 8
+// slots at address 0x01 - but every sense walk captured on the wire has
+// found exactly one tile, so the extra slots are being assigned somewhere
+// the Tile Bus does not show. slot = the slot claimed, tile_bus_cmd = the
+// address it was given.
+static constexpr uint8_t ERROR_TYPE_SENSE_EXTRA_SLOT = 0x07;
+// One entry each time a discovery sweep begins, slot = a wrapping counter.
+// The error log does not survive a chip reset (it is a plain global, zeroed
+// by static init), so these say whether a restart was a reset at all: sweeps
+// logged either side of a gap mean the chip kept running and only the sweep
+// restarted, while a log that begins again after the gap means it rebooted.
+// Reading the counter alongside a bus capture is also what pins the row's
+// millis() epoch to a point on the wire.
+static constexpr uint8_t ERROR_TYPE_SENSE_START = 0x08;
 
 // Dispatches Row Bus commands arriving from the Raspberry Pi
 // (docs/row-bus-protocol.md §5). in.addr must already be filtered by the
@@ -49,6 +76,13 @@ public:
     // (which owns the Pi-facing UART) but logged here, because core 1 owns
     // the error log - main.cpp carries the flag across.
     void log_row_bus_overflow(uint32_t now_ms);
+
+    // Diagnostics, logged by main.cpp: one per boot, and one per tile
+    // assigned to a slot above 0. Both go in the error log because it is the
+    // only channel that already reaches the Pi with a timestamp attached.
+    void log_boot(uint32_t chip_reset_reason, uint32_t now_ms);
+    void log_sense_extra_slot(uint8_t slot, uint8_t addr, uint32_t now_ms);
+    void log_sense_start(uint32_t now_ms);
 
 private:
     static constexpr uint8_t ERROR_LOG_CAPACITY = 32;

@@ -45,6 +45,7 @@ void SenseMapper::send_version_query(uint8_t addr) {
 }
 
 void SenseMapper::start() {
+    sweep_started_pending_ = true;
     map_.reset();
     current_slot_ = 0;
     state_ = SenseMapState::DISCOVERING;
@@ -76,6 +77,20 @@ void SenseMapper::advance_version_query(uint32_t now_ms) {
     send_version_query(map_.address_for(version_slot_));
     request_sent_ms_ = now_ms;
     step_ = Step::WAIT_VERSION_RESP;
+}
+
+bool SenseMapper::take_sweep_started() {
+    if (!sweep_started_pending_) return false;
+    sweep_started_pending_ = false;
+    return true;
+}
+
+bool SenseMapper::take_extra_slot(uint8_t *slot_out, uint8_t *addr_out) {
+    if (!extra_slot_pending_) return false;
+    extra_slot_pending_ = false;
+    *slot_out = extra_slot_;
+    *addr_out = extra_slot_addr_;
+    return true;
 }
 
 void SenseMapper::fail_discovery() {
@@ -126,6 +141,11 @@ void SenseMapper::poll(uint32_t now_ms) {
         if (transport_.poll(parser_, &f)) {
             if (f.cmd == (uint8_t)Cmd::DETECT_RESP) {
                 map_.set_discovered(current_slot_, f.addr);
+                if (current_slot_ > 0) {
+                    extra_slot_pending_ = true;
+                    extra_slot_        = current_slot_;
+                    extra_slot_addr_   = f.addr;
+                }
                 send_activate_sense(f.addr);
                 request_sent_ms_ = now_ms;
                 step_ = Step::WAIT_ACTIVATE_ACK;

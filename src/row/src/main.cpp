@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <hardware/structs/powman.h>  // POWMAN_CHIP_RESET sticky causes, for the boot log
 #include "rp2350/pins.h"
 #include "row_address.h"
 #include "rp2350/pi_transport_rp2350.h"
@@ -288,6 +289,13 @@ void setup1() {
     tile_transport.init();
     row_sense.init();
     power_monitor.init();
+
+    // Record why we booted before discovery runs. POWMAN's CHIP_RESET holds
+    // sticky cause bits (POR / BOR / RUN_LOW / watchdog / glitch detect),
+    // which is what separates a watchdog reset from a supply problem - the
+    // distinction that turned an apparent firmware fault into a bench one.
+    row_cmd_handler.log_boot(powman_hw->chip_reset >> 16, millis());
+
     sense_mapper.start();
 }
 
@@ -316,6 +324,17 @@ void loop1() {
     }
 
     sense_mapper.poll(millis());
+
+    // Any tile assigned to a slot above 0 goes in the error log. On a
+    // one-tile bench this should never fire; when the row comes up claiming
+    // 8 tiles, this is what says which slots were claimed and when.
+    if (sense_mapper.take_sweep_started())
+        row_cmd_handler.log_sense_start(millis());
+
+    uint8_t extra_slot, extra_addr;
+    if (sense_mapper.take_extra_slot(&extra_slot, &extra_addr))
+        row_cmd_handler.log_sense_extra_slot(extra_slot, extra_addr, millis());
+
     drive_ready_led(millis(), sense_mapper.state());
 
     RowBusFrame frame;

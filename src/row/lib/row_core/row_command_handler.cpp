@@ -122,6 +122,23 @@ void RowCommandHandler::log_row_bus_overflow(uint32_t now_ms) {
     log_error(0, 0, ERROR_TYPE_ROW_BUS_RX_OVERFLOW, now_ms);
 }
 
+void RowCommandHandler::log_boot(uint32_t chip_reset_reason, uint32_t now_ms) {
+    // Every HAD_* cause bit sits in POWMAN_CHIP_RESET bits 16-28, so the
+    // caller's >> 16 leaves them all inside 16 bits - split across the two
+    // spare bytes this entry has.
+    log_error((uint8_t)(chip_reset_reason >> 8), (uint8_t)(chip_reset_reason & 0xFF),
+              ERROR_TYPE_ROW_BOOT, now_ms);
+}
+
+void RowCommandHandler::log_sense_start(uint32_t now_ms) {
+    static uint8_t sweep_counter = 0;
+    log_error(sweep_counter++, 0, ERROR_TYPE_SENSE_START, now_ms);
+}
+
+void RowCommandHandler::log_sense_extra_slot(uint8_t slot, uint8_t addr, uint32_t now_ms) {
+    log_error(slot, addr, ERROR_TYPE_SENSE_EXTRA_SLOT, now_ms);
+}
+
 void RowCommandHandler::log_error(uint8_t slot, uint8_t tile_bus_cmd, uint8_t error_type, uint32_t now_ms) {
     ErrorLogEntry &e = error_log_[error_log_next_];
     e.slot         = slot;
