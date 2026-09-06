@@ -1,9 +1,10 @@
 # Row Bus — Raspberry Pi ↔ Row Controller Protocol
 
 This document specifies the command protocol on **Row Bus**: the RS-485 link
-between the Raspberry Pi (host) and the 8 row controllers. For physical-layer
-wiring, topology, and the overall addressing model see
-[communication.md](communication.md).
+between the Raspberry Pi (host) and the 8 row controllers. §1 below is
+current on the physical layer and the two-chain topology;
+[communication.md](communication.md) still describes a single bus on a 4P4C
+connector and should not be used for wiring.
 
 ---
 
@@ -16,7 +17,27 @@ wiring, topology, and the overall addressing model see
 | UART framing   | 8N1 (8 data bits, no parity, 1 stop bit)      |
 | Master         | Raspberry Pi                                  |
 | Slaves         | 8 row controllers (Xiao RP2350)               |
+| Chains         | **2, driven concurrently** — see below        |
 | Default state  | Row controllers in RX; only transmit on reply |
+
+### Two chains, driven concurrently
+
+**The 8 rows are split across two independent RS-485 chains, and the Pi drives
+both at the same time. This is a settled decision, not an available
+optimization — the frame budget below assumes it and does not close without
+it.**
+
+The pi-hat carries two RS-485 transceivers landing in a single 8P8C jack, so
+the parallelism is committed in copper. One Cat5 run passes every row
+controller in physical order, each tapping the opposite pair from its
+neighbour, giving an alternating split: **rows 0,2,4,6 on chain 0; rows 1,3,5,7
+on chain 1**. Each chain therefore carries 4 rows, and a full-floor update is 4
+frame times, not 8.
+
+Row addresses stay global `0x00`–`0x07` — only the wiring is partitioned, and
+row controller firmware is unaware there is more than one chain. Wiring
+details, GPIO assignments and the host-side API are in
+[src/pi/README.md](../src/pi/README.md).
 
 ### Baud rate rationale
 
@@ -34,27 +55,46 @@ them. The result is a completely mute bus, indistinguishable from a broken
 wire. An earlier revision of this document specified 4 Mbps, which is
 unreachable, and cost a full bring-up session to diagnose.
 
-A full-row `SEND_DATA` frame with all tiles using `SET_LEDS` carries 968 bytes
-of pixel data plus frame overhead (976 bytes total). Updating all 8 rows
-before a latch takes 8 such frames. At 8N1 each byte occupies **10 bit-times**
-on the wire (1 start + 8 data + 1 stop), so a row frame is 9,760 bits and a
-full sweep of 8 rows is 78,080 bits.
+Because 3.125 Mbps is a ceiling rather than a choice, the second chain is the
+only remaining lever on Row Bus wall-clock time.
 
-| Baud rate       | Time per row | 8 rows total | Slack (33 ms frame) |
-| --------------- | ------------ | ------------ | ------------------- |
-| 1 Mbps          | 9.8 ms       | 78.1 ms      | — (over budget)     |
-| 2 Mbps          | 4.9 ms       | 39.0 ms      | — (over budget)     |
-| **3.125 Mbps**  | **3.1 ms**   | **25.0 ms**  | **~8 ms**           |
-| 4 Mbps          | 2.4 ms       | 19.5 ms      | ~13 ms (unreachable)|
-| 8 Mbps          | 1.2 ms       | 9.8 ms       | ~23 ms (unreachable)|
+### Worst-case frame budget
 
-3.125 Mbps sustains 30 FPS with roughly 8 ms of slack in the worst case (all
-64 tiles using `SET_LEDS`). Typical frames mixing `SET_COLOR`/`SET_PATTERN`
-are far smaller and leave much more.
+The worst case is every one of the 64 tiles sending `SET_LEDS` — 60 LEDs at
+3 bytes each. One tile entry is 181 bytes, a full-row `SEND_DATA` payload is
+`8 × 181 = 1,448` bytes, and the framed total is **1,456 bytes**. At 8N1 each
+byte occupies 10 bit-times, so one row frame is 14,560 bits = **4.66 ms** at
+3.125 Mbps.
 
-Going faster requires different host hardware — the Pi's UART, not the
-transceiver or cable, is the binding constraint. The THVD1420DR is rated to
-12 Mbps and the RP2350's PIO could clock well past that.
+End-to-end latency is the Row Bus phase plus one row's Tile Bus forwarding.
+The two do not overlap within a row: `RowCommandHandler::handle_send_data()`
+copies the whole frame before forwarding its first tile, so the last row
+served cannot start on Tile Bus until its frame has fully arrived. Rows *do*
+overlap each other — each has its own Tile Bus — so only the last row's tail
+counts.
+
+| | Row Bus phase | Tile Bus tail | End-to-end | Ceiling |
+| --- | --- | --- | --- | --- |
+| One chain, 8 rows serialized | 37.3 ms | 15.0 ms | 52.2 ms | 19.1 fps |
+| **Two chains, 4 rows each** | **18.6 ms** | **15.0 ms** | **33.6 ms** | **29.8 fps** |
+| Two chains + Tile Bus at 2 Mbps | 18.6 ms | 7.5 ms | 26.1 ms | 38.3 fps |
+
+Two chains is what makes 30 FPS approximately reachable at all; without it the
+floor runs at 19 fps worst case, with the last row a full frame behind the
+first. Even with it the all-`SET_LEDS` case lands ~0.3 ms past the 33.3 ms
+period — close enough that the overrun path in §8 is a normal occurrence at
+full load rather than an exceptional one, and the last row illuminates
+slightly late. Typical frames mixing `SET_COLOR`/`SET_PATTERN` are far smaller
+and leave substantial slack.
+
+**The identified next lever is the Tile Bus baud rate**, which at 1 Mbps now
+contributes more to end-to-end latency than the whole Row Bus phase. The
+THVD1420DR is rated to 12 Mbps; the binding constraint is the ATtiny3224's
+USART, whose ceiling must be confirmed against the datasheet before this is
+relied on. See [tile-bus-protocol.md](tile-bus-protocol.md) §1.
+
+Going faster on Row Bus itself requires different host hardware — the Pi's
+UART, not the transceiver or cable, is the constraint there.
 
 ---
 
@@ -62,7 +102,7 @@ transceiver or cable, is the binding constraint. The THVD1420DR is rated to
 
 Row Bus uses a slightly extended variant of the Tile Bus frame format. The payload
 length field is **2 bytes** to accommodate the large `SEND_DATA` payload
-(up to 968 bytes).
+(up to 1,448 bytes).
 
 ```
  0        1        2        3        4        5   6        7 … 7+N-1   7+N      8+N
@@ -78,12 +118,17 @@ length field is **2 bytes** to accommodate the large `SEND_DATA` payload
 | `SYNC2`   | 1 B  | Always `0x55` |
 | `ADDR`    | 1 B  | Target row address (`0x00`–`0x07`), or `0xFF` for broadcast. On response frames this is the responding row controller's address. |
 | `CMD`     | 1 B  | Command or response code (see §5 and §6) |
-| `LEN`     | 2 B  | Payload byte count, big-endian (`LEN_H` first). Range 0–968. |
+| `LEN`     | 2 B  | Payload byte count, big-endian (`LEN_H` first). Range 0–1,448. |
 | `PAYLOAD` | N B  | Command-specific data; absent when `LEN = 0` |
 | `CRC`     | 2 B  | CRC-16/CCITT (polynomial `0x1021`, init `0xFFFF`), computed over `ADDR`, `CMD`, `LEN_H`, `LEN_L`, and all payload bytes. Transmitted big-endian. |
 
 **Minimum frame size:** 8 bytes (no payload).
-**Maximum frame size:** 976 bytes (`SEND_DATA`, 968-byte payload).
+**Maximum frame size:** 1,456 bytes (`SEND_DATA`, 1,448-byte payload).
+
+Both figures track `LEDS_PER_TILE`; firmware derives them in
+[row_bus_protocol.h](../src/row/lib/row_core/row_bus_protocol.h) rather than
+restating them, and the host in
+[protocol/constants.py](../src/pi/src/df2_pi/protocol/constants.py).
 
 ### Receiver framing
 
@@ -242,7 +287,7 @@ Response payload:
 | 0         | `entry_count` | Number of log entries that follow (0–32) |
 | 1 + 5×i   | `slot`        | Tile slot (0–7) that failed; see note for `LATCH_OVERRUN` |
 | 2 + 5×i   | `tile_bus_cmd`   | Tile Bus command code involved; see note for `LATCH_OVERRUN` |
-| 3 + 5×i   | `error_type`  | `0x01` = no ACK after 3 retries, `0x02` = CRC failure, `0x03` = sense collision, `0x04` = LATCH overrun, `0x05` = Row Bus RX overflow |
+| 3 + 5×i   | `error_type`  | `0x01` = no ACK after 3 retries, `0x02` = CRC failure, `0x03` = sense collision, `0x04` = LATCH overrun, `0x05` = Row Bus RX overflow, `0x06` = row boot, `0x07` = sense extra slot, `0x08` = sense start |
 | 4–5 + 5×i | `timestamp`   | Seconds since row controller boot (uint16, big-endian) |
 
 `ROW_BUS_RX_OVERFLOW` (`error_type = 0x05`) reports a receive overrun on the
@@ -258,6 +303,28 @@ For `LATCH_OVERRUN` entries (`error_type = 0x04`) the fields are repurposed:
   tile was still in flight; a value of 0 means the row hadn't started at all.
 - `tile_bus_cmd` — the tile command code that was in flight at the time (typically
   `0x12` SET_LEDS).
+
+Three entry types are **diagnostics rather than faults**, and also repurpose
+the fields:
+
+- `ROW_BOOT` (`0x06`) — logged once per boot, before discovery runs. `slot` and
+  `tile_bus_cmd` are the high and low bytes of `POWMAN_CHIP_RESET >> 16`, the
+  RP2350's sticky reset causes: power-on, brownout, RUN low, the four watchdog
+  variants, glitch detect and so on. More than one bit can be set. A plain
+  "was it the watchdog" flag would not be enough: the distinction that matters
+  is watchdog versus supply, and a POR with no watchdog or brownout bit set is
+  what identified a row restarting mid-boot as a power problem rather than a
+  firmware one.
+- `SENSE_START` (`0x08`) — one per discovery sweep, `slot` a wrapping sweep
+  counter, `tile_bus_cmd` `0`. The error log is cleared by a chip reset, so
+  these also answer whether a restart *was* a reset: sweeps logged either side
+  of a gap mean the chip kept running, whereas a log that starts over means it
+  rebooted.
+- `SENSE_EXTRA_SLOT` (`0x07`) — discovery assigned a tile to slot 1 or higher.
+  `slot` is the slot claimed, `tile_bus_cmd` is the address it was given. On a
+  single-tile row this should never appear; it exists to catch the row
+  intermittently coming up claiming all 8 slots at one address, which no
+  captured sense walk has ever produced on the wire.
 
 Maximum response payload: `1 + 32 × 5 = 161 bytes`.
 
@@ -333,7 +400,7 @@ different commands — they may be freely mixed within a single `SEND_DATA` fram
 | ------- | ----- |
 | `ADDR`  | target row address |
 | `CMD`   | `0x10` |
-| `LEN`   | sum of all 8 tile entry sizes (32–968) |
+| `LEN`   | sum of all 8 tile entry sizes (32–1,448) |
 | Payload | 8 tile entries, concatenated (see below) |
 
 **Per-tile entry format:**
@@ -341,9 +408,10 @@ different commands — they may be freely mixed within a single `SEND_DATA` fram
 | Bytes  | Field       | Description |
 | ------ | ----------- | ----------- |
 | 0      | `tile_cmd`  | `0x10` = SET_COLOR, `0x11` = SET_PATTERN, `0x12` = SET_LEDS (same codes as [tile-bus-protocol.md](tile-bus-protocol.md)) |
-| 1…     | `tile_data` | Payload for that command: 3 bytes for SET_COLOR, 5 bytes for SET_PATTERN, 120 bytes for SET_LEDS |
+| 1…     | `tile_data` | Payload for that command: 3 bytes for SET_COLOR, 5 bytes for SET_PATTERN, 180 bytes for SET_LEDS |
 
-Entry sizes: SET_COLOR = 4 bytes, SET_PATTERN = 6 bytes, SET_LEDS = 121 bytes.
+Entry sizes: SET_COLOR = 4 bytes, SET_PATTERN = 6 bytes, SET_LEDS = 181 bytes
+(1 + 60 LEDs × 3).
 
 **Payload size examples:**
 
@@ -351,8 +419,8 @@ Entry sizes: SET_COLOR = 4 bytes, SET_PATTERN = 6 bytes, SET_LEDS = 121 bytes.
 | ------------------------ | ------------- |
 | All 8 × SET_COLOR        | 32 bytes      |
 | All 8 × SET_PATTERN      | 48 bytes      |
-| All 8 × SET_LEDS         | 968 bytes     |
-| 4 × SET_COLOR + 4 × SET_LEDS | 500 bytes |
+| All 8 × SET_LEDS         | 1,448 bytes   |
+| 4 × SET_COLOR + 4 × SET_LEDS | 740 bytes |
 
 ---
 
@@ -455,33 +523,49 @@ retries each) to monitor discovery progress.
 
 ### Normal frame update (30 FPS, 33 ms period)
 
-Frame updates use a **pipelined** model: each row controller begins forwarding
-to its tiles on Tile Bus immediately upon receiving `SEND_DATA`, overlapping Tile Bus
-transfers across rows. The Pi fires `LATCH` at t=33 ms regardless of Tile Bus
-state.
+Frame updates are **pipelined across rows and parallel across chains**. The Pi
+writes a `SEND_DATA` to one row on each chain at the same time (see §1), and
+each row controller begins forwarding to its tiles on Tile Bus as soon as its
+own frame has fully arrived. Tile Bus transfers therefore overlap between rows.
+The Pi fires `LATCH` at a fixed point each frame regardless of Tile Bus state.
 
-**At 4 Mbps (Row Bus) / 1 Mbps (Tile Bus), worst case (all SET_LEDS):**
+**At 3.125 Mbps (Row Bus) / 1 Mbps (Tile Bus), worst case (all `SET_LEDS`,
+1,456-byte frames):**
 
 ```
-ms:   0    2    4    6    8   10   12   14   16              27   33
-Row Bus: [RC0][RC1][RC2][RC3][RC4][RC5][RC6][RC7] ── idle ────── [LATCH]
-RC0:       [────── Tile Bus 11ms ──────]
-RC1:            [────── Tile Bus 11ms ──────]
-RC2:                 [────── Tile Bus 11ms ──────]
+ms:      0     4.7   9.3  14.0  18.6                          33.3
+chain 0: [RC0][RC2][RC4][RC6] ─────── idle ─────────────────── [LATCH]
+chain 1: [RC1][RC3][RC5][RC7] ─────── idle ───────────────────
+RC0:          [────── Tile Bus 15.0 ms ──────]
+RC1:          [────── Tile Bus 15.0 ms ──────]
+RC2:                [────── Tile Bus 15.0 ms ──────]
  ⋮
-RC7:                              [────── Tile Bus 11ms ──────]
-                                                       ↑ done t≈27ms
+RC6/RC7:                        [────── Tile Bus 15.0 ms ──────]
+                                                     ↑ done t≈33.6 ms
 ```
 
-RC7 finishes its Tile Bus update at ~t=27 ms, leaving **6 ms of slack** before
-`LATCH` at t=33 ms. No overrun at 4 Mbps.
+Both chains finish their Row Bus phase at t≈18.6 ms. The last pair of rows
+(RC6 on chain 0, RC7 on chain 1) then take 15.0 ms on their own Tile Buses,
+finishing at **t≈33.6 ms** — roughly 0.3 ms past the 33.3 ms `LATCH`.
 
-At 8 Mbps on Row Bus, the `SEND_DATA` phase completes at ~t=8 ms and RC7 finishes
-Tile Bus at ~t=19 ms, providing ~14 ms of slack.
+So at *full* load the overrun path below is the normal case for the last row
+in each chain, not an exception: those two rows illuminate a fraction of a
+frame late and log `LATCH_OVERRUN`. This is a visible-only-under-worst-case
+condition — any frame mixing `SET_COLOR`/`SET_PATTERN` into some slots shrinks
+the Row Bus phase and clears it entirely.
 
-The overrun condition arises if RC7's Tile Bus update cannot complete before t=33 ms.
-This cannot happen at the ≥ 4 Mbps minimum with all-`SET_LEDS` payloads, but
-could occur during sustained admin traffic or if Row Bus runs below specification.
+Two things would remove the overrun outright, in order of leverage:
+
+1. **Tile Bus at 2 Mbps** halves the 15.0 ms tail to 7.5 ms, finishing at
+   t≈26.1 ms with ~7 ms of slack. Gated on the ATtiny3224's USART ceiling —
+   confirm against the datasheet.
+2. **Fewer bytes per LED.** At 2 bytes/LED, RGB565 puts 60 LEDs on the wire
+   in the 120 bytes/tile that 40 LEDs at RGB888 used — restoring the old
+   frame sizes exactly, at the cost of colour depth.
+
+Serializing the two chains — driving them one after the other — pushes this to
+t≈52 ms and 19 fps. That is why §1 states the concurrency as a requirement
+rather than an optimization.
 
 ### Blackout sequence
 
@@ -497,14 +581,12 @@ All tiles go dark within ~2 ms of the `BLACKOUT` frame completing.
 
 ## 9. Open Questions
 
-- **Pi hat PCB:** a dedicated PCB that mounts on the Raspberry Pi and translates
-  its hardware UART to RS-485 for the Row Bus is planned but not yet designed.
-  The planned transceiver is the **THVD1420DR** (same device used on the row
-  controller and tiles); its 12 Mbps maximum data rate easily covers the ≥ 4 Mbps
-  requirement.
 - **Bus turnaround timing:** row controllers need a guard interval (≥ 100 µs,
   same as Tile Bus) after the Pi's last stop bit before they begin a response
-  frame. Confirm this is sufficient at 4/8 Mbps cable lengths.
+  frame. Confirm this is sufficient at 3.125 Mbps cable lengths.
+- **Tile Bus baud ceiling:** §8's first-choice fix for the worst-case overrun
+  is 2 Mbps on Tile Bus. Confirm the ATtiny3224's USART can reach it (and at
+  what system clock) against the datasheet before planning around it.
 - **Error log ring buffer size:** 32 entries chosen arbitrarily. Tune to fit
   within RP2350 SRAM budget once firmware is written.
 - **`RE_DISCOVER` during live show:** decide whether re-discovery is allowed
