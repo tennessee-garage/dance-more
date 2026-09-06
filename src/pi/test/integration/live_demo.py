@@ -16,12 +16,14 @@ noise-sensitive; see power_monitor_rp2350.cpp on the calibration register
 resetting under electrical noise). STATUS needs no I2C and no Tile Bus, so
 it answers that question directly.
 
-When a row does go silent the loop stops driving it, quiets the bus, and
-watches for it to come back. A row that returns on its own stalled and was
-reset - that much is solid. A row that stays silent is *not* self-diagnosing:
-it means either something no watchdog can recover, or that main.cpp's
-watchdog isn't resetting this part at all, and nothing here separates those
-two. Read the under-load POWER samples for that, not this timeout.
+When a row does go silent the loop stops driving it and watches for it to
+come back, feeding the bus filler frames while it waits - see
+await_recovery(), which used to go quiet instead and thereby prevented the
+commonest recovery from happening at all. A row that stays silent through
+that is *not* self-diagnosing: it means either something no watchdog can
+recover, or that main.cpp's watchdog isn't resetting this part at all, and
+nothing here separates those two. Read the under-load POWER samples for
+that, not this timeout.
 
 Steps:
   1. Scan rows 0-7, each on the chain that should carry it (Floor.scan()).
@@ -46,7 +48,13 @@ import colorsys
 import sys
 import time
 
-from df2_pi.protocol.constants import LEDS_PER_TILE, Cmd, TileCmd
+from df2_pi.protocol.constants import (
+    FRAME_OVERHEAD,
+    LEDS_PER_TILE,
+    MAX_PAYLOAD,
+    Cmd,
+    TileCmd,
+)
 from df2_pi.transport import ChainConfig, Floor, RowChainMap, RowNotResponding, default_chain_configs
 from df2_pi.transport.row_bus import DEFAULT_BAUDRATE
 
@@ -97,6 +105,12 @@ DEFAULT_LEDS_FPS = 30.0
 # and a reboot re-runs discovery, so anything that is coming back is back
 # well inside this.
 RECOVERY_LIMIT_S = 8.0
+
+# Filler frames sent per recovery attempt, sized to cover the largest payload
+# a row's parser can be left owing after a truncated frame. See
+# await_recovery(): the row cannot resync until it has been fed the balance,
+# so the count has to beat the worst case rather than merely be generous.
+FLUSH_FRAMES = -(-(MAX_PAYLOAD + 2) // FRAME_OVERHEAD)  # ceil, 182 at 60 LEDs
 
 # Rail drop from the dark baseline worth calling out. The row controller
 # runs off the same 12 V it measures, so a sag this size is the thing to
@@ -300,14 +314,26 @@ def health_poll(floor: Floor, row: int, last_log: dict[int, list[tuple]]) -> boo
 def await_recovery(floor: Floor, row: int, limit_s: float = RECOVERY_LIMIT_S) -> float | None:
     """Seconds until the row answers STATUS again, or None if it never does.
 
-    Called with the bus otherwise quiet - no display data - so a row that
-    stays silent here is genuinely not executing rather than merely losing
-    its reply to traffic.
+    This used to poll STATUS on an otherwise quiet bus, on the reasoning that
+    silence isolates the row from traffic it might be losing replies to. That
+    was exactly backwards for the most common cause of a silent row: a frame
+    truncated on the wire leaves the row's parser owing the rest of a payload,
+    and only bytes can pay it off, so a quiet bus is the one condition under
+    which it can never recover. Eight seconds of politeness guaranteed the
+    failure it was trying to observe.
+
+    So the probes are now padded with filler. BLACKOUT is the vehicle: it is
+    the largest thing here that is safe to send to a row in an unknown state -
+    it drives no pixel data, and a row that does receive one just goes dark,
+    which it already is. Enough of them to cover a full SEND_DATA payload
+    clears any stuck parser within the first second.
     """
     start = time.perf_counter()
     while time.perf_counter() - start < limit_s:
         if probe(floor, row, Cmd.STATUS) is not None:
             return time.perf_counter() - start
+        for _ in range(FLUSH_FRAMES):
+            floor.blackout()  # broadcast: writes only, never waits for a reply
         time.sleep(0.1)
     return None
 

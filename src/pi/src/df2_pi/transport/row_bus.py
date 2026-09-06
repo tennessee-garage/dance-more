@@ -129,9 +129,20 @@ class RowBus:
 
     def _write(self, data: bytes) -> None:
         deadline = self.start_write(data)
-        while time.perf_counter() < deadline:
-            pass
-        self.finish_write()
+        try:
+            while time.perf_counter() < deadline:
+                pass
+        finally:
+            # Release the driver even if the busy-wait is interrupted. A
+            # Ctrl+C landing here used to leave XDIR asserted and, worse,
+            # the frame itself cut short: a row controller mid-payload
+            # consumes whatever follows as payload, so one interrupted
+            # SEND_DATA left the row unable to see any further frame until
+            # ~1,448 more bytes had been fed to it. Observed on the bench as
+            # a row that looked permanently dead and came back on the second
+            # scan. The row now times the gap out on its own, but truncating
+            # frames on the way out of a demo is worth not doing either way.
+            self.finish_write()
 
     def read_frame(self, timeout: float | None = None) -> Frame | None:
         """Block until a CRC-valid frame arrives, or timeout elapses."""
