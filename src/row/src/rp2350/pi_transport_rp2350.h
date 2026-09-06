@@ -25,6 +25,12 @@ public:
     volatile uint32_t tx_frames = 0;
 
 private:
+    // Idle gap after which a part-received frame is abandoned. 20 ms is ~4x
+    // the 4.7 ms a maximum-size frame takes on the wire, so it cannot fire
+    // mid-frame, and it is short enough that a stranded row recovers within
+    // one frame period rather than needing a power cycle. See poll().
+    static constexpr uint32_t RX_IDLE_RESET_US = 20000;
+
     // micros() timestamp of the last byte received from the Pi, so send()
     // can wait out the turnaround guard from the *incoming* frame's last
     // stop bit, not from our own transmission.

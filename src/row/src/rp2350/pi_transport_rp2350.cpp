@@ -72,6 +72,26 @@ void PiTransportRP2350::init() {
 }
 
 bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
+    // Recover from a truncated frame before reading anything more.
+    //
+    // The parser cannot resync on its own: mid-payload it takes every byte as
+    // payload, so the next frame's SYNC1/SYNC2 is swallowed and only the byte
+    // count in LEN can end the state. A frame cut short - the host
+    // interrupted mid-write, or bytes lost to a brownout - therefore leaves
+    // the row deaf until up to ROWBUS_MAX_PAYLOAD further bytes have arrived
+    // to reach the CRC and fail it. That is the cruel part: the Pi's response
+    // to a silent row is a scan, whose 8-byte admin frames supply a couple of
+    // hundred bytes where 1,448 are owed, so the row looks permanently dead
+    // while both its cores run normally and its watchdog sees nothing wrong.
+    // Observed on the bench: a row unreachable across a full scan came back
+    // on the second, having been fed just enough bytes by the first.
+    //
+    // A gap this long cannot occur inside a real frame - the Pi writes one
+    // contiguously, 3.2 us per byte, and a whole maximum-size frame is 4.7 ms
+    // - so this can only fire between frames.
+    if (parser.in_progress() && (uint32_t)(micros() - last_rx_byte_us_) >= RX_IDLE_RESET_US)
+        parser.reset();
+
     // Drain all available RX bytes. Return true on the first complete frame.
     while (Serial2.available()) {
         uint8_t byte = (uint8_t)Serial2.read();

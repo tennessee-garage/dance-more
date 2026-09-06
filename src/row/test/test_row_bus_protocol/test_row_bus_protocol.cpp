@@ -328,6 +328,59 @@ void test_parser_reset_clears_state() {
     TEST_ASSERT_EQUAL_HEX8(tx.cmd,  rx.cmd);
 }
 
+// A frame truncated on the wire swallows the frames that follow it, and
+// in_progress() is what lets a transport notice and break the cycle.
+//
+// This is not hypothetical: a row stranded exactly this way looked wedged on
+// the bench - unreachable across a whole scan, LED solid, watchdog quiet,
+// both cores running - because the parser was still owing payload bytes that
+// the Pi's small admin frames could not supply fast enough.
+void test_parser_truncated_frame_swallows_following_frames() {
+    RowBusFrame big = {};
+    big.addr = 0x00; big.cmd = (uint8_t)RowBusCmd::SEND_DATA; big.len = ROWBUS_MAX_PAYLOAD;
+
+    uint8_t buf[ROWBUS_MAX_FRAME];
+    int n = row_bus_frame_encode(big, buf, sizeof(buf));
+
+    RowBusFrameParser parser;
+    RowBusFrame rx = {};
+    // Cut the big frame off a quarter of the way in, as an interrupted host
+    // write or a brownout would.
+    for (int i = 0; i < n / 4; i++) parser.feed(buf[i], &rx);
+    TEST_ASSERT_TRUE(parser.in_progress());
+
+    // A following well-formed frame is now invisible: its bytes are counted
+    // as the truncated frame's outstanding payload.
+    RowBusFrame status = {};
+    status.addr = 0x00; status.cmd = (uint8_t)RowBusCmd::STATUS; status.len = 0;
+    uint8_t small[ROWBUS_MAX_FRAME];
+    int sn = row_bus_frame_encode(status, small, sizeof(small));
+    TEST_ASSERT_FALSE(parse_all(parser, small, sn, &rx));
+    TEST_ASSERT_TRUE(parser.in_progress());
+
+    // reset() is the only way out that does not require feeding the balance.
+    parser.reset();
+    TEST_ASSERT_FALSE(parser.in_progress());
+    TEST_ASSERT_TRUE(parse_all(parser, small, sn, &rx));
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)RowBusCmd::STATUS, rx.cmd);
+}
+
+void test_parser_in_progress_tracks_frame_boundaries() {
+    RowBusFrame tx = {};
+    tx.addr = 0x03; tx.cmd = (uint8_t)RowBusCmd::TEST; tx.len = 0;
+
+    uint8_t buf[ROWBUS_MAX_FRAME];
+    int n = row_bus_frame_encode(tx, buf, sizeof(buf));
+
+    RowBusFrameParser parser;
+    RowBusFrame rx = {};
+    TEST_ASSERT_FALSE(parser.in_progress());   // idle before any byte
+    parser.feed(buf[0], &rx);                  // SYNC1 seen
+    TEST_ASSERT_TRUE(parser.in_progress());
+    for (int i = 1; i < n; i++) parser.feed(buf[i], &rx);
+    TEST_ASSERT_FALSE(parser.in_progress());   // idle again once complete
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -357,6 +410,8 @@ int main(int, char **) {
     RUN_TEST(test_parser_handles_double_aa_sync);
     RUN_TEST(test_parser_consecutive_frames);
     RUN_TEST(test_parser_reset_clears_state);
+    RUN_TEST(test_parser_in_progress_tracks_frame_boundaries);
+    RUN_TEST(test_parser_truncated_frame_swallows_following_frames);
 
     return UNITY_END();
 }

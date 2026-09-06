@@ -58,6 +58,18 @@ public:
     bool feed(uint8_t byte, RowBusFrame *out);
     void reset();
 
+    // True while a frame is only partly received.
+    //
+    // Mid-payload the parser consumes bytes unconditionally until it has as
+    // many as LEN promised, so a following frame's SYNC1/SYNC2 is taken as
+    // payload rather than recognised. A frame truncated on the wire therefore
+    // leaves the row deaf until enough further bytes arrive to reach the CRC
+    // and fail it - up to ROWBUS_MAX_PAYLOAD of them, which is far more than
+    // the Pi's small admin frames supply while it is probing an unresponsive
+    // row. Transports pair this with an idle timeout so a gap no legitimate
+    // frame can contain resets the parser instead.
+    bool in_progress() const { return state != State::SYNC1; }
+
 private:
     enum class State : uint8_t {
         SYNC1, SYNC2, ADDR, CMD, LEN_H, LEN_L, PAYLOAD, CRC_H, CRC_L
