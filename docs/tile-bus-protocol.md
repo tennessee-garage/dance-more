@@ -36,7 +36,7 @@ controller or a tile responding to a command.
 | --------- | ---- | ----------- |
 | `SYNC1`   | 1 B  | Always `0xAA`. Marks frame start. |
 | `SYNC2`   | 1 B  | Always `0x55`. Two-byte preamble reduces false-sync probability. |
-| `ADDR`    | 1 B  | Target tile address (`0x01`–`0xFE`), or `0xFF` for broadcast. On response frames this is the responding tile's address. |
+| `ADDR`    | 1 B  | Target tile address (`0x01`–`0x08`, see §3), or `0xFF` for broadcast. On response frames this is the responding tile's address. |
 | `CMD`     | 1 B  | Command or response code (see §5 and §6). |
 | `LEN`     | 1 B  | Number of payload bytes that follow (`0`–`180`). |
 | `PAYLOAD` | N B  | Command-specific data; absent when `LEN = 0`. |
@@ -66,13 +66,35 @@ bytes per LED.
 
 | Range         | Meaning |
 | ------------- | ------- |
-| `0x00`        | Reserved |
-| `0x01`–`0xFE` | Valid tile unicast addresses |
-| `0xFF`        | Broadcast — all tiles accept and process, none respond (except `DETECT_SENSE`) |
+| `0x00`        | Unassigned — a tile that has not yet been given an address |
+| `0x01`–`0x08` | Tile at slot 0–7, assigned during the SENSE walk |
+| `0x09`–`0xFE` | Unused |
+| `0xFF`        | Broadcast — all tiles accept and process, none respond (except `DETECT_SENSE` and `SET_ADDRESS`) |
 
-Each tile's address is **programmed into non-volatile storage at manufacturing
-time** and is unique across all tiles in the system. Address assignment
-procedure: TBD (see §10).
+**Addresses are assigned by position, at every boot, and are not stored.** A
+tile powers up as `0x00` and is named by its row controller during the SENSE
+auto-mapping walk (§9): the tile found at slot *N* becomes address *N+1*.
+
+Two facts make this work, and they are worth stating because the obvious
+reading of "address" suggests otherwise:
+
+- **Addresses need only be unique on one Tile Bus.** The floor's 8 rows are 8
+  electrically separate buses that never join, so 8 addresses suffice for 64
+  tiles. Nothing needs to be unique floor-wide.
+- **Exactly one tile is selected at a time during the walk.** That is what
+  lets a broadcast `SET_ADDRESS` reach precisely one tile, which is the only
+  way to name a tile that has no address to unicast to yet.
+
+The consequences are the point of the scheme: tiles are physically
+interchangeable, a replacement needs no programming before it works, there is
+no manufacturing step and no per-tile firmware build, and the slot→address map
+can never disagree with the physical chain because position *is* the address.
+The cost is that a tile is addressable only after discovery reaches it, and
+that a row controller reset re-runs the walk (which it already did).
+
+An unaddressed tile matches broadcasts only. That is sufficient: `DETECT_SENSE`
+and `SET_ADDRESS`, the two commands it must see before it has a name, are both
+broadcast.
 
 ---
 
@@ -83,6 +105,7 @@ procedure: TBD (see §10).
 | Admin (unicast)  | **Yes** — row controller waits for `ACK` response |
 | Admin (broadcast, no response expected) | No |
 | `DETECT_SENSE` (broadcast, one tile responds) | **Yes** — one tile sends `DETECT_RESP` |
+| `SET_ADDRESS` (broadcast, one tile responds) | **Yes** — one tile sends `0x86`, from its new address |
 | Display (all)    | **No** — fire and forget |
 
 ---
@@ -196,6 +219,41 @@ Response payload (7 bytes, big-endian; shared encoding, defined once in
 | 0–1   | `version` | `TILE_FW_VERSION`, hand-bumped per build |
 | 2–5   | `git_sha` | First 4 bytes of the build's commit SHA |
 | 6     | `flags`   | Bit 0 = built from a dirty tree; bits 1–7 reserved (must be 0) |
+
+---
+
+#### `0x06 SET_ADDRESS` — broadcast
+
+Assigns the addressed-by-position address to the one tile whose incoming
+SENSE line is currently asserted. Sent by the row controller during the SENSE
+walk (§9), immediately after that slot's `DETECT_RESP`.
+
+Broadcast is not a convenience here but a necessity: the target may hold
+`0x00` and so cannot be reached by unicast. The SENSE walk supplies the
+selectivity instead — exactly one tile has its incoming line asserted at any
+point in the walk, and **a tile whose SENSE line is not asserted must ignore
+this command entirely.** Without that rule every tile on the bus would take
+the same address at once.
+
+| Field   | Value |
+| ------- | ----- |
+| `ADDR`  | `0xFF` |
+| `CMD`   | `0x06` |
+| `LEN`   | `1` |
+| Payload | `new_addr` — the address the tile is to adopt |
+| ACK     | **Yes** (`0x86`), **sent from the new address** |
+
+`new_addr` of `0x00` or `0xFF` is invalid and must be ignored; neither is a
+usable unicast address (§3).
+
+The acknowledgement is sent from the newly adopted address, not the old one.
+That is deliberate — it confirms the assignment actually took, where an ACK
+from the previous address would only confirm the command was received. The row
+controller matches on it before recording the slot.
+
+Assignment is a plain overwrite with no notion of "already addressed": a row
+controller that resets mid-show re-walks a chain of tiles that still hold
+their previous names, and must be able to rename them.
 
 ---
 
@@ -329,12 +387,22 @@ to `DETECT_SENSE`.
 
 | Field   | Value |
 | ------- | ----- |
-| `ADDR`  | responding tile's address ← **this is what the row controller captures** |
+| `ADDR`  | responding tile's *current* address — see below |
 | `CMD`   | `0x82` |
 | `LEN`   | `0` |
 | Payload | none |
 
-The tile address is carried in the `ADDR` field; no payload is needed.
+`DETECT_RESP` means "a tile is present at this slot" and nothing more. The
+address it carries is whatever the tile happens to hold — `0x00` on a freshly
+booted tile, a stale assignment on one that survived a row controller reset —
+and **the row controller must not record it.** The slot's address is decided
+by the `SET_ADDRESS` that follows, and confirmed by the `0x86` sent from it.
+
+### `0x86 ACK (SET_ADDRESS)` — tile → row controller
+
+Sent in response to `SET_ADDRESS (0x06)`, **from the newly adopted address**,
+with a 1-byte status payload (`0x00` = success). See §5.1's `SET_ADDRESS`
+entry for why the source address is the meaningful part.
 
 ### `0x85 VERSION_RESP` — tile → row controller
 
@@ -434,23 +502,28 @@ commands used are:
 
 1. Row controller asserts SENSE to tile 0 (hardware line, not a command).
 2. RC → all: `DETECT_SENSE (0x02)` → tile 0 replies `DETECT_RESP (0x82)`.
-   RC records tile 0's address.
-3. RC → tile 0: `ACTIVATE_SENSE (0x01)` → tile 0 pulls its outgoing SENSE low.
-4. RC → all: `DETECT_SENSE (0x02)` → tile 1 replies `DETECT_RESP (0x82)`.
-   RC records tile 1's address.
-5. Repeat steps 3–4 for tiles 2–7.
+   This says only that a tile is there; its reported address is ignored.
+3. RC → all: `SET_ADDRESS (0x06)` carrying `0x01` → only tile 0 acts on it,
+   because only tile 0 has its incoming SENSE asserted. It adopts `0x01` and
+   replies `0x86` **from** `0x01`. RC records slot 0 → `0x01`.
+4. RC → tile 0 (`0x01`): `ACTIVATE_SENSE (0x01)` → tile 0 pulls its outgoing
+   SENSE low, selecting tile 1.
+5. Repeat steps 2–4 for tiles 1–7, assigning `0x02`…`0x08`.
 6. RC → all: `CLEAR_SENSE (0x03)` → all tiles release their SENSE lines.
 
-After this sequence the row controller has a complete `slot 0..7 → tile address`
-map.
+After this sequence the row controller has a complete `slot 0..7 → tile
+address` map, and it is trivially `slot + 1` — the map exists so the rest of
+the firmware need not assume that, not because the assignment is interesting.
+
+A tile that answers `DETECT_SENSE` but never acknowledges `SET_ADDRESS` is a
+**fault**, not the end of the chain: it is demonstrably present. Discovery
+fails rather than silently truncating the row. End of chain is signalled only
+by silence at `DETECT_SENSE` (§7).
 
 ---
 
 ## 10. Open Questions
 
-- **Tile address assignment:** how are unique addresses burned in at
-  manufacture? Options: factory programming via UPDI, derived from ATtiny3224
-  unique serial, or a one-time self-assignment command.
 - **Baud rate confirmation:** 1 Mbps requires validation against the ATtiny3224
   UART tolerance and cable length/capacitance on the tile bus.
 - **Response timeout value:** 5 ms is a placeholder. Tune after measuring
