@@ -139,6 +139,16 @@ def show_frame(floor: Floor, rows: list[int], payload: bytes, latch_delay_s: flo
     docs/row-bus-protocol.md §5.2, and harmless in itself) - but at these
     frame rates that buries every other entry in the row's 32-deep error log
     within a second, which is exactly the log this script exists to read.
+
+    The default was raised from 5 ms to 15 ms after measuring the boundary on
+    the bench with one tile: at 5 ms every SET_LEDS frame overran while every
+    SET_COLOR frame was clean, and at 10 ms both were clean. That the two
+    commands differ is the useful part - a SET_LEDS tile frame is 187 bytes
+    (~1.9 ms at 1 Mbps) against SET_COLOR's 9, so what a row needs here
+    tracks the Tile Bus write, not the fixed cost of walking 8 slots. Which
+    means this figure does *not* generalise: a row with 8 discovered tiles
+    writes 8 such frames, so budget accordingly rather than assuming 15 ms
+    stays sufficient.
     """
     for row in rows:
         floor.send_data(row, payload)
@@ -177,43 +187,84 @@ def sample_under_load(floor: Floor, rows: list[int], label: str,
         print(f"      row 0x{row:02X}: {v} mV  {c} mA under {label}{sag}")
 
 
-def print_error_log(row: int, payload: bytes, last_uptime: dict[int, int]) -> None:
+def count_new_entries(previous: list[tuple] | None, current: list[tuple]) -> int | None:
+    """How many of `current` were appended since `previous` was read.
+
+    The row's log is an append-only 32-deep ring emitted oldest-first, so
+    once it is full a later read is the earlier one shifted left by however
+    many entries were added. Recovering that shift is what separates "the
+    row logged nothing" from "the row logged the same thing again", which
+    reading raw timestamps cannot do: entries persist across runs of this
+    script, and a full ring of stale entries looks exactly like a full ring
+    of fresh ones. Returns None on the first poll, where there is no
+    baseline and every entry predates us.
+    """
+    if previous is None:
+        return None
+    for shift in range(len(previous) + 1):
+        kept = len(previous) - shift
+        if previous[shift:] == current[:kept]:
+            return len(current) - kept
+    return len(current)  # no overlap at all - the whole log turned over
+
+
+def print_error_log(row: int, payload: bytes, last_log: dict[int, list[tuple]]) -> None:
     count = payload[0]
-    entries = [payload[1 + i * 5 : 6 + i * 5] for i in range(count)]
+    entries = [tuple(payload[1 + i * 5 : 6 + i * 5]) for i in range(count)]
 
     # Timestamps are seconds since the row controller booted, so the newest
     # one is a lower bound on its uptime. If that goes backwards between
     # polls, the row rebooted while we weren't looking - the fingerprint of
     # a watchdog reset or a brownout, neither of which announces itself.
     newest = max((e[3] << 8) | e[4] for e in entries) if entries else None
-    previous = last_uptime.get(row)
-    if newest is not None and previous is not None and newest < previous:
+    previous = last_log.get(row)
+    prev_newest = max((e[3] << 8) | e[4] for e in previous) if previous else None
+    if newest is not None and prev_newest is not None and newest < prev_newest:
         print(f"    row 0x{row:02X} REBOOTED since the last poll "
-              f"(error-log clock went {previous}s -> {newest}s)")
-    if newest is not None:
-        last_uptime[row] = newest
+              f"(error-log clock went {prev_newest}s -> {newest}s)")
+        previous = None  # the ring restarted; nothing carries across
+
+    n_new = count_new_entries(previous, entries)
+    last_log[row] = entries
 
     if count == 0:
+        print(f"    error log: empty")
         return
+
     kinds: dict[int, int] = {}
     for e in entries:
         kinds[e[2]] = kinds.get(e[2], 0) + 1
     summary = ", ".join(f"{ERROR_TYPE_NAMES.get(k, hex(k))}={v}" for k, v in sorted(kinds.items()))
-    print(f"    error log: {count} entr{'y' if count == 1 else 'ies'} ({summary})")
-    for slot, tile_cmd, err_type, ts_hi, ts_lo in entries:
+
+    # The row clock is the only uptime the Pi can see - STATUS_RESP carries
+    # state, tiles_found and the 8 tile statuses, but no uptime field. So it
+    # is a lower bound, and it stops advancing the moment the row stops
+    # logging. That is exactly when it misleads, hence the explicit new-entry
+    # count beside it rather than leaving the reader to date the timestamps.
+    if n_new is None:
+        freshness = "all predate this run"
+    elif n_new == 0:
+        freshness = "0 new since last poll - all stale"
+    else:
+        freshness = f"{n_new} new since last poll"
+    print(f"    error log: {count} entr{'y' if count == 1 else 'ies'} "
+          f"({summary}); row clock >= {newest}s; {freshness}")
+
+    for i, (slot, tile_cmd, err_type, ts_hi, ts_lo) in enumerate(entries):
         name = ERROR_TYPE_NAMES.get(err_type, f"unknown(0x{err_type:02X})")
         t = (ts_hi << 8) | ts_lo
+        mark = "NEW " if n_new is not None and i >= count - n_new else "    "
         if err_type == 0x06:
-            print(f"      {name}: {reset_causes((slot << 8) | tile_cmd)} t={t}s")
+            print(f"      {mark}{name}: {reset_causes((slot << 8) | tile_cmd)} t={t}s")
         elif err_type == 0x08:
-            print(f"      {name}: sweep #{slot} t={t}s")
+            print(f"      {mark}{name}: sweep #{slot} t={t}s")
         elif err_type == 0x07:
-            print(f"      {name}: slot {slot} claimed by addr 0x{tile_cmd:02X} t={t}s")
+            print(f"      {mark}{name}: slot {slot} claimed by addr 0x{tile_cmd:02X} t={t}s")
         else:
-            print(f"      slot={slot} tile_cmd=0x{tile_cmd:02X} type={name} t={t}s")
+            print(f"      {mark}slot={slot} tile_cmd=0x{tile_cmd:02X} type={name} t={t}s")
 
 
-def health_poll(floor: Floor, row: int, last_uptime: dict[int, int]) -> bool:
+def health_poll(floor: Floor, row: int, last_log: dict[int, list[tuple]]) -> bool:
     """STATUS, POWER and ERROR_LOG for one row. False if the row is silent.
 
     STATUS goes first and its failure is what defines "silent": it is
@@ -242,7 +293,7 @@ def health_poll(floor: Floor, row: int, last_uptime: dict[int, int]) -> bool:
     if errors is None:
         print(f"    row 0x{row:02X}: ERROR_LOG did not answer")
     else:
-        print_error_log(row, errors, last_uptime)
+        print_error_log(row, errors, last_log)
     return True
 
 
@@ -285,13 +336,13 @@ def discover(floor: Floor) -> dict[int, int]:
 
 def drive(floor: Floor, rows: list[int], stats_interval: float, latch_delay_s: float,
           level: int, leds_fps: float, rediscover_every: float) -> None:
-    last_uptime: dict[int, int] = {}
+    last_log: dict[int, list[tuple]] = {}
     active = list(rows)
 
     print("\nBaseline health, LEDs still dark:")
     baseline_mV: dict[int, int] = {}
     for row in active:
-        health_poll(floor, row, last_uptime)
+        health_poll(floor, row, last_log)
         reading = read_power(floor, row)
         if reading is not None:
             baseline_mV[row] = reading[0]
@@ -326,7 +377,7 @@ def drive(floor: Floor, rows: list[int], stats_interval: float, latch_delay_s: f
             return
         print(f"\n  -- health @ {time.strftime('%H:%M:%S')} --")
         for row in list(active):
-            if health_poll(floor, row, last_uptime):
+            if health_poll(floor, row, last_log):
                 continue
             # Silent. Stop driving it and let the bus go quiet before
             # deciding whether it is stalled (watchdog will reboot it) or
@@ -346,7 +397,7 @@ def drive(floor: Floor, rows: list[int], stats_interval: float, latch_delay_s: f
                 print(f"    row 0x{row:02X}: came back after {recovery:.2f}s "
                       f"(watchdog reboot) - resuming")
                 active.append(row)
-                health_poll(floor, row, last_uptime)
+                health_poll(floor, row, last_log)
         next_stats = time.perf_counter() + stats_interval
 
     while True:
@@ -401,10 +452,10 @@ def main() -> int:
                         help=f"default: {DEFAULT_BAUDRATE}")
     parser.add_argument("--stats-interval", type=float, default=5.0,
                         help="seconds between STATUS/POWER/ERROR_LOG polls (default: 5)")
-    parser.add_argument("--latch-delay", type=float, default=0.005,
+    parser.add_argument("--latch-delay", type=float, default=0.015,
                         help="seconds between SEND_DATA and LATCH, so rows finish forwarding "
                              "before latching and the error log isn't buried in "
-                             "LATCH_OVERRUN entries (default: 0.005; 0 to latch immediately)")
+                             "LATCH_OVERRUN entries (default: 0.015; 0 to latch immediately)")
     parser.add_argument("--rediscover-every", type=float, default=0.0, metavar="SECONDS",
                         help="re-run discovery this often while driving LEDs (default: off). "
                              "Reproduces the mis-discovery on demand: the row only claims "
