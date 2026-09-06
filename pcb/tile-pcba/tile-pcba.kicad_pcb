@@ -219,12 +219,6 @@
 		(path "/081ce341-64cf-417c-9dd4-32baa4044ded")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -377,7 +371,7 @@
 			(uuid "abc04b8b-bc80-4710-85db-01dbfb395f53")
 		)
 		(embedded_fonts no)
-		(model "865080342006.stp"
+		(model "/Users/garth/projects/layout/kicad/865080342006/865080342006.stp"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -385,7 +379,7 @@
 				(xyz 1 1 1)
 			)
 			(rotate
-				(xyz 0 0 0)
+				(xyz -0 -0 90)
 			)
 		)
 	)
@@ -523,12 +517,6 @@
 		(path "/0bf28127-ed53-48d2-9986-c82566a1580b")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2" "3")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -803,12 +791,6 @@
 		(path "/f8cae6e9-4c2a-4388-b854-a861efb3c561")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -976,12 +958,6 @@
 		(path "/51f1e419-d56e-43d4-8406-8d1103498f33")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1149,12 +1125,6 @@
 		(path "/bc1681b4-adb7-413e-afd6-767233e72a2e")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1320,12 +1290,6 @@
 		(path "/b82cf1d1-c48e-434f-8511-21662b6fbed2")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1547,12 +1511,6 @@
 		(path "/57b149f0-877e-4b2f-b6e0-bff3806d4664")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2" "3" "4" "8" "7" "6" "5")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -1872,12 +1830,6 @@
 		(path "/f723af06-625e-4ed9-a970-1e723da8fae9")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2" "3")
-			)
-		)
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2139,12 +2091,6 @@
 		(path "/f246c286-7e88-413d-a688-43b3e8347d7f")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2312,12 +2258,6 @@
 		(path "/3574088f-72f0-4cca-8e5f-93926d83fa5f")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2462,12 +2402,6 @@
 		(path "/f9b53c3c-75b8-4e13-a6cc-4059790ea447")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2" "3" "4" "5" "6" "7" "8")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -2725,6 +2659,17 @@
 			(uuid "ceb50984-775a-411f-8e57-29c66be6d6d8")
 		)
 		(embedded_fonts no)
+		(model "/Users/garth/projects/layout/kicad/MJ3225-88.pretty/MJ3225-88-0.stp"
+			(offset
+				(xyz 0 -8.31 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz -90 -0 -0)
+			)
+		)
 	)
 	(footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
 		(layer "F.Cu")
@@ -2794,12 +2739,6 @@
 		(path "/6a7a6832-21d5-4370-a5c2-4069929defaf")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2" "3")
-			)
-		)
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -3061,12 +3000,6 @@
 		(path "/ea77f022-de47-4af2-83e9-ccb314fa53be")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr through_hole)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -3423,14 +3356,6 @@
 		(path "/faf993b8-e030-4591-bcd1-832ac3b565ea")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "12" "13" "14" "15" "1" "20" "16" "17" "18" "19" "2" "3" "4" "5"
-					"11" "10" "9" "8" "7" "6"
-				)
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -3949,12 +3874,6 @@
 		(path "/6bf699e3-6d54-43c3-88bf-f1e91e37d38c")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
@@ -4129,12 +4048,6 @@
 		(path "/3ccc1fc7-0486-4053-a7cc-aece191ffc0a")
 		(sheetname "/")
 		(sheetfile "tile-pcba.kicad_sch")
-		(units
-			(unit
-				(name "A")
-				(pins "1" "2")
-			)
-		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
