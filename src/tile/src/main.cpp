@@ -7,7 +7,12 @@
 #include "at/led_driver_at.h"
 #include "at/sense_at.h"
 
-static constexpr uint8_t MY_ADDR = 0x01; // TODO: read from EEPROM
+// Assigned by the row during its SENSE walk, not stored anywhere: the walk
+// runs at every boot and derives the address from physical position, so a
+// tile is interchangeable with any other and a replacement needs no
+// programming. Until then it answers broadcasts only, which is enough to
+// receive DETECT_SENSE and SET_ADDRESS. See docs/tile-bus-protocol.md §3.
+static uint8_t my_addr = ADDR_UNASSIGNED;
 
 static TransportAT transport;
 static LedDriverAT led_driver;
@@ -76,8 +81,12 @@ void setup() {
 void loop() {
     Frame f;
     if (transport.poll(parser, &f)) {
-        if (f.addr == MY_ADDR || f.addr == ADDR_BROADCAST) {
-            const Frame *resp = handle_command(f, pixel_buf, sense, MY_ADDR, &pattern);
+        // An unassigned tile must not match on address: ADDR_UNASSIGNED is
+        // reserved and never legitimately targeted, but matching it would
+        // make every unaddressed tile on the bus answer the same frame.
+        const bool for_us = (my_addr != ADDR_UNASSIGNED && f.addr == my_addr);
+        if (for_us || f.addr == ADDR_BROADCAST) {
+            const Frame *resp = handle_command(f, pixel_buf, sense, my_addr, &pattern);
             if (resp) transport.send(*resp);
         }
     }

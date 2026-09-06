@@ -8,8 +8,15 @@
 #include "sense.h"
 
 // Dispatch a received frame to the pixel buffer and/or sense control.
-// my_addr is this tile's unicast address; used when building response frames.
-// Caller must pre-filter: only call when frame.addr == my_addr or ADDR_BROADCAST.
+//
+// my_addr is this tile's unicast address, used when building response frames
+// and taken by reference because SET_ADDRESS changes it: a tile boots as
+// ADDR_UNASSIGNED and is given an address by position during the row's SENSE
+// walk (docs/tile-bus-protocol.md §3). Nothing else writes it.
+//
+// Caller must pre-filter: only call when frame.addr == my_addr or
+// ADDR_BROADCAST. An unaddressed tile therefore sees broadcasts only, which
+// is enough - DETECT_SENSE and SET_ADDRESS are both broadcast.
 // pattern is optional: pass the tile's PatternEngine to enable SET_PATTERN and
 // the pattern-cancelling side effect of SET_COLOR/SET_LEDS. When it is nullptr
 // (harnesses and tests that don't exercise patterns) SET_PATTERN stays the
@@ -17,5 +24,5 @@
 // Returns a pointer to a statically-allocated response frame, or nullptr if no
 // response is needed.
 const Frame *handle_command(const Frame &in, PixelBuffer &buf,
-                             ISenseControl &sense, uint8_t my_addr,
+                             ISenseControl &sense, uint8_t &my_addr,
                              PatternEngine *pattern = nullptr);

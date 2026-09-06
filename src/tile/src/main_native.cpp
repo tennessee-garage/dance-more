@@ -28,6 +28,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Given on the command line rather than left ADDR_UNASSIGNED as the real
+    // firmware does: TransportNative takes the address at construction to
+    // register with the broker, so the socket identity is fixed before
+    // SET_ADDRESS could ever arrive. A SET_ADDRESS handled here still updates
+    // my_addr and so changes which frames this process answers, while its
+    // broker routing key does not follow - so socket-broker tests should not
+    // be used to exercise address assignment. The row's own unit tests cover
+    // that path (test_sense_mapper).
     uint8_t my_addr = (uint8_t)strtoul(argv[1], nullptr, 0);
     uint8_t slot    = (uint8_t)strtoul(argv[2], nullptr, 0);
     int     row     = (int)strtol(argv[3], nullptr, 10);

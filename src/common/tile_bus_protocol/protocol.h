@@ -4,6 +4,13 @@
 static constexpr uint8_t PROTO_SYNC1    = 0xAA;
 static constexpr uint8_t PROTO_SYNC2    = 0x55;
 static constexpr uint8_t ADDR_BROADCAST = 0xFF;
+// A tile holds this until the row assigns it one during the SENSE walk. It is
+// the "Reserved" address of docs/tile-bus-protocol.md §3, so no frame is ever
+// legitimately sent to it and an unaddressed tile answers only broadcasts -
+// which is all it needs, since DETECT_SENSE and SET_ADDRESS are both
+// broadcast. Addresses are assigned by position and need only be unique on
+// one Tile Bus: the floor's 8 rows are 8 separate buses that never join.
+static constexpr uint8_t ADDR_UNASSIGNED = 0x00;
 // ---- LED geometry ----
 // A build specification, not a preference: the strip is 300 LED/5m and the
 // wooden frame's ledge gives ~10" of the tile's 15" side to lay it on, so
@@ -36,6 +43,7 @@ enum class Cmd : uint8_t {
     CLEAR_SENSE    = 0x03,
     TEST           = 0x04,
     VERSION        = 0x05,
+    SET_ADDRESS    = 0x06,
     SET_COLOR      = 0x10,
     SET_PATTERN    = 0x11,
     SET_LEDS       = 0x12,

@@ -2,7 +2,7 @@
 #include "fw_version_info.h"
 
 const Frame *handle_command(const Frame &in, PixelBuffer &buf,
-                             ISenseControl &sense, uint8_t my_addr,
+                             ISenseControl &sense, uint8_t &my_addr,
                              PatternEngine *pattern) {
     static Frame response;
 
@@ -62,6 +62,28 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
             return &response;
         }
         return nullptr;
+
+    case Cmd::SET_ADDRESS:
+        // Broadcast, but answered by exactly one tile: the SENSE walk has
+        // asserted precisely one tile's incoming line at this point, so the
+        // row can hand an address to a tile that does not yet have one - the
+        // bootstrap that address-based unicast cannot do for itself. A tile
+        // whose SENSE_IN is not asserted must stay silent, or every tile on
+        // the bus would take the same address at once.
+        if (!sense.sense_is_asserted()) return nullptr;
+        if (in.len < 1) return nullptr;
+        if (in.payload[0] == ADDR_UNASSIGNED || in.payload[0] == ADDR_BROADCAST)
+            return nullptr;  // neither is a usable unicast address (§3)
+
+        my_addr = in.payload[0];
+        // Answering *from* the new address is the acknowledgement that
+        // matters: it proves the assignment took, rather than only that the
+        // command was received.
+        response.addr       = my_addr;
+        response.cmd        = (uint8_t)Cmd::ACK | in.cmd; // 0x86
+        response.len        = 1;
+        response.payload[0] = 0x00; // success
+        return &response;
 
     case Cmd::TEST:
         response.addr       = my_addr;
