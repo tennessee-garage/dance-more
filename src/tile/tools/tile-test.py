@@ -55,7 +55,7 @@ CMD_LATCH      = 0x13
 MSG_FRAME    = 0x01
 MSG_IDENTIFY = 0x02
 
-NUM_LEDS = 40
+NUM_LEDS = 60  # LEDS_PER_TILE, see src/common/tile_bus_protocol/protocol.h
 
 # ---------------------------------------------------------------------------
 # Frame helpers

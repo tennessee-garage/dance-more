@@ -13,7 +13,21 @@ ADDR_BROADCAST = 0xFF
 MIN_ROW_ADDR = 0x00
 MAX_ROW_ADDR = 0x07
 
-MAX_PAYLOAD = 968
+# ---- LED geometry ----
+# Mirrors LEDS_PER_SIDE / LEDS_PER_TILE / BYTES_PER_LED in
+# src/common/tile_bus_protocol/protocol.h, which is the firmware-side source of
+# truth for the same numbers. geometry.py's FloorGeometry defaults must agree;
+# it is deliberately not imported here, because the wire format shouldn't
+# depend on the floor model. test_constants.py asserts the two stay in step.
+LEDS_PER_SIDE = 15
+LEDS_PER_TILE = 4 * LEDS_PER_SIDE  # 60, corners dark
+BYTES_PER_LED = 3  # RGB888
+SET_LEDS_PAYLOAD = LEDS_PER_TILE * BYTES_PER_LED  # 180
+
+ROW_SLOTS = 8  # tiles per row controller
+
+# A SEND_DATA payload is ROW_SLOTS tile entries; SET_LEDS is the largest.
+MAX_PAYLOAD = ROW_SLOTS * (1 + SET_LEDS_PAYLOAD)  # 1448
 FRAME_OVERHEAD = 8  # SYNC1 SYNC2 ADDR CMD LEN_H LEN_L .. CRC_H CRC_L
 MAX_FRAME_SIZE = FRAME_OVERHEAD + MAX_PAYLOAD
 
@@ -57,5 +71,5 @@ class TileCmd(IntEnum):
 TILE_ENTRY_SIZE = {
     TileCmd.SET_COLOR: 4,
     TileCmd.SET_PATTERN: 6,
-    TileCmd.SET_LEDS: 121,
+    TileCmd.SET_LEDS: 1 + SET_LEDS_PAYLOAD,  # 181
 }

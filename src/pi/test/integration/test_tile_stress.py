@@ -9,7 +9,7 @@ Two halves:
      colour mapping (a GRB/RGB swap looks fine to the protocol), per-pixel
      addressing, LED ordering and the actual LED count.
 
-  2. STRESS - ramps SEND_DATA/LATCH throughput using maximum-size 968-byte
+  2. STRESS - ramps SEND_DATA/LATCH throughput using maximum-size
      SET_LEDS frames until the achieved rate stops tracking the requested
      one, then soaks at the ceiling. Checks the row controller is still
      responsive after each step, since a Row Bus RX overrun used to wedge
@@ -33,7 +33,14 @@ import colorsys
 import sys
 import time
 
-from df2_pi.protocol.constants import Cmd, TileCmd
+from df2_pi.protocol.constants import (
+    LEDS_PER_TILE,
+    MAX_FRAME_SIZE,
+    MAX_PAYLOAD,
+    ROW_SLOTS,
+    Cmd,
+    TileCmd,
+)
 from df2_pi.transport import (
     ChainConfig,
     Floor,
@@ -43,16 +50,17 @@ from df2_pi.transport import (
 )
 from df2_pi.transport.row_bus import DEFAULT_BAUDRATE
 
-NUM_LEDS = 40
-NUM_SLOTS = 8
-# Full white on 40 LEDs approaches the bench supply's limit, which flattens
-# any visual difference between bright colours. Cap so patterns stay honest.
+NUM_LEDS = LEDS_PER_TILE
+NUM_SLOTS = ROW_SLOTS
+# Full white on a whole tile approaches the bench supply's limit, which
+# flattens any visual difference between bright colours - more so at 60 LEDs
+# than the 40 this was first tuned for. Cap so patterns stay honest.
 MAX_LEVEL = 200
 
 
 def set_leds_payload(pixels: list[tuple[int, int, int]]) -> bytes:
-    """One SET_LEDS entry per slot: 8 x 121 = 968 bytes, the largest legal
-    SEND_DATA payload."""
+    """One SET_LEDS entry per slot: the largest legal SEND_DATA payload
+    (MAX_PAYLOAD bytes)."""
     if len(pixels) != NUM_LEDS:
         raise ValueError(f"need {NUM_LEDS} pixels, got {len(pixels)}")
     body = b"".join(bytes(p) for p in pixels)
@@ -82,17 +90,17 @@ VISUAL_PLAN = """
      -> Is each colour the one named? A red/green swap means the tile's RGB
         order is wrong - no protocol check can catch that, only your eyes.
 
-  2. Single white pixel walking LED 0 -> 39 (~4s)
+  2. Single white pixel walking LED 0 -> the last one (~6s)
      -> Exactly one lit pixel, travelling end to end, no skips or gaps?
         It should reach the far end with none left over.
 
-  3. LEDs 0-19 RED, LEDs 20-39 BLUE (3s)
-     -> Clean split, boundary exactly at the midpoint? Confirms 40
-        addressable LEDs - no more, no fewer.
+  3. First half RED, second half BLUE (3s)
+     -> Clean split, boundary exactly at the midpoint? Confirms the tile has
+        exactly NUM_LEDS addressable LEDs - no more, no fewer.
 
   4. Static rainbow across the strip (3s)
      -> Smooth continuous hue sweep, no dead or repeated pixels? This drives
-        all 120 per-pixel bytes independently.
+        every per-pixel byte independently.
 
   5. Rotating rainbow (~6s)
      -> Smooth motion, no stutter, tearing or flicker? Tearing would mean
@@ -120,7 +128,7 @@ def visual(floor: Floor, row: int) -> None:
         floor.latch()
         time.sleep(2.0)
 
-    announce("2. Walking pixel, LED 0 -> 39", 0.4)
+    announce(f"2. Walking pixel, LED 0 -> {NUM_LEDS - 1}", 0.4)
     for i in range(NUM_LEDS):
         px = [(0, 0, 0)] * NUM_LEDS
         px[i] = (MAX_LEVEL,) * 3
@@ -128,8 +136,9 @@ def visual(floor: Floor, row: int) -> None:
         time.sleep(0.09)
     time.sleep(0.4)
 
-    announce("3. Split: 0-19 RED / 20-39 BLUE", 0.4)
-    show(floor, row, [(MAX_LEVEL, 0, 0)] * 20 + [(0, 0, MAX_LEVEL)] * 20)
+    half = NUM_LEDS // 2
+    announce(f"3. Split: 0-{half - 1} RED / {half}-{NUM_LEDS - 1} BLUE", 0.4)
+    show(floor, row, [(MAX_LEVEL, 0, 0)] * half + [(0, 0, MAX_LEVEL)] * (NUM_LEDS - half))
     time.sleep(3.0)
 
     announce("4. Static rainbow", 0.4)
@@ -194,9 +203,10 @@ def measure(floor: Floor, row: int, frames: int, target_fps: float | None) -> fl
 
 
 def stress(floor: Floor, row: int, soak_s: float) -> bool:
-    print("\n=== THROUGHPUT: 968-byte SET_LEDS frames + LATCH ===")
-    wire_ms = (968 + 8) * 10 / 3_125_000 * 1000
-    print(f"    Each frame is 976 bytes on the wire = {wire_ms:.2f} ms at 3.125 Mbps,")
+    print(f"\n=== THROUGHPUT: {MAX_PAYLOAD}-byte SET_LEDS frames + LATCH ===")
+    wire_ms = MAX_FRAME_SIZE * 10 / DEFAULT_BAUDRATE * 1000
+    print(f"    Each frame is {MAX_FRAME_SIZE} bytes on the wire = {wire_ms:.2f} ms "
+          f"at {DEFAULT_BAUDRATE / 1e6:.3f} Mbps,")
     print(f"    so the Row Bus alone caps this row near {1000 / wire_ms:.0f} fps.\n")
     print(f"    {'target':>8}  {'achieved':>9}  {'per frame':>10}  row")
     print("    " + "-" * 44)
@@ -250,7 +260,7 @@ def stress(floor: Floor, row: int, soak_s: float) -> bool:
         measure(floor, row, frames=1, target_fps=None)
     elapsed = time.perf_counter() - start
     print(f"    {sent} frames in {elapsed:.1f}s = {sent / elapsed:.1f} fps sustained")
-    print(f"    ({sent * 976 / elapsed / 1000:.0f} kB/s on the Row Bus)")
+    print(f"    ({sent * MAX_FRAME_SIZE / elapsed / 1000:.0f} kB/s on the Row Bus)")
 
     alive = responsive(floor, row)
     if not alive:
