@@ -12,6 +12,19 @@ void SenseMapper::send_detect_sense() {
     transport_.send(f);
 }
 
+void SenseMapper::send_set_address(uint8_t addr) {
+    // Broadcast on purpose: the tile being addressed may not have an address
+    // yet, so there is nothing to unicast to. The SENSE walk is what makes
+    // this unambiguous - exactly one tile has its incoming line asserted, and
+    // only that tile acts on this.
+    Frame f{};
+    f.addr       = ADDR_BROADCAST;
+    f.cmd        = (uint8_t)Cmd::SET_ADDRESS;
+    f.len        = 1;
+    f.payload[0] = addr;
+    transport_.send(f);
+}
+
 void SenseMapper::send_activate_sense(uint8_t addr) {
     Frame f{};
     f.addr = addr;
@@ -140,15 +153,14 @@ void SenseMapper::poll(uint32_t now_ms) {
         Frame f;
         if (transport_.poll(parser_, &f)) {
             if (f.cmd == (uint8_t)Cmd::DETECT_RESP) {
-                map_.set_discovered(current_slot_, f.addr);
-                if (current_slot_ > 0) {
-                    extra_slot_pending_ = true;
-                    extra_slot_        = current_slot_;
-                    extra_slot_addr_   = f.addr;
-                }
-                send_activate_sense(f.addr);
+                // Deliberately ignore the address this frame carries. It
+                // reports whatever the tile currently holds, which for a
+                // freshly booted tile is ADDR_UNASSIGNED and for a tile that
+                // survived a row reset is a stale assignment. DETECT_RESP
+                // means "a tile is here"; what it is called is decided next.
+                send_set_address(address_for_slot(current_slot_));
                 request_sent_ms_ = now_ms;
-                step_ = Step::WAIT_ACTIVATE_ACK;
+                step_ = Step::WAIT_SET_ADDRESS_ACK;
             }
             // else: unrelated frame, ignore and keep waiting.
         } else if (now_ms - request_sent_ms_ >= TIMEOUT_MS) {
@@ -159,6 +171,42 @@ void SenseMapper::poll(uint32_t now_ms) {
                 finish_discovery(now_ms);
             } else {
                 send_detect_sense();
+                request_sent_ms_ = now_ms;
+            }
+        }
+        break;
+    }
+
+    case Step::WAIT_SET_ADDRESS_ACK: {
+        Frame f;
+        const uint8_t assigned = address_for_slot(current_slot_);
+        static constexpr uint8_t SET_ADDRESS_ACK =
+            (uint8_t)Cmd::ACK | (uint8_t)Cmd::SET_ADDRESS;
+        if (transport_.poll(parser_, &f)) {
+            // The tile answers from its new address, so matching on it is
+            // what confirms the assignment landed rather than merely that
+            // something replied.
+            if (f.cmd == SET_ADDRESS_ACK && f.addr == assigned) {
+                map_.set_discovered(current_slot_, assigned);
+                if (current_slot_ > 0) {
+                    extra_slot_pending_ = true;
+                    extra_slot_        = current_slot_;
+                    extra_slot_addr_   = assigned;
+                }
+                send_activate_sense(assigned);
+                request_sent_ms_ = now_ms;
+                step_ = Step::WAIT_ACTIVATE_ACK;
+            }
+            // else: unrelated frame, ignore and keep waiting.
+        } else if (now_ms - request_sent_ms_ >= TIMEOUT_MS) {
+            map_.increment_retry(current_slot_);
+            if (map_.retry_count(current_slot_) > MAX_RETRIES) {
+                // A tile answered DETECT_SENSE and then would not take an
+                // address, so it is present but unusable - a real fault, not
+                // the end of the chain.
+                fail_discovery();
+            } else {
+                send_set_address(assigned);
                 request_sent_ms_ = now_ms;
             }
         }
