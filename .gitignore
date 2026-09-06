@@ -3,3 +3,10 @@
 .history
 memory
 __pycache__
+
+# Saleae Logic 2 exports. Captures are working evidence for a specific bench
+# session, not something later sessions can reproduce or diff - findings go in
+# the docs, the raw export stays local.
+digital.csv
+analog.csv
+*.sal
