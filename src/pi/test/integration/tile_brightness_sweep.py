@@ -37,7 +37,13 @@ import time
 from pathlib import Path
 
 from df2_pi.protocol.constants import Cmd, TileCmd
-from df2_pi.transport import ChainConfig, Floor, RowChainMap, default_chain_configs
+from df2_pi.transport import (
+    ChainConfig,
+    Floor,
+    RowChainMap,
+    RowNotResponding,
+    default_chain_configs,
+)
 from df2_pi.transport.row_bus import DEFAULT_BAUDRATE
 
 COLORS = {
@@ -88,19 +94,40 @@ def run_sweep(floor: Floor, row: int, step_pct: int, settle_s: float,
 
     rows = [make_row("baseline", 0, 0, base_v, base_c, base_c_std, base_w, base_c, base_w)]
 
-    for color, rgb_fn in COLORS.items():
-        for pct in range(0, 101, step_pct):
-            level = round(pct / 100 * 255)
-            r, g, b = rgb_fn(level)
-            floor.send_data(row, color_payload(r, g, b))
-            floor.latch()
-            time.sleep(settle_s)
-            v, c, w, c_std = sample(floor, row, reads_per_point, read_gap_s)
-            data_row = make_row(color, pct, level, v, c, c_std, w, base_c, base_w)
-            rows.append(data_row)
-            print(f"{color:6s} {pct:3d}%  level={level:3d}  "
-                  f"current={c:6.1f}mA  delta={c - base_c:6.1f}mA  "
-                  f"power_delta={w - base_w:6.1f}mW", flush=True)
+    # Voltage is printed, not just recorded, because the rail is the thing
+    # under suspicion when a row stops answering as LEDs light: this board
+    # taps 12 V at the tile's own injection point (docs/power.md), so a sag
+    # driven by LED current shows up here first.
+    try:
+        for color, rgb_fn in COLORS.items():
+            for pct in range(0, 101, step_pct):
+                level = round(pct / 100 * 255)
+                r, g, b = rgb_fn(level)
+                floor.send_data(row, color_payload(r, g, b))
+                floor.latch()
+                time.sleep(settle_s)
+                v, c, w, c_std = sample(floor, row, reads_per_point, read_gap_s)
+                data_row = make_row(color, pct, level, v, c, c_std, w, base_c, base_w)
+                rows.append(data_row)
+                print(f"{color:6s} {pct:3d}%  level={level:3d}  "
+                      f"bus={v:7.0f}mV  sag={base_v - v:6.0f}mV  "
+                      f"current={c:6.1f}mA  delta={c - base_c:6.1f}mA  "
+                      f"power_delta={w - base_w:6.1f}mW", flush=True)
+    except RowNotResponding:
+        # The row dying mid-sweep is a result, not a crash - and the point it
+        # died at is the measurement worth keeping. Returning normally lets
+        # main() still write the CSV of everything up to here; raising would
+        # throw away the whole run, which costs a power cycle to repeat.
+        last = rows[-1] if len(rows) > 1 else None
+        print(f"\nrow 0x{row:02X} STOPPED RESPONDING during the sweep.", file=sys.stderr)
+        if last:
+            print(f"last good point: {last['color']} {last['pct']}% - "
+                  f"{last['voltage_mV']:.0f} mV, {last['current_mA']:.1f} mA "
+                  f"(sag {base_v - last['voltage_mV']:.0f} mV from a {base_v:.0f} mV baseline)",
+                  file=sys.stderr)
+        print("A rail that held its voltage to the last point means the sag theory is "
+              "wrong and the cause is elsewhere.", file=sys.stderr)
+        return rows, {"voltage_mV": base_v, "current_mA": base_c, "power_mW": base_w}
 
     floor.blackout()
     baseline = {"voltage_mV": base_v, "current_mA": base_c, "power_mW": base_w}
