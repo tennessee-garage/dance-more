@@ -140,10 +140,33 @@ class RowBus:
             byte = self._serial.read(1)
             if not byte:
                 if deadline is not None and time.monotonic() >= deadline:
+                    self._parser.reset()
                     return None
                 continue
             frame = self._parser.feed(byte[0])
             if frame is not None:
                 return frame
             if deadline is not None and time.monotonic() >= deadline:
+                # self._parser is a persistent, per-RowBus object - without
+                # this reset, a frame that times out mid-payload (e.g. a
+                # truncated/delayed reply) leaves it "owed" N more bytes,
+                # and the next call's SYNC1/SYNC2 gets silently swallowed as
+                # bogus payload instead of triggering a fresh resync. A
+                # truncated frame can never become valid later, so there's
+                # nothing useful this state could still be waiting for.
+                self._parser.reset()
                 return None
+
+    def flush_input(self) -> None:
+        """Discard buffered input and reset the frame parser.
+
+        For a caller re-probing after a failed/timed-out read_frame() (e.g.
+        a bring-up loopback test running many independent checks back to
+        back) - clears any stale bytes still sitting in the OS receive
+        buffer so the next read_frame() can't mistake them for the next
+        check's frame. Unlike a read_frame() timeout, this discards
+        in-flight bytes unconditionally, so don't call it while a reply is
+        legitimately still expected.
+        """
+        self._serial.reset_input_buffer()
+        self._parser.reset()

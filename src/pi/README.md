@@ -24,11 +24,13 @@ test/integration/
 
 ## Two-chain topology
 
-The floor's 8 rows are split across **two RS-485 chains** so the worst-case
-frame fits the 33 ms budget (docs/row-bus-protocol.md §1). A single Cat5 run
-passes every row controller in physical order, each tapping the opposite pair
-from its neighbour, so the split is **alternating**: rows 0,2,4,6 on chain 0,
-rows 1,3,5,7 on chain 1.
+The floor's 8 rows are split across **two RS-485 chains, driven concurrently**,
+so the worst-case frame fits the 33 ms budget — see
+[docs/row-bus-protocol.md](../../docs/row-bus-protocol.md) §1, which states the
+budget and why the concurrency is a requirement rather than an optimization. A
+single Cat5 run passes every row controller in physical order, each tapping the
+opposite pair from its neighbour, so the split is **alternating**: rows 0,2,4,6
+on chain 0, rows 1,3,5,7 on chain 1.
 
 | | Chain 0 | Chain 1 |
 | --- | --- | --- |
@@ -48,6 +50,14 @@ so row controller firmware is unaware there is more than one chain. `Floor`
 routes unicast by row and fans `LATCH`/`BLACKOUT` out to every chain at once,
 writing all chains before waiting on any so cross-chain skew stays in the
 microseconds.
+
+> **Not yet concurrent for `SEND_DATA`.** `Floor.broadcast()` overlaps the
+> chains as described, but `Floor.send()` — and so `send_data()` — writes one
+> chain and waits out its whole frame time before touching the other. At
+> worst-case frame sizes that costs ~18.6 ms per floor update, doubling the
+> Row Bus phase and putting 30 FPS out of reach. `RowBus.start_write()` /
+> `finish_write()` already expose the split needed to fix it; the frame loop
+> that will use it is part of the driver epic.
 
 ## Setup
 
