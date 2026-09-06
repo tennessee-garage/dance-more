@@ -38,12 +38,20 @@ controller or a tile responding to a command.
 | `SYNC2`   | 1 B  | Always `0x55`. Two-byte preamble reduces false-sync probability. |
 | `ADDR`    | 1 B  | Target tile address (`0x01`–`0xFE`), or `0xFF` for broadcast. On response frames this is the responding tile's address. |
 | `CMD`     | 1 B  | Command or response code (see §5 and §6). |
-| `LEN`     | 1 B  | Number of payload bytes that follow (`0`–`120`). |
+| `LEN`     | 1 B  | Number of payload bytes that follow (`0`–`180`). |
 | `PAYLOAD` | N B  | Command-specific data; absent when `LEN = 0`. |
 | `CRC`     | 2 B  | CRC-16/CCITT (polynomial `0x1021`, init `0xFFFF`). Computed over `ADDR`, `CMD`, `LEN`, and all `PAYLOAD` bytes. Transmitted big-endian (`CRC_H` first). |
 
 **Minimum frame size:** 7 bytes (no payload).  
-**Maximum frame size:** 127 bytes (`SET_LEDS`, 120-byte payload).
+**Maximum frame size:** 187 bytes (`SET_LEDS`, 180-byte payload).
+
+Both track `LEDS_PER_TILE`, which
+[protocol.h](../src/common/tile_bus_protocol/protocol.h) defines once and
+derives `MAX_PAYLOAD` / `MAX_FRAME_SIZE` from. `LEN` is a single byte and the
+firmware's frame helpers take `uint8_t` lengths, so the **whole frame** must
+stay under 256 — at 3 bytes/LED that caps a side at 20 LEDs. A `static_assert`
+in that header enforces it; going past it means a 2-byte `LEN` here or fewer
+bytes per LED.
 
 ### Receiver framing
 
@@ -204,7 +212,7 @@ line without risk of missing an incoming RS-485 frame during the push.
 
 #### `0x10 SET_COLOR` — unicast
 
-Sets all 40 LEDs on the addressed tile to a single RGB color.
+Sets all 60 LEDs on the addressed tile to a single RGB color.
 
 | Field   | Value |
 | ------- | ----- |
@@ -246,23 +254,31 @@ Payload layout (5 bytes):
 | `params[2]`  | byte 3 | Parameter 2; meaning defined per pattern |
 | `params[3]`  | byte 4 | Parameter 3; meaning defined per pattern |
 
-Pattern definitions and their parameter semantics are documented in
-**tile-patterns.md** (TBD). Common parameters will include animation speed,
-direction, and foreground/background colors.
+Pattern ids and their parameter semantics are defined in
+[tile-patterns.md](tile-patterns.md). Two points that affect this layer:
+
+- A pattern is **staged**, not started, by `SET_PATTERN`. It begins on the next
+  `LATCH`, so a row's tiles can be armed one at a time and started in step.
+  A `LATCH` with nothing staged does not restart a running pattern.
+- A running pattern **modulates the tile's existing buffer contents** rather
+  than carrying its own colour, so `SET_COLOR`/`SET_LEDS` set the base first.
+  Either of those commands also cancels a running pattern.
 
 ---
 
 #### `0x12 SET_LEDS` — unicast
 
-Loads explicit RGB values for all 40 LEDs on the addressed tile. LEDs are
-ordered from LED 0 (start of WS2815 chain) to LED 39.
+Loads explicit RGB values for all 60 LEDs on the addressed tile. LEDs are
+ordered from LED 0 (start of WS2815 chain) to LED 59; see
+[hardware-tile.md](hardware-tile.md)'s "LED layout and chain order" for where
+each index sits physically.
 
 | Field   | Value |
 | ------- | ----- |
 | `ADDR`  | target tile address |
 | `CMD`   | `0x12` |
-| `LEN`   | `120` |
-| Payload | `R0 G0 B0  R1 G1 B1  … R39 G39 B39` (120 bytes) |
+| `LEN`   | `180` |
+| Payload | `R0 G0 B0  R1 G1 B1  … R59 G59 B59` (180 bytes) |
 
 ---
 
@@ -369,7 +385,7 @@ Each UART byte is 10 bits (1 start + 8 data + 1 stop).
 | Admin (no payload) | 7 B | 70 µs |
 | `SET_COLOR`  | 10 B       | 100 µs |
 | `SET_PATTERN`| 12 B       | 120 µs |
-| `SET_LEDS`   | 127 B      | 1.27 ms |
+| `SET_LEDS`   | 187 B      | 1.87 ms |
 | ACK response | 8 B        | 80 µs |
 | `DETECT_RESP`| 7 B        | 70 µs |
 
@@ -387,14 +403,27 @@ Sending `SET_LEDS` to all 8 tiles in a row (row controller → tiles):
 
 | Item | Time |
 | ---- | ---- |
-| 8 × `SET_LEDS` frame (127 B each) | 10.2 ms |
+| 8 × `SET_LEDS` frame (187 B each) | 15.0 ms |
 | 8 × 100 µs inter-frame gap        | 0.8 ms |
 | `LATCH` broadcast (7 B)           | < 0.1 ms |
-| Total (RC → tiles)                | ~11 ms |
+| Total (RC → tiles)                | ~16 ms |
 
-After LATCH all 8 tiles push to WS2815 simultaneously (~1.2 ms, overlapping,
-not serial). The row controller then has the remainder of the 33 ms frame
-period idle on Tile Bus before the next `SEND_DATA` arrives from the Pi.
+After LATCH all 8 tiles push to WS2815 simultaneously (~1.8 ms at 60 LEDs,
+overlapping, not serial).
+
+**This ~16 ms is now the largest single term in the floor's end-to-end frame
+latency** — larger than the whole Row Bus phase, which two concurrent chains
+bring down to ~18.6 ms for all 8 rows. Raising Tile Bus to 2 Mbps would halve
+it and is the identified next lever on frame rate; see
+[row-bus-protocol.md](row-bus-protocol.md) §8. The blocker is the ATtiny3224's
+USART ceiling, which needs confirming against the datasheet — the THVD1420DR
+transceiver is rated to 12 Mbps and is not the constraint.
+
+At 60 LEDs the row controller's idle margin on Tile Bus within a 33 ms frame
+is thin (~17 ms rather than the ~22 ms it had at 40), which matters for the
+quiet-window assumption in [hardware-tile.md](hardware-tile.md)'s ATtiny
+rationale: the tile's interrupt-disabled WS2815 push must still land inside
+it.
 
 ---
 
@@ -426,13 +455,13 @@ map.
   UART tolerance and cable length/capacitance on the tile bus.
 - **Response timeout value:** 5 ms is a placeholder. Tune after measuring
   actual tile firmware processing latency.
-- **Pattern library:** pattern IDs and their `params[]` semantics are TBD;
-  document in `tile-patterns.md` once patterns are designed.
 - **Display command errors:** currently display commands have no ACK and no
   retry. If reliable delivery for `SET_LEDS` is later needed, a lightweight
   per-frame CRC check or a heartbeat could be added.
-- **`SET_PATTERN` param count:** 4 parameter bytes covers most animation needs
-  (speed, direction, 1 color), but may be insufficient for patterns needing two
-  full RGB colors (6 bytes). Revisit when the pattern library is defined.
+- **`SET_PATTERN` param count:** resolved for the patterns defined so far —
+  [tile-patterns.md](tile-patterns.md) takes the tile's existing buffer as the
+  pattern's base image, so no parameter byte is spent on colour and 4 is
+  enough. A pattern needing two *independent* colours would still not fit;
+  revisit then.
 - **LED ordering convention:** LED 0 = start of WS2815 chain; confirm physical
   position relative to the tile's corner/connector.

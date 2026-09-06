@@ -7,24 +7,31 @@ The floor runs on **12 V**, supplied by two line-powered **Mean Well 12 V /
 
 | Scope | LEDs | Current @ 12 V (full white) | Power |
 | --- | --- | --- | --- |
-| Per tile | 40 | **~0.5 A** (measured) | ~6 W |
-| Per row (8 tiles) | 320 | ~4 A | ~48 W |
-| Whole floor (64 tiles) | 2,560 | **~32 A** | **~384 W** |
+| Per tile | 60 | **~0.75 A** | ~9 W |
+| Per row (8 tiles) | 480 | ~6 A | ~72 W |
+| Whole floor (64 tiles) | 3,840 | **~48 A** | **~576 W** |
 
-- The **0.5 A/tile** figure is a measured worst case (40 WS2815 LEDs at full
-  white). It is **LED current only** — it does not yet include the ATtiny3224,
-  the Xiao row controllers, or transceivers.
+- These are the **40-LED measurements scaled by 1.5** for the move to 60
+  LEDs/tile. Per-LED draw doesn't change with strip density — 300 LED/5m and
+  150 LED/5m use the same WS2815 emitters at a different pitch — so the scaling
+  is straightforward, but the figures below are **derived, not measured at 60**.
+  Re-run `tile_brightness_sweep.py` on a 60-LED tile to confirm.
+- The underlying **0.5 A/tile at 40 LEDs** is a measured worst case (40 WS2815
+  LEDs at full white). It is **LED current only** — it does not include the
+  ATtiny3224, the Xiao row controllers, or transceivers.
 - A later, instrumented remeasurement — `tile_brightness_sweep.py`, see
   [docs/measurements/](measurements/) — puts LED-only current at full white
-  closer to **~418 mA**, with the row controller + tile's own quiescent draw
-  (~108 mA) subtracted out explicitly rather than folded in. The provenance
+  closer to **~418 mA** for 40 LEDs (**~627 mA** scaled to 60), with the row
+  controller + tile's own quiescent draw (~108 mA) subtracted out explicitly
+  rather than folded in. The provenance
   of the original 0.5 A figure isn't known (likely different driving
   hardware, possibly a different strip), so this isn't treated as a
-  correction, just corroboration - same order of magnitude, and **0.5 A is
-  kept as the figure used throughout this doc** (including the per-row/
-  per-floor rollups below) for its clean rounding and built-in headroom.
+  correction, just corroboration - same order of magnitude, and **0.5 A/tile
+  at 40 LEDs, i.e. 0.75 A at 60, is kept as the figure used throughout this
+  doc** (including the per-row/per-floor rollups below) for its clean rounding
+  and built-in headroom.
 - Full white is the worst case; typical animated content draws less, but the
-  supply and wiring must be sized for the ~32 A peak (plus headroom).
+  supply and wiring must be sized for the ~48 A peak (plus headroom).
 
 ## Distribution architecture
 
@@ -43,10 +50,12 @@ The floor runs on **12 V**, supplied by two line-powered **Mean Well 12 V /
 
 | | Per row (LED) | Per supply (4 rows, LED) | Per supply rating |
 | --- | --- | --- | --- |
-| Current @ 12 V | ~4 A | ~16 A | **40 A** |
+| Current @ 12 V | ~6 A | ~24 A | **40 A** |
 
-Each 40 A supply carries roughly **16 A of LED load** at full white (plus
-controller/logic draw), leaving comfortable headroom.
+Each 40 A supply carries roughly **24 A of LED load** at full white (plus
+controller/logic draw). That still fits, but the move from 40 to 60 LEDs/tile
+took the margin from 2.5× down to **1.67×** — the supplies remain adequate,
+and are no longer generously so.
 
 ## Why 12 V
 
@@ -63,15 +72,20 @@ controller/logic draw), leaving comfortable headroom.
 
 ## Open Questions
 
+- **Confirm the 60-LED figures by measurement** rather than by scaling — see
+  the note above. Everything in this doc is currently 1.5× the 40-LED numbers.
 - **Controller/logic current:** add the ATtiny3224, Xiao, and transceiver draw
-  on top of the ~16 A/supply LED figure (still well under 40 A).
+  on top of the ~24 A/supply LED figure (still under 40 A).
 - **Voltage drop** along the 16 AWG per-tile splice run — confirm 12 V holds at
-  the last tile in a row. Note the lever here is **where the 14 AWG feeder
-  enters the row** (i.e. row-controller placement), not the 16 AWG. Extending
-  16 AWG to the middle does **not** help: that feeder segment still carries the
-  full ~4 A row current over its whole length. Only bringing the low-resistance
-  14 AWG feed to the row's center — so the 16 AWG never carries more than ~2 A
-  over short half-runs — meaningfully reduces the worst-case drop.
+  the last tile in a row. **This got 50% worse at 60 LEDs** (~6 A per row
+  rather than ~4 A) and is now the most pressing open question here, because
+  the fix is a wiring-layout decision worth making once. The lever is **where
+  the 14 AWG feeder enters the row** (i.e. row-controller placement), not the
+  16 AWG. Extending 16 AWG to the middle does **not** help: that feeder segment
+  still carries the full row current over its whole length. Only bringing the
+  low-resistance 14 AWG feed to the row's center — so the 16 AWG never carries
+  more than ~3 A over short half-runs — meaningfully reduces the worst-case
+  drop.
 - **Connectors & polarity protection** for the 12 V daisy chain at both levels.
 - **Inrush / soft-start** for 64 tiles of WS2815 powering on together.
 - **Grounding:** relationship between the 12 V return and the RS-485 GND/SENSE

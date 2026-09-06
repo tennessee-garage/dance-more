@@ -77,8 +77,8 @@ control hierarchy so that every tile can be addressed independently.
 | Row controllers | 8 | Xiao RP2350 |
 | Tile controllers | 64 | ATtiny3224 |
 | RS-485 buses | 9 | 1 host bus (A) + 8 row→tile buses (B) |
-| LEDs per tile | 40 | WS2815; ≥10 per side around the square perimeter |
-| LEDs total | 2,560 | 64 tiles × 40 |
+| LEDs per tile | 60 | WS2815; 15 per side around the square perimeter, corners dark |
+| LEDs total | 3,840 | 64 tiles × 60 |
 
 ## Physical floor layout
 
@@ -91,5 +91,7 @@ control hierarchy so that every tile can be addressed independently.
 - **Coordinate convention:** how are rows and tiles numbered (origin corner,
   direction)? This affects the logical→physical map.
 - **Frame rate / latency budget:** target FPS and the per-frame byte budget
-  end-to-end, which constrains baud rates on buses A and B. With 40 LEDs/tile
-  at 3 bytes/LED that is 120 B of pixel data per tile, 960 B per row.
+  end-to-end, which constrains baud rates on buses A and B. With 60 LEDs/tile
+  at 3 bytes/LED that is 180 B of pixel data per tile, 1,440 B per row. See
+  [row-bus-protocol.md](row-bus-protocol.md) §1 for the current frame budget —
+  including the two concurrent Row Bus chains this document predates.
