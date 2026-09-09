@@ -7,15 +7,18 @@ The floor runs on **12 V**, supplied by two line-powered **Mean Well 12 V /
 
 | Scope | LEDs | Current @ 12 V (full white) | Power |
 | --- | --- | --- | --- |
-| Per tile | 60 | **~0.75 A** | ~9 W |
-| Per row (8 tiles) | 480 | ~6 A | ~72 W |
-| Whole floor (64 tiles) | 3,840 | **~48 A** | **~576 W** |
+| Per tile | 60 | **~0.55 A** | ~6.6 W |
+| Per row (8 tiles) | 480 | ~4.4 A | ~53 W |
+| Whole floor (64 tiles) | 3,840 | **~35 A** | **~420 W** |
 
-- These are the **40-LED measurements scaled by 1.5** for the move to 60
-  LEDs/tile. Per-LED draw doesn't change with strip density — 300 LED/5m and
-  150 LED/5m use the same WS2815 emitters at a different pitch — so the scaling
-  is straightforward, but the figures below are **derived, not measured at 60**.
-  Re-run `tile_brightness_sweep.py` on a 60-LED tile to confirm.
+- **Measured at 60 LEDs** on 2026-09-08, via a row controller's own INA226
+  with two tiles attached. These replace the earlier figures, which were the
+  40-LED measurements scaled by 1.5 and put per-tile draw at ~0.75 A.
+- The scaled numbers were high because they assumed white costs the sum of
+  three channels. It does not — see "LED current tracks the brightest
+  channel" below, which is why the floor total drops from ~48 A to ~35 A.
+- LED current only: it excludes the ATtiny3224, the Xiao row controllers and
+  the transceivers. A row controller plus two idle tiles measured 0.30 A.
 - The underlying **0.5 A/tile at 40 LEDs** is a measured worst case (40 WS2815
   LEDs at full white). It is **LED current only** — it does not include the
   ATtiny3224, the Xiao row controllers, or transceivers.
@@ -48,14 +51,40 @@ The floor runs on **12 V**, supplied by two line-powered **Mean Well 12 V /
 
 ### Load vs. capacity
 
-| | Per row (LED) | Per supply (4 rows, LED) | Per supply rating |
-| --- | --- | --- | --- |
-| Current @ 12 V | ~6 A | ~24 A | **40 A** |
+Measured on the bench (2026-09-08, one row controller and two tiles, via the
+row's own INA226), rather than scaled from the 40-LED numbers:
 
-Each 40 A supply carries roughly **24 A of LED load** at full white (plus
-controller/logic draw). That still fits, but the move from 40 to 60 LEDs/tile
-took the margin from 2.5× down to **1.67×** — the supplies remain adequate,
-and are no longer generously so.
+| | Per tile (LED) | Per row (8 tiles) | Per supply (4 rows) | Per supply rating |
+| --- | --- | --- | --- | --- |
+| Full white @ 12 V | **0.55 A** | ~4.4 A | ~17.6 A | **40 A** |
+
+That is a **2.3× margin**, not the 1.67× this section previously estimated by
+scaling. Logic draw is on top: a row controller plus two idle tiles measured
+0.30 A, so allow roughly 0.15 A per row of controller/transceiver/ATtiny
+overhead.
+
+### LED current tracks the brightest channel, not the sum
+
+The measurement that moves the number. Tile current follows the sum over LEDs
+of **max(R, G, B)** — not R+G+B:
+
+| Commanded (all 60 LEDs) | Channel sum | Measured |
+| --- | --- | --- |
+| `(200, 0, 0)` | 200 | 427 mA |
+| `(200, 200, 0)` | 400 | 427 mA |
+| `(200, 200, 200)` | 600 | 429 mA |
+| `(255, 255, 255)` | 765 | 549 mA |
+| `(255, 0, 0)` | 255 | 548 mA |
+
+So **full white costs the same as a single primary at the same level**, and a
+three-channel estimate overstates white by ~3×. On the governing channel the
+relationship is linear to better than 1%, and predictions from it matched
+measurement within 2 mA of 427 across solid, gradient and rainbow frames.
+Per-tile draw is additive to within 1 mA.
+
+The mechanism is **not confirmed** — the WS2815 datasheet has not been checked
+against this — so treat the relationship as an empirical result that holds
+across the range tested, not as a datasheet claim.
 
 ## Why 12 V
 
@@ -72,13 +101,17 @@ and are no longer generously so.
 
 ## Open Questions
 
-- **Confirm the 60-LED figures by measurement** rather than by scaling — see
-  the note above. Everything in this doc is currently 1.5× the 40-LED numbers.
-- **Controller/logic current:** add the ATtiny3224, Xiao, and transceiver draw
-  on top of the ~24 A/supply LED figure (still under 40 A).
+- **Confirm the mechanism behind the max-channel result** against the WS2815
+  datasheet. The measurement is solid and repeatable; the explanation is not
+  established, and the whole supply margin now rests on it holding at scale.
+- **Re-measure with more than two tiles.** Per-tile draw was additive to
+  within 1 mA at two, but the full-row figure is still 8× a two-tile
+  measurement rather than a measured row.
 - **Voltage drop** along the 16 AWG per-tile splice run — confirm 12 V holds at
-  the last tile in a row. **This got 50% worse at 60 LEDs** (~6 A per row
-  rather than ~4 A) and is now the most pressing open question here, because
+  the last tile in a row. At the measured 60-LED figure this is ~4.4 A per row
+  rather than the ~6 A previously assumed — better than feared, but still up
+  from ~4 A at 40 LEDs, and it remains the most pressing open question here
+  because
   the fix is a wiring-layout decision worth making once. The lever is **where
   the 14 AWG feeder enters the row** (i.e. row-controller placement), not the
   16 AWG. Extending 16 AWG to the middle does **not** help: that feeder segment
