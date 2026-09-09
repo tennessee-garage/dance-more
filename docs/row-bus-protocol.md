@@ -79,15 +79,55 @@ counts.
 | **Two chains, 4 rows each** | **18.6 ms** | **15.0 ms** | **33.6 ms** | **29.8 fps** |
 | Two chains + Tile Bus at 2 Mbps | 18.6 ms | 7.5 ms | 26.1 ms | 38.3 fps |
 
-Two chains is what makes 30 FPS approximately reachable at all; without it the
-floor runs at 19 fps worst case, with the last row a full frame behind the
-first. Even with it the all-`SET_LEDS` case lands ~0.3 ms past the 33.3 ms
-period — close enough that the overrun path in §8 is a normal occurrence at
+Two chains is what makes 30 FPS approachable at all; without it the floor runs
+at 19 fps worst case, with the last row a full frame behind the first. Even
+with it the all-`SET_LEDS` case lands ~0.3 ms past the 33.3 ms period — and
+the measured ceiling below is lower still, for a reason this table does not
+model — close enough that the overrun path in §8 is a normal occurrence at
 full load rather than an exceptional one, and the last row illuminates
 slightly late. Typical frames mixing `SET_COLOR`/`SET_PATTERN` are far smaller
 and leave substantial slack.
 
-**The identified next lever is the Tile Bus baud rate**, which at 1 Mbps now
+### Measured ceiling: ~25 FPS, and the limit is receive, not forwarding
+
+The table above models the Row Bus phase and the Tile Bus tail. It does not
+model what a row spends **receiving** — and that turns out to be the binding
+constraint. Address filtering happens after a frame is assembled, so every row
+parses every byte on its chain, including the three frames addressed to its
+neighbours.
+
+Measured on the bench (2026-09-08, `test/integration/test_chain_saturation.py`,
+one row driven with a full chain's worth of worst-case frames):
+
+| Target | Period | Core-0 receive load | Result |
+| --- | --- | --- | --- |
+| 15 FPS | 66.7 ms | 52% | pass |
+| 25 FPS | 40.0 ms | 87% | pass |
+| 27 FPS | 37.0 ms | 94% | **`ROW_BUS_RX_OVERFLOW`** |
+| 30 FPS | 33.3 ms | 105% | row restarts |
+
+A row ingests Row Bus bytes at **~6.0 µs each** against the 3.2 µs/byte the
+wire delivers them at — measured across seven frame sizes with forwarding held
+constant. The cost is `SerialUART`'s `_pumpFIFO()`, called once by
+`available()` and again by `read()`. A chain's worst case is
+`4 × 1,456 = 5,824` bytes, so 34.9 ms of core-0 time per floor update, which
+puts the predicted ceiling at 28.7 FPS against a measured 25–27.
+
+**So the worst case runs at ~25 FPS, not 30.** Typical frames mixing
+`SET_COLOR`/`SET_PATTERN` are far smaller and unaffected; this bounds the
+all-`SET_LEDS` case only. Raising it means making the receive path cheaper —
+and note that the obvious fix does not work: hoisting `available()` out of the
+drain loop was tried and made things sharply worse, for reasons not
+established (see `poll()` in
+[pi_transport_rp2350.cpp](../src/row/src/rp2350/pi_transport_rp2350.cpp)).
+A different receive path — PIO, or DMA into a ring — is the real lever.
+
+One behaviour above the ceiling is worth knowing: at 27 FPS the row logs the
+overflow and keeps running, but by 30 FPS it restarts, reporting `HAD_POR`
+with no watchdog bit set. Why an overrun ends in a power-on reset rather than
+a watchdog reset is **not explained**.
+
+**The next lever after that is the Tile Bus baud rate**, which at 1 Mbps
 contributes more to end-to-end latency than the whole Row Bus phase. The
 THVD1420DR is rated to 12 Mbps; the binding constraint is the ATtiny3224's
 USART, whose ceiling must be confirmed against the datasheet before this is
