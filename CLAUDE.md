@@ -111,6 +111,13 @@ Each is documented where it bites — this is just the index:
 - Branches: `feature/#<issue>-<slug>` where an issue exists.
 - Firmware and host changes that share a protocol behaviour go in **separate
   commits**, one per side.
+- **Bump the firmware version before opening a PR.** Any non-`.md` change under
+  `src/row/` bumps `ROW_FW_VERSION`, under `src/tile/` bumps
+  `TILE_FW_VERSION`, and anything under `src/common/tile_bus_protocol/` bumps
+  **both** — it ships in both images. CI enforces this
+  (`.github/workflows/fw-version-bump.yml`) but only on `pull_request`, so a
+  push straight to `main` slips through and the constants silently stop
+  meaning anything. Gaps are fine; going backwards is not.
 - Row addresses are global `0x00`–`0x07` even though the floor runs two RS-485
   chains; only the wiring is partitioned, and row firmware is unaware of it.
 

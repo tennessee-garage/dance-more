@@ -33,9 +33,17 @@ public:
     // from setup1(), the boot retry, and RE_DISCOVER.
     bool take_sweep_started();
 
+    // The address given to the tile found at a slot. Position *is* identity:
+    // tiles boot as ADDR_UNASSIGNED and are numbered as the walk reaches
+    // them, so slot 0 is always 0x01 and the map is 1:1 with the physical
+    // chain. Only has to be unique on this Tile Bus - the floor's 8 rows are
+    // 8 separate buses. See docs/tile-bus-protocol.md §3.
+    static constexpr uint8_t address_for_slot(uint8_t slot) { return (uint8_t)(slot + 1); }
+
 private:
     enum class Step : uint8_t {
-        START, SETTLE, WAIT_DETECT_RESP, WAIT_ACTIVATE_ACK, WAIT_VERSION_RESP
+        START, SETTLE, WAIT_DETECT_RESP, WAIT_SET_ADDRESS_ACK,
+        WAIT_ACTIVATE_ACK, WAIT_VERSION_RESP
     };
 
     // 3 total attempts per docs/tile-bus-protocol.md §7 (1 initial + 2 retries).
@@ -51,6 +59,7 @@ private:
     static constexpr uint32_t SETTLE_MS = 20;
 
     void send_detect_sense();
+    void send_set_address(uint8_t addr);
     void send_activate_sense(uint8_t addr);
     void send_clear_sense(uint8_t addr);
     void broadcast_clear_sense();

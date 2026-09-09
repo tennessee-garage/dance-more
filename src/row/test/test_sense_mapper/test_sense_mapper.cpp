@@ -9,10 +9,15 @@ void tearDown() {}
 // Fakes
 // ---------------------------------------------------------------------------
 
-// Models a chain of `tile_count` tiles addressed 1..tile_count, one slot at a
-// time becoming "active" (visible to DETECT_SENSE) as each prior tile is
-// successfully ACTIVATE_SENSE'd, mirroring the real SENSE hardware chain
-// closely enough to drive SenseMapper's state machine and timing.
+// Models a chain of `tile_count` tiles, one slot at a time becoming "active"
+// (visible to DETECT_SENSE) as each prior tile is successfully
+// ACTIVATE_SENSE'd, mirroring the real SENSE hardware chain closely enough to
+// drive SenseMapper's state machine and timing.
+//
+// Tiles start at ADDR_UNASSIGNED and only get an address when the walk hands
+// them one, exactly as the firmware does. That matters for more than realism:
+// it is what would catch the mapper regressing to trusting the address in a
+// DETECT_RESP, which under this scheme carries no information.
 class FakeChainTransport : public ITransport {
 public:
     explicit FakeChainTransport(uint8_t tile_count) : tile_count_(tile_count) {}
@@ -33,13 +38,29 @@ public:
                 return;
             }
             pending_frame_ = Frame{};
-            pending_frame_.addr = tile_address(active_slot_);
+            // Whatever this tile currently holds - ADDR_UNASSIGNED until the
+            // row names it. The mapper must not depend on this value.
+            pending_frame_.addr = assigned_[active_slot_];
             pending_frame_.cmd  = (uint8_t)Cmd::DETECT_RESP;
             pending_frame_.len  = 0;
             pending_ = true;
 
+        } else if (cmd == Cmd::SET_ADDRESS) {
+            // Broadcast; only the tile whose SENSE line is asserted acts.
+            if (never_ack_set_address_ || active_slot_ >= tile_count_ || frame.len < 1) {
+                pending_ = false;
+                return;
+            }
+            assigned_[active_slot_] = frame.payload[0];
+            pending_frame_ = Frame{};
+            pending_frame_.addr       = frame.payload[0]; // answers from the new address
+            pending_frame_.cmd        = (uint8_t)Cmd::ACK | (uint8_t)Cmd::SET_ADDRESS;
+            pending_frame_.len        = 1;
+            pending_frame_.payload[0] = 0x00;
+            pending_ = true;
+
         } else if (cmd == Cmd::ACTIVATE_SENSE) {
-            if (never_ack_activate_ || frame.addr != tile_address(active_slot_)) {
+            if (never_ack_activate_ || frame.addr != assigned_[active_slot_]) {
                 pending_ = false;
                 return;
             }
@@ -79,8 +100,18 @@ public:
 
     void fail_first_detect_for_slot(uint8_t slot) { fail_detect_slot_ = slot; }
     void never_ack_activate() { never_ack_activate_ = true; }
+    void never_ack_set_address() { never_ack_set_address_ = true; }
     void never_answer_version_for_addr(uint8_t addr) { fail_version_addr_ = addr; }
 
+    uint8_t assigned_address(uint8_t slot) const { return assigned_[slot]; }
+
+    // Start every tile claiming the same address, as the bench hardware did
+    // before assignment existed (all tiles hardcoded 0x01).
+    void preset_all_addresses(uint8_t addr) {
+        for (uint8_t i = 0; i < TileMap::NUM_SLOTS; i++) assigned_[i] = addr;
+    }
+
+    // The address the row is expected to hand a tile at this slot.
     static uint8_t tile_address(uint8_t slot) { return (uint8_t)(slot + 1); }
 
 private:
@@ -88,10 +119,12 @@ private:
     uint8_t active_slot_ = 0;
     bool    pending_ = false;
     Frame   pending_frame_{};
+    uint8_t assigned_[TileMap::NUM_SLOTS] = {};  // ADDR_UNASSIGNED until named
 
     int     fail_detect_slot_ = -1;
     bool    detect_failed_once_ = false;
     bool    never_ack_activate_ = false;
+    bool    never_ack_set_address_ = false;
     int     fail_version_addr_ = -1;
 };
 
@@ -249,10 +282,76 @@ void test_re_discover_clears_stale_version_cache() {
     TEST_ASSERT_FALSE(map.has_version(0));
 }
 
+// ---------------------------------------------------------------------------
+// Address assignment
+// ---------------------------------------------------------------------------
+
+void test_discovery_assigns_addresses_by_position() {
+    FakeChainTransport transport(8);
+    FakeRowSense sense;
+    TileMap map;
+    SenseMapper mapper(transport, sense, map);
+
+    mapper.start();
+    uint32_t now = 0;
+    run_to_completion(mapper, now);
+
+    TEST_ASSERT_EQUAL(SenseMapState::DONE, mapper.state());
+    for (uint8_t slot = 0; slot < 8; slot++) {
+        // The tile actually took the address...
+        TEST_ASSERT_EQUAL_HEX8(FakeChainTransport::tile_address(slot),
+                               transport.assigned_address(slot));
+        // ...and the row's map agrees, so slot N is always address N+1.
+        TEST_ASSERT_EQUAL_HEX8(FakeChainTransport::tile_address(slot), map.address_for(slot));
+    }
+}
+
+// The whole point of assigning addresses is that a tile's prior address means
+// nothing. Every tile here boots claiming the same stale address, which is
+// precisely the bench condition that made the row unable to tell 8 tiles from
+// one - and it must now discover them correctly regardless.
+void test_identical_reported_addresses_do_not_confuse_discovery() {
+    FakeChainTransport transport(8);
+    transport.preset_all_addresses(0x01);
+    FakeRowSense sense;
+    TileMap map;
+    SenseMapper mapper(transport, sense, map);
+
+    mapper.start();
+    uint32_t now = 0;
+    run_to_completion(mapper, now);
+
+    TEST_ASSERT_EQUAL(SenseMapState::DONE, mapper.state());
+    TEST_ASSERT_EQUAL(8, map.discovered_count());
+    for (uint8_t slot = 0; slot < 8; slot++)
+        TEST_ASSERT_EQUAL_HEX8(FakeChainTransport::tile_address(slot), map.address_for(slot));
+}
+
+// A tile present enough to answer DETECT_SENSE but unable to take an address
+// is a fault, not the end of the chain - the distinction matters because
+// end-of-chain is the normal way discovery finishes.
+void test_set_address_never_acked_reaches_error() {
+    FakeChainTransport transport(4);
+    transport.never_ack_set_address();
+    FakeRowSense sense;
+    TileMap map;
+    SenseMapper mapper(transport, sense, map);
+
+    mapper.start();
+    uint32_t now = 0;
+    run_to_completion(mapper, now);
+
+    TEST_ASSERT_EQUAL(SenseMapState::ERROR, mapper.state());
+    TEST_ASSERT_EQUAL(0, map.discovered_count());
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
 
     RUN_TEST(test_full_discovery_8_tiles);
+    RUN_TEST(test_discovery_assigns_addresses_by_position);
+    RUN_TEST(test_identical_reported_addresses_do_not_confuse_discovery);
+    RUN_TEST(test_set_address_never_acked_reaches_error);
     RUN_TEST(test_short_chain_ends_via_timeout_not_error);
     RUN_TEST(test_activate_sense_never_acked_reaches_error);
     RUN_TEST(test_retry_is_tracked_per_slot);
