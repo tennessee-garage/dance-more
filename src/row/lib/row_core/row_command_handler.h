@@ -20,6 +20,17 @@ struct ErrorLogEntry {
 // ROW_BUS_RX_OVERFLOW have producers; the others describe future error
 // sources (SenseMapper retry exhaustion, CRC failures, sense collisions)
 // with nothing wired up to log them yet.
+// Frames discarded on a failed CRC, batched: slot and tile_bus_cmd are the
+// high and low bytes of how many failed since the last such entry, saturating
+// at 0xFFFF. A count rather than one entry per failure because a bad link
+// produces them in floods, and one entry per frame would evict everything
+// else - the mistake 0x07 made.
+//
+// Exists because a corrupted link was, until now, invisible: bad frames fail
+// the check and vanish, and every other diagnostic keeps reporting a healthy
+// row. A bench session was spent chasing restarts under load before the cable
+// turned out to be 20 ft of unterminated Cat5.
+static constexpr uint8_t ERROR_TYPE_CRC_FAILURE = 0x02;
 static constexpr uint8_t ERROR_TYPE_LATCH_OVERRUN = 0x04;
 // Row Bus receive overrun: the Pi-facing UART dropped bytes, so whatever
 // frame was in flight died on CRC. Unlike the types above this describes a
@@ -97,6 +108,7 @@ public:
     // All go in the error log because it is the only channel that already
     // reaches the Pi with a timestamp attached.
     void log_boot(uint32_t chip_reset_reason, uint32_t now_ms);
+    void log_crc_failures(uint16_t count, uint32_t now_ms);
     void log_tile_no_version(uint8_t slot, uint8_t addr, uint32_t now_ms);
     void log_sense_start(uint32_t now_ms);
 

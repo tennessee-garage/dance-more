@@ -135,6 +135,7 @@ bool RowBusFrameParser::feed(uint8_t byte, RowBusFrame *out) {
     case State::CRC_L: {
         uint16_t received = (uint16_t)(((uint16_t)crc_high << 8) | byte);
         state = State::SYNC1;
+        if (received != running_crc) crc_failures_++;
         if (received == running_crc) {
             *out = current;
             return true;

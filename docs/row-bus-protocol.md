@@ -316,8 +316,24 @@ For `LATCH_OVERRUN` entries (`error_type = 0x04`) the fields are repurposed:
 - `tile_bus_cmd` — the tile command code that was in flight at the time (typically
   `0x12` SET_LEDS).
 
-Three entry types are **diagnostics rather than faults**, and also repurpose
-the fields:
+`CRC_FAILURE` (`0x02`) repurposes its fields as a **count**: `slot` and
+`tile_bus_cmd` are the high and low bytes of how many frames failed the check
+since the last such entry, saturating at 65,535, and entries are rate-limited
+to one per 5 s. A count rather than one entry per failure because a bad link
+produces them in floods; one entry each would evict everything else.
+
+This is the only signal a corrupted link gives. A frame that fails CRC is
+discarded, and every other diagnostic — `STATUS`, uptime, the rest of this
+log — keeps reporting a perfectly healthy row. Worth knowing what that costs:
+20 ft of unterminated Cat5 at 3.125 Mbps puts a round-trip reflection at
+~60 ns against a 320 ns bit period, and until this entry existed the firmware
+had no way to say so. Note also that Cat5 is a **100 Ω** differential cable —
+the usual 120 Ω RS-485 figure is for dedicated RS-485 cable, and mismatched
+termination is its own reflection source. See the open question in
+[hardware-row-controller.md](hardware-row-controller.md).
+
+Three further entry types are **diagnostics rather than faults**, and also
+repurpose the fields:
 
 - `ROW_BOOT` (`0x06`) — logged once per boot, before discovery runs. `slot` and
   `tile_bus_cmd` are the high and low bytes of `POWMAN_CHIP_RESET >> 16`, the
