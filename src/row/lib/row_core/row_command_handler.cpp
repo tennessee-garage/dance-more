@@ -38,13 +38,26 @@ void RowCommandHandler::handle_status() {
 
     response_.addr = my_row_addr_;
     response_.cmd  = (uint8_t)RowBusCmd::STATUS_RESP;
-    response_.len  = 10;
+    response_.len  = 14;
     // SenseMapState's declaration order (IDLE, DISCOVERING, DONE, ERROR)
     // already matches the wire's 0x00-0x03 (idle/discovering/running/error).
     response_.payload[0] = (uint8_t)sense_.state();
     response_.payload[1] = map.discovered_count();
     for (uint8_t slot = 0; slot < TileMap::NUM_SLOTS; slot++)
         response_.payload[2 + slot] = (uint8_t)map.status_for(slot);
+
+    // Uptime in seconds, so "did this row restart?" is a number rather than
+    // an inference. The error log's newest timestamp was the only clock the
+    // Pi could see, and it stops advancing the moment the row stops logging -
+    // which on a healthy row is most of the time. 32 bits because a 16-bit
+    // second count wraps at 18.2 hours, and a floor is expected to run longer
+    // than that; a wrap here would read as exactly the reboot it exists to
+    // rule out. Sourced from poll()'s clock, which runs every loop iteration.
+    const uint32_t uptime_s = last_now_ms_ / 1000;
+    response_.payload[10] = (uint8_t)(uptime_s >> 24);
+    response_.payload[11] = (uint8_t)(uptime_s >> 16);
+    response_.payload[12] = (uint8_t)(uptime_s >> 8);
+    response_.payload[13] = (uint8_t)(uptime_s & 0xFF);
 }
 
 void RowCommandHandler::handle_power() {
@@ -73,16 +86,30 @@ void RowCommandHandler::handle_re_discover() {
 void RowCommandHandler::handle_error_log() {
     response_.addr = my_row_addr_;
     response_.cmd  = (uint8_t)RowBusCmd::ERROR_LOG_RESP;
-    response_.len  = (uint16_t)(1 + error_log_count_ * 5);
-    response_.payload[0] = error_log_count_;
+    const uint8_t total = (uint8_t)(error_log_count_ + (has_boot_entry_ ? 1 : 0));
+    response_.len  = (uint16_t)(1 + total * 5);
+    response_.payload[0] = total;
 
-    // Oldest first: if the buffer hasn't wrapped yet, entry 0 is oldest and
-    // sits at index 0; once full, the oldest is whatever error_log_next_ is
-    // about to overwrite.
+    // The boot entry leads, and is also the oldest thing the row can report:
+    // it is written in setup1() before anything else can log.
+    uint8_t out = 0;
+    if (has_boot_entry_) {
+        uint8_t *p = &response_.payload[1];
+        p[0] = boot_entry_.slot;
+        p[1] = boot_entry_.tile_bus_cmd;
+        p[2] = boot_entry_.error_type;
+        p[3] = (uint8_t)(boot_entry_.timestamp_s >> 8);
+        p[4] = (uint8_t)(boot_entry_.timestamp_s & 0xFF);
+        out = 1;
+    }
+
+    // Then the ring, oldest first: if it hasn't wrapped yet, entry 0 is oldest
+    // and sits at index 0; once full, the oldest is whatever error_log_next_
+    // is about to overwrite.
     uint8_t start = (error_log_count_ == ERROR_LOG_CAPACITY) ? error_log_next_ : 0;
     for (uint8_t i = 0; i < error_log_count_; i++) {
         const ErrorLogEntry &e = error_log_[(start + i) % ERROR_LOG_CAPACITY];
-        uint8_t *p = &response_.payload[1 + i * 5];
+        uint8_t *p = &response_.payload[1 + (out + i) * 5];
         p[0] = e.slot;
         p[1] = e.tile_bus_cmd;
         p[2] = e.error_type;
@@ -126,8 +153,15 @@ void RowCommandHandler::log_boot(uint32_t chip_reset_reason, uint32_t now_ms) {
     // Every HAD_* cause bit sits in POWMAN_CHIP_RESET bits 16-28, so the
     // caller's >> 16 leaves them all inside 16 bits - split across the two
     // spare bytes this entry has.
-    log_error((uint8_t)(chip_reset_reason >> 8), (uint8_t)(chip_reset_reason & 0xFF),
-              ERROR_TYPE_ROW_BOOT, now_ms);
+    //
+    // Written outside the ring: this is the only entry whose value grows with
+    // age, since it answers "did this row restart, and why" long after any
+    // fault that followed it has scrolled away.
+    boot_entry_.slot         = (uint8_t)(chip_reset_reason >> 8);
+    boot_entry_.tile_bus_cmd = (uint8_t)(chip_reset_reason & 0xFF);
+    boot_entry_.error_type   = ERROR_TYPE_ROW_BOOT;
+    boot_entry_.timestamp_s  = (uint16_t)(now_ms / 1000);
+    has_boot_entry_          = true;
 }
 
 void RowCommandHandler::log_sense_start(uint32_t now_ms) {
@@ -135,8 +169,8 @@ void RowCommandHandler::log_sense_start(uint32_t now_ms) {
     log_error(sweep_counter++, 0, ERROR_TYPE_SENSE_START, now_ms);
 }
 
-void RowCommandHandler::log_sense_extra_slot(uint8_t slot, uint8_t addr, uint32_t now_ms) {
-    log_error(slot, addr, ERROR_TYPE_SENSE_EXTRA_SLOT, now_ms);
+void RowCommandHandler::log_tile_no_version(uint8_t slot, uint8_t addr, uint32_t now_ms) {
+    log_error(slot, addr, ERROR_TYPE_TILE_NO_VERSION, now_ms);
 }
 
 void RowCommandHandler::log_error(uint8_t slot, uint8_t tile_bus_cmd, uint8_t error_type, uint32_t now_ms) {

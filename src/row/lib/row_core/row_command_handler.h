@@ -38,13 +38,16 @@ static constexpr uint8_t ERROR_TYPE_ROW_BUS_RX_OVERFLOW = 0x05;
 // the firmware, and the row was in fact browning out. A plain
 // watchdog_caused_reboot() bool could not have told those apart.
 static constexpr uint8_t ERROR_TYPE_ROW_BOOT = 0x06;
-// Discovery assigned a tile to slot 1 or higher. On a one-tile bench that
-// should never happen, and the row intermittently comes up claiming all 8
-// slots at address 0x01 - but every sense walk captured on the wire has
-// found exactly one tile, so the extra slots are being assigned somewhere
-// the Tile Bus does not show. slot = the slot claimed, tile_bus_cmd = the
-// address it was given.
-static constexpr uint8_t ERROR_TYPE_SENSE_EXTRA_SLOT = 0x07;
+// 0x07 is retired. It used to flag "discovery assigned a tile to slot 1 or
+// higher", which was a usable proxy for the phantom-8 cascade only while the
+// bench had a single tile. Since addresses are assigned by position
+// (SET_ADDRESS), slot 1 holding 0x02 is simply correct, so it fired on every
+// sweep of a healthy two-tile row - twice a second through the boot retry
+// window, filling the ring in 16 seconds and evicting ROW_BOOT, the one entry
+// worth keeping. A diagnostic that destroys the evidence it was added to
+// preserve is worse than none. Deliberately not reused: an older row's 0x07
+// entries decode as unknown on a newer host rather than being mislabelled as
+// a fault that now means something else.
 // One entry each time a discovery sweep begins, slot = a wrapping counter.
 // The error log does not survive a chip reset (it is a plain global, zeroed
 // by static init), so these say whether a restart was a reset at all: sweeps
@@ -53,6 +56,18 @@ static constexpr uint8_t ERROR_TYPE_SENSE_EXTRA_SLOT = 0x07;
 // Reading the counter alongside a bus capture is also what pins the row's
 // millis() epoch to a point on the wire.
 static constexpr uint8_t ERROR_TYPE_SENSE_START = 0x08;
+// A tile that discovery mapped, and that then would not answer VERSION.
+// slot = the slot, tile_bus_cmd = the address it was assigned.
+//
+// This is what 0x07 was reaching for. Because SET_ADDRESS makes a tile
+// abandon its previous address, a row that mistakenly walks one tile into
+// several slots leaves every earlier slot pointing at an address nothing
+// answers to - so the phantom cascade shows up here as "every slot but the
+// last went silent", a signature no correct row can produce. It also catches
+// the plainer cases the row was previously blind to: a tile that took an
+// address and then died, or one unplugged mid-run. The sweep already
+// detected all of this and simply moved on without saying so.
+static constexpr uint8_t ERROR_TYPE_TILE_NO_VERSION = 0x09;
 
 // Dispatches Row Bus commands arriving from the Raspberry Pi
 // (docs/row-bus-protocol.md §5). in.addr must already be filtered by the
@@ -77,15 +92,21 @@ public:
     // the error log - main.cpp carries the flag across.
     void log_row_bus_overflow(uint32_t now_ms);
 
-    // Diagnostics, logged by main.cpp: one per boot, and one per tile
-    // assigned to a slot above 0. Both go in the error log because it is the
-    // only channel that already reaches the Pi with a timestamp attached.
+    // Diagnostics, logged by main.cpp: one per boot, one per discovery
+    // sweep, and one per discovered tile that then would not answer VERSION.
+    // All go in the error log because it is the only channel that already
+    // reaches the Pi with a timestamp attached.
     void log_boot(uint32_t chip_reset_reason, uint32_t now_ms);
-    void log_sense_extra_slot(uint8_t slot, uint8_t addr, uint32_t now_ms);
+    void log_tile_no_version(uint8_t slot, uint8_t addr, uint32_t now_ms);
     void log_sense_start(uint32_t now_ms);
 
 private:
-    static constexpr uint8_t ERROR_LOG_CAPACITY = 32;
+    // The boot entry is held outside the ring, so a busy row cannot evict the
+    // one entry that says why it restarted - which is exactly what happened
+    // when two per-sweep diagnostics filled 32 slots in 16 seconds. The ring
+    // is one shorter to keep the response at the documented 161-byte
+    // maximum: 1 + 32 x 5, boot included.
+    static constexpr uint8_t ERROR_LOG_CAPACITY = 31;
 
     void handle_test();
     void handle_status();
@@ -130,4 +151,6 @@ private:
     ErrorLogEntry error_log_[ERROR_LOG_CAPACITY]{};
     uint8_t       error_log_count_ = 0; // valid entries, caps at ERROR_LOG_CAPACITY
     uint8_t       error_log_next_  = 0; // next write index, wraps
+    ErrorLogEntry boot_entry_      = {}; // outside the ring; see ERROR_LOG_CAPACITY
+    bool          has_boot_entry_  = false;
 };

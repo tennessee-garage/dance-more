@@ -325,15 +325,15 @@ void loop1() {
 
     sense_mapper.poll(millis());
 
-    // Any tile assigned to a slot above 0 goes in the error log. On a
-    // one-tile bench this should never fire; when the row comes up claiming
-    // 8 tiles, this is what says which slots were claimed and when.
     if (sense_mapper.take_sweep_started())
         row_cmd_handler.log_sense_start(millis());
 
-    uint8_t extra_slot, extra_addr;
-    if (sense_mapper.take_extra_slot(&extra_slot, &extra_addr))
-        row_cmd_handler.log_sense_extra_slot(extra_slot, extra_addr, millis());
+    // A tile discovery mapped that then would not answer VERSION. On a
+    // healthy row this never fires; when the row mis-walks one tile into
+    // several slots, every slot but the last lands here.
+    uint8_t silent_slot, silent_addr;
+    if (sense_mapper.take_silent_tile(&silent_slot, &silent_addr))
+        row_cmd_handler.log_tile_no_version(silent_slot, silent_addr, millis());
 
     drive_ready_led(millis(), sense_mapper.state());
 
