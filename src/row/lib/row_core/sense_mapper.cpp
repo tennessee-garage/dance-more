@@ -98,11 +98,11 @@ bool SenseMapper::take_sweep_started() {
     return true;
 }
 
-bool SenseMapper::take_extra_slot(uint8_t *slot_out, uint8_t *addr_out) {
-    if (!extra_slot_pending_) return false;
-    extra_slot_pending_ = false;
-    *slot_out = extra_slot_;
-    *addr_out = extra_slot_addr_;
+bool SenseMapper::take_silent_tile(uint8_t *slot_out, uint8_t *addr_out) {
+    if (!silent_tile_pending_) return false;
+    silent_tile_pending_ = false;
+    *slot_out = silent_tile_slot_;
+    *addr_out = silent_tile_addr_;
     return true;
 }
 
@@ -188,11 +188,6 @@ void SenseMapper::poll(uint32_t now_ms) {
             // something replied.
             if (f.cmd == SET_ADDRESS_ACK && f.addr == assigned) {
                 map_.set_discovered(current_slot_, assigned);
-                if (current_slot_ > 0) {
-                    extra_slot_pending_ = true;
-                    extra_slot_        = current_slot_;
-                    extra_slot_addr_   = assigned;
-                }
                 send_activate_sense(assigned);
                 request_sent_ms_ = now_ms;
                 step_ = Step::WAIT_ACTIVATE_ACK;
@@ -254,6 +249,16 @@ void SenseMapper::poll(uint32_t now_ms) {
                 // Discovered but not answering VERSION - leave its cache
                 // entry invalid and move on. Not a discovery fault: the
                 // tile passed SENSE mapping, so its TileStatus stays OK.
+                //
+                // Reported all the same. A tile that took an address and
+                // then went quiet is exactly the condition nothing else
+                // here surfaces, and it is also how a mis-walked row shows
+                // itself: SET_ADDRESS makes a tile drop its old address, so
+                // one tile walked into several slots leaves every slot but
+                // the last answering to nothing.
+                silent_tile_pending_ = true;
+                silent_tile_slot_    = version_slot_;
+                silent_tile_addr_    = map_.address_for(version_slot_);
                 version_slot_++;
                 advance_version_query(now_ms);
             } else {

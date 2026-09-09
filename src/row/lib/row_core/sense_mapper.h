@@ -19,14 +19,15 @@ public:
     SenseMapState state() const { return state_; }
     const TileMap &result() const { return map_; }
 
-    // Diagnostic hand-off: reports the most recent tile assigned to a slot
-    // above 0, so main.cpp can put it in the error log (SenseMapper has no
-    // access to that). Returns false when there is nothing pending.
+    // Diagnostic hand-off: reports a slot that discovery mapped and that then
+    // would not answer VERSION, so main.cpp can put it in the error log
+    // (SenseMapper has no access to that). Returns false when nothing is
+    // pending.
     //
-    // A single pending slot is enough: assigning one costs at least a
-    // SETTLE_MS wait plus a Tile Bus round trip, so main.cpp always drains
-    // this before the next one can be recorded.
-    bool take_extra_slot(uint8_t *slot_out, uint8_t *addr_out);
+    // A single pending slot is enough: reaching the next one costs a full
+    // VERSION retry budget of Tile Bus round trips, so main.cpp always drains
+    // this before another can be recorded.
+    bool take_silent_tile(uint8_t *slot_out, uint8_t *addr_out);
 
     // Same hand-off for "a sweep just began". Reported here rather than at
     // each start() call site so no caller can forget it - start() is invoked
@@ -84,7 +85,7 @@ private:
     uint8_t          version_slot_         = 0;
     uint8_t          version_retry_count_  = 0;
     bool             sweep_started_pending_ = false;
-    bool             extra_slot_pending_   = false;
-    uint8_t          extra_slot_           = 0;
-    uint8_t          extra_slot_addr_      = 0;
+    bool             silent_tile_pending_  = false;
+    uint8_t          silent_tile_slot_     = 0;
+    uint8_t          silent_tile_addr_     = 0;
 };

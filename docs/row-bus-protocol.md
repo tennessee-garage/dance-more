@@ -208,13 +208,25 @@ tile slot in its row.
 | Payload | none |
 | ACK     | **Yes** (`0x82 STATUS_RESP`); allow up to 20 ms |
 
-Response payload (10 bytes):
+Response payload (14 bytes):
 
 | Byte  | Field           | Description |
 | ----- | --------------- | ----------- |
 | 0     | `state`         | `0x00` = idle, `0x01` = discovering, `0x02` = running, `0x03` = error |
 | 1     | `tiles_found`   | Number of tiles successfully discovered (0–8) |
 | 2–9   | `tile_status[0..7]` | Per-slot status: `0x00` = not discovered, `0x01` = OK, `0x02` = non-responsive, `0x03` = test failed |
+| 10–13 | `uptime_s`      | Seconds since the row controller booted (uint32, big-endian) |
+
+`uptime_s` decreasing between two polls is a reboot, and is the only direct
+way to detect one. The alternative — watching the newest `ERROR_LOG`
+timestamp — only advances while the row is logging, which on a healthy row is
+almost never, so a stale clock is indistinguishable from a steady one. It is
+32 bits because a uint16 of seconds wraps at 18.2 hours, and a floor is
+expected to run longer than that; a wrap would read as exactly the reboot the
+field exists to rule out.
+
+Hosts should treat a payload shorter than 14 bytes as firmware predating this
+field rather than as a malformed reply.
 
 ---
 
@@ -287,7 +299,7 @@ Response payload:
 | 0         | `entry_count` | Number of log entries that follow (0–32) |
 | 1 + 5×i   | `slot`        | Tile slot (0–7) that failed; see note for `LATCH_OVERRUN` |
 | 2 + 5×i   | `tile_bus_cmd`   | Tile Bus command code involved; see note for `LATCH_OVERRUN` |
-| 3 + 5×i   | `error_type`  | `0x01` = no ACK after 3 retries, `0x02` = CRC failure, `0x03` = sense collision, `0x04` = LATCH overrun, `0x05` = Row Bus RX overflow, `0x06` = row boot, `0x07` = sense extra slot, `0x08` = sense start |
+| 3 + 5×i   | `error_type`  | `0x01` = no ACK after 3 retries, `0x02` = CRC failure, `0x03` = sense collision, `0x04` = LATCH overrun, `0x05` = Row Bus RX overflow, `0x06` = row boot, `0x08` = sense start, `0x09` = tile no version. `0x07` is **retired** — see below |
 | 4–5 + 5×i | `timestamp`   | Seconds since row controller boot (uint16, big-endian) |
 
 `ROW_BUS_RX_OVERFLOW` (`error_type = 0x05`) reports a receive overrun on the
@@ -320,13 +332,28 @@ the fields:
   these also answer whether a restart *was* a reset: sweeps logged either side
   of a gap mean the chip kept running, whereas a log that starts over means it
   rebooted.
-- `SENSE_EXTRA_SLOT` (`0x07`) — discovery assigned a tile to slot 1 or higher.
-  `slot` is the slot claimed, `tile_bus_cmd` is the address it was given. On a
-  single-tile row this should never appear; it exists to catch the row
-  intermittently coming up claiming all 8 slots at one address, which no
-  captured sense walk has ever produced on the wire.
+- `TILE_NO_VERSION` (`0x09`) — discovery mapped a tile that then would not
+  answer `VERSION`. `slot` is the slot, `tile_bus_cmd` the address it was
+  assigned. The post-discovery version sweep already detected this and moved
+  on silently; now it says so. It catches a tile that took an address and then
+  died, one unplugged mid-run, and — because `SET_ADDRESS` makes a tile
+  abandon its previous address — a row that mis-walked one tile into several
+  slots, which shows up here as *every slot but the last* going silent.
 
-Maximum response payload: `1 + 32 × 5 = 161 bytes`.
+`0x07` (`SENSE_EXTRA_SLOT`) is **retired**. It flagged "discovery assigned a
+tile to slot 1 or higher", which was a usable proxy for the mis-walk only
+while a bench had a single tile. Once addresses are assigned by position, slot
+1 holding `0x02` is simply correct, so it fired on every sweep of a healthy
+two-tile row — twice a second through the boot retry window, filling the ring
+in 16 seconds and evicting `ROW_BOOT`. The code is not reused, so an older
+row's entries decode as unknown rather than being mislabelled.
+
+`ROW_BOOT` is stored outside the ring buffer and always reported first, so a
+busy row cannot evict the entry that says why it last restarted. The ring
+holds the other 31 entries, keeping the response at the same maximum.
+
+Maximum response payload: `1 + 32 × 5 = 161 bytes` — 31 ring entries plus
+`ROW_BOOT`, unchanged from before it was moved out of the ring.
 
 ---
 

@@ -42,8 +42,17 @@ def _cmd_status(args: argparse.Namespace) -> int:
             print(exc, file=sys.stderr)
             return 1
         state, tiles = frame.payload[0], frame.payload[1]
+        # Uptime is appended after the 8 tile-status bytes; a shorter payload
+        # is firmware that predates the field, not a malformed reply.
+        up = ""
+        if len(frame.payload) >= 14:
+            p = frame.payload
+            secs = (p[10] << 24) | (p[11] << 16) | (p[12] << 8) | p[13]
+            h, rem = divmod(secs, 3600)
+            m, sec = divmod(rem, 60)
+            up = f" up={h}h{m:02d}m{sec:02d}s"
         print(f"row 0x{frame.addr:02X} (chain {floor.chain_map.chain_for(args.row)}): "
-              f"state={STATUS_STATE_NAMES.get(state, hex(state))} tiles_found={tiles}")
+              f"state={STATUS_STATE_NAMES.get(state, hex(state))} tiles_found={tiles}{up}")
         return 0
 
 

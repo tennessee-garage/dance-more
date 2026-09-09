@@ -63,7 +63,7 @@ STATUS_STATE_NAMES = {0x00: "idle", 0x01: "discovering", 0x02: "running", 0x03: 
 TILE_STATUS_NAMES = {0x00: "not_discovered", 0x01: "ok", 0x02: "non_responsive", 0x03: "test_failed"}
 ERROR_TYPE_NAMES = {0x01: "no_ack_after_retries", 0x02: "crc_failure", 0x03: "sense_collision",
                     0x04: "latch_overrun", 0x05: "row_bus_rx_overflow",
-                    0x06: "row_boot", 0x07: "sense_extra_slot", 0x08: "sense_start"}
+                    0x06: "row_boot", 0x08: "sense_start", 0x09: "tile_no_version"}
 
 # Diagnostic entries whose slot/tile_cmd fields mean something other than the
 # usual "tile slot / Tile Bus command", so the generic line would misread them.
@@ -85,6 +85,23 @@ RESET_CAUSES = [
     (0x0800, "hazard sys reset"),
     (0x1000, "watchdog(rsm)"),
 ]
+
+
+def status_uptime_s(status: bytes) -> int | None:
+    """Row uptime in seconds from a STATUS_RESP, or None on older firmware.
+
+    Appended after the 8 tile-status bytes, so a payload shorter than 14 is a
+    row that predates the field rather than a malformed reply.
+    """
+    if len(status) < 14:
+        return None
+    return (status[10] << 24) | (status[11] << 16) | (status[12] << 8) | status[13]
+
+
+def fmt_uptime(seconds: int) -> str:
+    h, rem = divmod(seconds, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}h{m:02d}m{sec:02d}s" if h else (f"{m}m{sec:02d}s" if m else f"{sec}s")
 
 
 def reset_causes(bits: int) -> str:
@@ -152,6 +169,9 @@ def per_tile_max_sum(pixels: list[tuple[int, int, int]]) -> int:
     """Sum of max(r,g,b) over one tile's LEDs - the quantity current tracks."""
     return sum(max(px) for px in pixels)
 
+
+# Row uptime at the previous health poll, for reboot detection.
+LAST_UPTIME: dict[int, int] = {}
 
 # Filled by calibrate_power(); None until then, which disables the check.
 POWER_CAL: dict[str, float | None] = {"dark_ma": None, "ma_per_unit": None}
@@ -276,8 +296,11 @@ def print_error_log(row: int, payload: bytes, last_log: dict[int, list[tuple]]) 
     previous = last_log.get(row)
     prev_newest = max((e[3] << 8) | e[4] for e in previous) if previous else None
     if newest is not None and prev_newest is not None and newest < prev_newest:
-        print(f"    row 0x{row:02X} REBOOTED since the last poll "
-              f"(error-log clock went {prev_newest}s -> {newest}s)")
+        # Fallback for firmware without STATUS uptime; health_poll reports the
+        # reboot directly when the field is present.
+        if row not in LAST_UPTIME:
+            print(f"    row 0x{row:02X} REBOOTED since the last poll "
+                  f"(error-log clock went {prev_newest}s -> {newest}s)")
         previous = None  # the ring restarted; nothing carries across
 
     n_new = count_new_entries(previous, entries)
@@ -292,11 +315,11 @@ def print_error_log(row: int, payload: bytes, last_log: dict[int, list[tuple]]) 
         kinds[e[2]] = kinds.get(e[2], 0) + 1
     summary = ", ".join(f"{ERROR_TYPE_NAMES.get(k, hex(k))}={v}" for k, v in sorted(kinds.items()))
 
-    # The row clock is the only uptime the Pi can see - STATUS_RESP carries
-    # state, tiles_found and the 8 tile statuses, but no uptime field. So it
-    # is a lower bound, and it stops advancing the moment the row stops
-    # logging. That is exactly when it misleads, hence the explicit new-entry
-    # count beside it rather than leaving the reader to date the timestamps.
+    # This clock is a lower bound that stops advancing the moment the row stops
+    # logging, so it is kept only to date entries against each other. Real
+    # uptime now comes from STATUS_RESP and is printed by health_poll; the
+    # explicit new-entry count is what stops a full ring of stale entries
+    # reading as a fresh failure.
     if n_new is None:
         freshness = "all predate this run"
     elif n_new == 0:
@@ -314,8 +337,9 @@ def print_error_log(row: int, payload: bytes, last_log: dict[int, list[tuple]]) 
             print(f"      {mark}{name}: {reset_causes((slot << 8) | tile_cmd)} t={t}s")
         elif err_type == 0x08:
             print(f"      {mark}{name}: sweep #{slot} t={t}s")
-        elif err_type == 0x07:
-            print(f"      {mark}{name}: slot {slot} claimed by addr 0x{tile_cmd:02X} t={t}s")
+        elif err_type == 0x09:
+            print(f"      {mark}{name}: slot {slot} (addr 0x{tile_cmd:02X}) "
+                  f"mapped but silent t={t}s")
         else:
             print(f"      {mark}slot={slot} tile_cmd=0x{tile_cmd:02X} type={name} t={t}s")
 
@@ -456,7 +480,20 @@ def health_poll(floor: Floor, row: int, last_log: dict[int, list[tuple]]) -> boo
         return False
 
     state = STATUS_STATE_NAMES.get(status[0], hex(status[0]))
-    print(f"    row 0x{row:02X}: state={state} tiles_found={status[1]}")
+    uptime = status_uptime_s(status)
+    up = f" up {fmt_uptime(uptime)}" if uptime is not None else ""
+    print(f"    row 0x{row:02X}: state={state} tiles_found={status[1]}{up}")
+
+    # Uptime going backwards is a reboot, full stop - no inference from log
+    # timestamps needed. Those only move while the row is logging, which on a
+    # healthy row is almost never, so they could never answer this.
+    previous = LAST_UPTIME.get(row)
+    if uptime is not None:
+        if previous is not None and uptime < previous:
+            print(f"    row 0x{row:02X}: REBOOTED since the last poll "
+                  f"(uptime {fmt_uptime(previous)} -> {fmt_uptime(uptime)}) - "
+                  f"read the row_boot entry below for the cause")
+        LAST_UPTIME[row] = uptime
 
     reading = read_power(floor, row)
     if reading is None:

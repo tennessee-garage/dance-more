@@ -66,7 +66,7 @@ void test_status_reports_discovered_tiles_and_state() {
 
     TEST_ASSERT_NOT_NULL(resp);
     TEST_ASSERT_EQUAL_HEX8((uint8_t)RowBusCmd::STATUS_RESP, resp->cmd);
-    TEST_ASSERT_EQUAL(10, resp->len);
+    TEST_ASSERT_EQUAL(14, resp->len);
     TEST_ASSERT_EQUAL_HEX8(0x00, resp->payload[0]); // state: IDLE (discovery never started)
     TEST_ASSERT_EQUAL(5, resp->payload[1]);          // tiles_found
     for (uint8_t i = 0; i < 5; i++)
@@ -319,7 +319,7 @@ void test_latch_without_forwarding_is_unaffected_by_overrun_logic() {
     TEST_ASSERT_EQUAL(0, log_resp->payload[0]); // no overrun logged
 }
 
-void test_error_log_ring_buffer_caps_at_32_and_drops_oldest() {
+void test_error_log_ring_buffer_caps_at_31_and_drops_oldest() {
     FakeTileTransport transport;
     FakeRowSense      row_sense;
     TileMap           map;
@@ -338,9 +338,10 @@ void test_error_log_ring_buffer_caps_at_32_and_drops_oldest() {
     RowBusFrame send_req  = make_frame(0x00, RowBusCmd::SEND_DATA, payload, offset);
     RowBusFrame latch_req = make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::LATCH, nullptr, 0);
 
-    // Trigger 33 overruns (one more than the 32-entry capacity), each with a
-    // distinct timestamp, to verify the oldest entry gets dropped.
-    for (uint32_t i = 0; i < 33; i++) {
+    // Trigger 32 overruns (one more than the 31-entry ring), each with a
+    // distinct timestamp, to verify the oldest entry gets dropped. The ring is
+    // 31 rather than 32 because the boot entry is held outside it.
+    for (uint32_t i = 0; i < 32; i++) {
         uint32_t now_ms = i * 1000;
         handler.handle(send_req);
         handler.poll(now_ms);                            // advance 1 slot, then defer
@@ -350,15 +351,104 @@ void test_error_log_ring_buffer_caps_at_32_and_drops_oldest() {
 
     RowBusFrame log_req = make_frame(0x00, RowBusCmd::ERROR_LOG, nullptr, 0);
     const RowBusFrame *resp = handler.handle(log_req);
-    TEST_ASSERT_EQUAL(32, resp->payload[0]);
-    TEST_ASSERT_EQUAL(1 + 32 * 5, resp->len);
+    TEST_ASSERT_EQUAL(31, resp->payload[0]);
+    TEST_ASSERT_EQUAL(1 + 31 * 5, resp->len);
 
     // Oldest (timestamp 0, from i=0) was overwritten; entries are timestamps
-    // 1..32, oldest first.
-    for (int i = 0; i < 32; i++) {
+    // 1..31, oldest first.
+    for (int i = 0; i < 31; i++) {
         uint16_t ts = (uint16_t)((resp->payload[1 + i * 5 + 3] << 8) | resp->payload[1 + i * 5 + 4]);
         TEST_ASSERT_EQUAL(i + 1, ts);
     }
+}
+
+// Uptime is what makes "did this row restart?" answerable. Before it, the only
+// clock the Pi could see was the newest error-log timestamp, which stops
+// advancing whenever the row stops logging - i.e. whenever it is healthy.
+void test_status_reports_uptime_from_poll_clock() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    handler.poll(3661000);  // 1h 1m 1s
+    RowBusFrame req = make_frame(0x00, RowBusCmd::STATUS, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    TEST_ASSERT_NOT_NULL(resp);
+    uint32_t uptime = ((uint32_t)resp->payload[10] << 24) | ((uint32_t)resp->payload[11] << 16) |
+                      ((uint32_t)resp->payload[12] << 8)  | resp->payload[13];
+    TEST_ASSERT_EQUAL_UINT32(3661, uptime);
+}
+
+// 32 bits, not 16: a 16-bit second count wraps at 18.2 hours, and a wrap would
+// read as exactly the reboot this field exists to rule out.
+void test_status_uptime_survives_past_16_bit_seconds() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    handler.poll(200000000);  // ~55 hours, well past a uint16 of seconds
+    RowBusFrame req = make_frame(0x00, RowBusCmd::STATUS, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    uint32_t uptime = ((uint32_t)resp->payload[10] << 24) | ((uint32_t)resp->payload[11] << 16) |
+                      ((uint32_t)resp->payload[12] << 8)  | resp->payload[13];
+    TEST_ASSERT_EQUAL_UINT32(200000, uptime);
+}
+
+// The boot entry is the one whose value grows with age, so it must outlive a
+// full ring. Two per-sweep diagnostics once flooded 32 slots in 16 seconds and
+// evicted it - which is why it now lives outside the ring entirely.
+void test_boot_entry_survives_a_full_ring_and_reports_first() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    handler.log_boot(0x0002, 0);  // brownout
+
+    // Flood well past the ring's capacity with unrelated entries.
+    for (uint32_t i = 1; i <= 60; i++) handler.log_sense_start(i * 1000);
+
+    RowBusFrame req = make_frame(0x00, RowBusCmd::ERROR_LOG, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    TEST_ASSERT_NOT_NULL(resp);
+    TEST_ASSERT_EQUAL(32, resp->payload[0]);           // 31 ring + 1 boot
+    TEST_ASSERT_EQUAL(1 + 32 * 5, resp->len);          // still the documented max
+    TEST_ASSERT_EQUAL_HEX8(ERROR_TYPE_ROW_BOOT, resp->payload[1 + 2]);
+    TEST_ASSERT_EQUAL_HEX8(0x00, resp->payload[1 + 0]); // cause hi
+    TEST_ASSERT_EQUAL_HEX8(0x02, resp->payload[1 + 1]); // cause lo: brownout
+    // and the entries after it are the ring, not another copy of boot
+    TEST_ASSERT_EQUAL_HEX8(ERROR_TYPE_SENSE_START, resp->payload[1 + 5 + 2]);
+}
+
+void test_tile_no_version_records_slot_and_address() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    handler.log_tile_no_version(3, 0x04, 12000);
+
+    RowBusFrame req = make_frame(0x00, RowBusCmd::ERROR_LOG, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    TEST_ASSERT_EQUAL(1, resp->payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(3, resp->payload[1 + 0]);
+    TEST_ASSERT_EQUAL_HEX8(0x04, resp->payload[1 + 1]);
+    TEST_ASSERT_EQUAL_HEX8(ERROR_TYPE_TILE_NO_VERSION, resp->payload[1 + 2]);
+    TEST_ASSERT_EQUAL(12, (resp->payload[1 + 3] << 8) | resp->payload[1 + 4]);
 }
 
 // ---------------------------------------------------------------------------
@@ -548,7 +638,11 @@ int main(int, char **) {
     RUN_TEST(test_latch_broadcasts_tile_latch);
     RUN_TEST(test_latch_defers_when_send_data_still_forwarding);
     RUN_TEST(test_latch_without_forwarding_is_unaffected_by_overrun_logic);
-    RUN_TEST(test_error_log_ring_buffer_caps_at_32_and_drops_oldest);
+    RUN_TEST(test_error_log_ring_buffer_caps_at_31_and_drops_oldest);
+    RUN_TEST(test_status_reports_uptime_from_poll_clock);
+    RUN_TEST(test_status_uptime_survives_past_16_bit_seconds);
+    RUN_TEST(test_boot_entry_survives_a_full_ring_and_reports_first);
+    RUN_TEST(test_tile_no_version_records_slot_and_address);
     RUN_TEST(test_blackout_sends_black_to_each_discovered_tile_then_latch);
     RUN_TEST(test_re_discover_starts_sense_mapping_and_acks);
     RUN_TEST(test_test_command_returns_always_pass_stub);
