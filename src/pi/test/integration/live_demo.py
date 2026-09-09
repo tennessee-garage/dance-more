@@ -333,7 +333,13 @@ def print_error_log(row: int, payload: bytes, last_log: dict[int, list[tuple]]) 
         name = ERROR_TYPE_NAMES.get(err_type, f"unknown(0x{err_type:02X})")
         t = (ts_hi << 8) | ts_lo
         mark = "NEW " if n_new is not None and i >= count - n_new else "    "
-        if err_type == 0x06:
+        if err_type == 0x02:
+            # slot/tile_cmd are a count, not a slot and a command: how many
+            # frames failed CRC in the 5 s window this entry covers. Any
+            # non-zero value here means the Row Bus link is corrupting frames,
+            # which nothing else on the row reports.
+            print(f"      {mark}{name}: {(slot << 8) | tile_cmd} frames failed CRC t={t}s")
+        elif err_type == 0x06:
             print(f"      {mark}{name}: {reset_causes((slot << 8) | tile_cmd)} t={t}s")
         elif err_type == 0x08:
             print(f"      {mark}{name}: sweep #{slot} t={t}s")
