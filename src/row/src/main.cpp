@@ -98,6 +98,14 @@ static bool display_data_seen = false;
 // at all" is the fact worth having.
 static volatile bool rx_overflow_pending = false;
 
+// core 0 -> core 1: running total of frames dropped on a failed CRC. A total
+// rather than a delta so there is exactly one writer and no read-modify-write
+// race across cores; core 1 keeps its own high-water mark and logs the
+// difference. Batched on an interval because a badly terminated link produces
+// these in floods and one entry per frame would evict everything else.
+static volatile uint32_t crc_failure_total = 0;
+static constexpr uint32_t CRC_LOG_INTERVAL_MS = 5000;
+
 // core 0 -> core 1: validated (CRC-good, addressed to us or broadcast) frames
 static RowBusFrameQueue ingest_queue;
 // core 1 -> core 0: RowCommandHandler responses to admin commands, bound for the Pi
@@ -275,6 +283,9 @@ void loop() {
     // sticky until read, so nothing is missed by sampling at this rate.
     if (pi_transport.take_rx_overflow()) rx_overflow_pending = true;
 
+    // Publish the parser's CRC-failure count for core 1 to log.
+    crc_failure_total = parser.crc_failures();
+
     RowBusFrame response;
     while (response_queue.try_pop(&response)) {
         pi_transport.send(response);
@@ -321,6 +332,19 @@ void loop1() {
     if (rx_overflow_pending) {
         rx_overflow_pending = false;
         row_cmd_handler.log_row_bus_overflow(millis());
+    }
+
+    // Frames the Pi sent that arrived corrupted. Rate-limited, carrying the
+    // count for the window, so a link that is mangling everything says so
+    // loudly without burying the rest of the log.
+    static uint32_t crc_logged_upto = 0;
+    static uint32_t next_crc_log_ms = CRC_LOG_INTERVAL_MS;
+    const uint32_t crc_now = crc_failure_total;
+    if (crc_now != crc_logged_upto && (int32_t)(millis() - next_crc_log_ms) >= 0) {
+        const uint32_t delta = crc_now - crc_logged_upto;
+        row_cmd_handler.log_crc_failures(delta > 0xFFFF ? 0xFFFF : (uint16_t)delta, millis());
+        crc_logged_upto = crc_now;
+        next_crc_log_ms = millis() + CRC_LOG_INTERVAL_MS;
     }
 
     sense_mapper.poll(millis());

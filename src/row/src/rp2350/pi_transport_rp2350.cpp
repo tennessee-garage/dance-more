@@ -44,8 +44,9 @@ void PiTransportRP2350::init() {
     // ROWBUS_MAX_FRAME bytes arriving back-to-back over ~4.7 ms, some 45x
     // longer than that window, and poll() below costs two _pumpFIFO() round
     // trips per byte (one in available(), one in read()) against a 3.2 us/byte
-    // arrival rate. Core 0 cannot keep up, the FIFO overruns, and the core
-    // wedges hard enough to need a power cycle - not merely dropped bytes.
+    // arrival rate. Core 0 cannot keep up, the FIFO absorbs the shortfall, and
+    // past its depth the core wedges hard enough to need a power cycle - not
+    // merely dropped bytes.
     //
     // Measured on the bench (at the 976-byte frame size of the 40-LED build):
     // continuous frames died above ~170 bytes, while the same 976-byte frame
@@ -93,6 +94,20 @@ bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
         parser.reset();
 
     // Drain all available RX bytes. Return true on the first complete frame.
+    //
+    // This is deliberately still two _pumpFIFO() round trips per byte - one in
+    // available(), one in read() - which measured ~6.0 us per byte against a
+    // 3.2 us/byte arrival rate at 3.125 Mbps, so the row finishes parsing a
+    // maximum-size frame roughly 4 ms after its last bit is on the wire.
+    //
+    // Hoisting available() out of the loop was tried on 2026-09-08 and made
+    // things worse, not better: with the row settled past its boot-discovery
+    // window, a saturated chain at 15 fps went from passing to failing
+    // (test/integration/test_chain_saturation.py). Why is not established -
+    // the change should strictly reduce work - so it is reverted rather than
+    // kept on the theory that the measurement was unlucky. Whatever ends the
+    // row under load is not simply per-byte cost, and the next move is
+    // measurement, not another rewrite of this loop.
     while (Serial2.available()) {
         uint8_t byte = (uint8_t)Serial2.read();
         last_rx_byte_us_ = micros();

@@ -58,6 +58,17 @@ public:
     bool feed(uint8_t byte, RowBusFrame *out);
     void reset();
 
+    // Frames discarded on a failed CRC since construction.
+    //
+    // A corrupted link is otherwise completely silent: a bad frame fails the
+    // check, is dropped, and nothing anywhere counts it. Every other
+    // diagnostic on this row - STATUS, the error log, uptime - reports a
+    // perfectly healthy controller while the wire mangles frames. That is not
+    // hypothetical: 20 ft of unterminated Cat5 at 3.125 Mbps puts a round-trip
+    // reflection at ~60 ns against a 320 ns bit period, and nothing in the
+    // firmware could say so.
+    uint32_t crc_failures() const { return crc_failures_; }
+
     // True while a frame is only partly received.
     //
     // Mid-payload the parser consumes bytes unconditionally until it has as
@@ -79,4 +90,5 @@ private:
     uint16_t    pay_idx     = 0;
     uint8_t     crc_high    = 0;
     uint16_t    running_crc = 0;
+    uint32_t    crc_failures_ = 0;
 };

@@ -451,6 +451,25 @@ void test_tile_no_version_records_slot_and_address() {
     TEST_ASSERT_EQUAL(12, (resp->payload[1 + 3] << 8) | resp->payload[1 + 4]);
 }
 
+void test_crc_failures_record_a_count_not_one_entry_each() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    handler.log_crc_failures(1234, 7000);
+
+    RowBusFrame req = make_frame(0x00, RowBusCmd::ERROR_LOG, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    TEST_ASSERT_EQUAL(1, resp->payload[0]);   // one entry, not 1234
+    TEST_ASSERT_EQUAL_HEX8(ERROR_TYPE_CRC_FAILURE, resp->payload[1 + 2]);
+    TEST_ASSERT_EQUAL(1234, (resp->payload[1 + 0] << 8) | resp->payload[1 + 1]);
+    TEST_ASSERT_EQUAL(7, (resp->payload[1 + 3] << 8) | resp->payload[1 + 4]);
+}
+
 // ---------------------------------------------------------------------------
 // RE_DISCOVER / TEST / ERROR_LOG
 // ---------------------------------------------------------------------------
@@ -643,6 +662,7 @@ int main(int, char **) {
     RUN_TEST(test_status_uptime_survives_past_16_bit_seconds);
     RUN_TEST(test_boot_entry_survives_a_full_ring_and_reports_first);
     RUN_TEST(test_tile_no_version_records_slot_and_address);
+    RUN_TEST(test_crc_failures_record_a_count_not_one_entry_each);
     RUN_TEST(test_blackout_sends_black_to_each_discovered_tile_then_latch);
     RUN_TEST(test_re_discover_starts_sense_mapping_and_acks);
     RUN_TEST(test_test_command_returns_always_pass_stub);

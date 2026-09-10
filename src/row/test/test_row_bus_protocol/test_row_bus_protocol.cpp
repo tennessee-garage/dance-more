@@ -381,6 +381,38 @@ void test_parser_in_progress_tracks_frame_boundaries() {
     TEST_ASSERT_FALSE(parser.in_progress());   // idle again once complete
 }
 
+// A corrupted link has to be countable, because nothing else on the row
+// notices one: bad frames fail the check and are discarded in silence.
+void test_parser_counts_crc_failures() {
+    RowBusFrame tx = {};
+    tx.addr = 0x01; tx.cmd = (uint8_t)RowBusCmd::STATUS; tx.len = 0;
+
+    uint8_t buf[ROWBUS_MAX_FRAME];
+    int n = row_bus_frame_encode(tx, buf, sizeof(buf));
+
+    RowBusFrameParser parser;
+    RowBusFrame rx = {};
+    TEST_ASSERT_EQUAL_UINT32(0, parser.crc_failures());
+
+    // A clean frame must not count.
+    TEST_ASSERT_TRUE(parse_all(parser, buf, n, &rx));
+    TEST_ASSERT_EQUAL_UINT32(0, parser.crc_failures());
+
+    // Corrupt the CRC and it does.
+    buf[n - 1] ^= 0xFF;
+    TEST_ASSERT_FALSE(parse_all(parser, buf, n, &rx));
+    TEST_ASSERT_EQUAL_UINT32(1, parser.crc_failures());
+
+    // Counts accumulate rather than latching.
+    TEST_ASSERT_FALSE(parse_all(parser, buf, n, &rx));
+    TEST_ASSERT_EQUAL_UINT32(2, parser.crc_failures());
+
+    // reset() clears parse state, not the tally - the count is a link-quality
+    // statistic and must survive the resyncs a bad link causes.
+    parser.reset();
+    TEST_ASSERT_EQUAL_UINT32(2, parser.crc_failures());
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -412,6 +444,7 @@ int main(int, char **) {
     RUN_TEST(test_parser_reset_clears_state);
     RUN_TEST(test_parser_in_progress_tracks_frame_boundaries);
     RUN_TEST(test_parser_truncated_frame_swallows_following_frames);
+    RUN_TEST(test_parser_counts_crc_failures);
 
     return UNITY_END();
 }

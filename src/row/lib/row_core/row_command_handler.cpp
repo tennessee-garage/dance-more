@@ -169,6 +169,11 @@ void RowCommandHandler::log_sense_start(uint32_t now_ms) {
     log_error(sweep_counter++, 0, ERROR_TYPE_SENSE_START, now_ms);
 }
 
+void RowCommandHandler::log_crc_failures(uint16_t count, uint32_t now_ms) {
+    log_error((uint8_t)(count >> 8), (uint8_t)(count & 0xFF),
+              ERROR_TYPE_CRC_FAILURE, now_ms);
+}
+
 void RowCommandHandler::log_tile_no_version(uint8_t slot, uint8_t addr, uint32_t now_ms) {
     log_error(slot, addr, ERROR_TYPE_TILE_NO_VERSION, now_ms);
 }
