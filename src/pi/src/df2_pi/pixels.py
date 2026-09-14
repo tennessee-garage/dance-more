@@ -55,7 +55,7 @@ from typing import TypeVar
 import numpy as np
 
 from df2_pi import paint
-from df2_pi.encode import from_linear, to_linear
+from df2_pi.gamma import from_linear, to_linear
 from df2_pi.geometry import FloorGeometry
 
 F = TypeVar("F", bound="Frame")
