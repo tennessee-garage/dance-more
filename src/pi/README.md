@@ -25,7 +25,14 @@ src/df2_pi/
                 rasterised onto lit cells only
   encode.py     The one gamma curve (linear <-> encoded bytes); the frame ->
                 SEND_DATA encoder lands here too
+  effects.py    Effect: the tile effect-register value (id + 4 params)
+  animation/    The authoring contract: @animation + Param (meta.py),
+                FrameContext (context.py), one-file loading and
+                AnimationRun (loader.py), AnimationRegistry with safe
+                reload (registry.py)
   cli.py        Command-line entry point (`df2-pi`)
+animations/     The animations themselves, one .py per animation; the
+                filename stem is the id playlists reference
 test/           Automated unit tests (pytest) - no hardware required
 test/integration/
                 Scripts that drive a real Pi + row controller + tile.
