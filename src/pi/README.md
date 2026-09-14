@@ -15,6 +15,12 @@ src/df2_pi/
     row_bus.py    One RS-485 chain: pyserial + XDIR direction control
     chain_map.py  Logical row (0-7) -> physical chain
     floor.py      The whole floor: routes rows to chains, fans out broadcasts
+  geometry.py   FloorGeometry: what is an LED and where - the 136x136 cell
+                grid, chain order, tile <-> cell <-> bus lookup tables
+  pixels.py     TileFrame (one colour per tile) and PixelFrame (every LED,
+                chain order); grid view, conversions, gain/blend, ownership
+  encode.py     The one gamma curve (linear <-> encoded bytes); the frame ->
+                SEND_DATA encoder lands here too
   cli.py        Command-line entry point (`df2-pi`)
 test/           Automated unit tests (pytest) - no hardware required
 test/integration/

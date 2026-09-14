@@ -156,7 +156,7 @@ class FloorGeometry:
 
     @classmethod
     def default(cls) -> FloorGeometry:
-        """The real floor: 8x8 tiles, 10 LEDs/side, corners dark."""
+        """The real floor: 8x8 tiles, 15 LEDs/side, corners dark."""
         return cls()
 
     # ---- tile <-> cell ----------------------------------------------------
