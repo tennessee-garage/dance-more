@@ -45,8 +45,13 @@ first. See docs/hardware-tile.md's open question on it.
 from __future__ import annotations
 
 from enum import Enum
+from functools import cached_property
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from df2_pi.edges import Axis, Edge, EdgeGraph
 
 
 class Side(Enum):
@@ -212,6 +217,62 @@ class FloorGeometry:
         ordered = led_indices[order]
         assert len(ordered) == n
         return ordered
+
+    # ---- edge structure (see edges.py) ----------------------------------------
+    #
+    # The edge model is derived from this geometry and lives in edges.py,
+    # which imports this module - so it is imported here lazily, and the
+    # results are cached on the instance like the lookup tables above.
+
+    @cached_property
+    def edges(self) -> tuple[Edge, ...]:
+        """All 4 * tiles edges, numbered `tile * 4 + [N, E, S, W].index(side)`."""
+        from df2_pi.edges import build_edges
+
+        return build_edges(self)
+
+    def edge(self, tile: int, side: Side) -> Edge:
+        """One side of one tile."""
+        from df2_pi.edges import edge_of
+
+        return edge_of(self, tile, side)
+
+    @cached_property
+    def seams(self) -> tuple[tuple[Edge, Edge], ...]:
+        """The facing pairs of interior edges, `a.leds[i]` facing `b.leds[i]`."""
+        from df2_pi.edges import build_seams
+
+        return build_seams(self)
+
+    @cached_property
+    def floor_ring(self) -> np.ndarray:
+        """The outer boundary as one ordered ring of flat LED indices,
+        clockwise from the floor's NW corner."""
+        from df2_pi.edges import build_floor_ring
+
+        return build_floor_ring(self)
+
+    def tile_ring(self, tile: int) -> np.ndarray:
+        """One tile's chain indices as a ring, clockwise from its NW corner."""
+        from df2_pi.edges import tile_ring
+
+        return tile_ring(self, tile)
+
+    def rails(self, axis: Axis | str, index: int) -> np.ndarray:
+        """A straight line of LEDs across the whole floor, as flat indices."""
+        from df2_pi.edges import rail
+
+        return rail(self, axis, index)
+
+    @cached_property
+    def _edge_graph(self) -> EdgeGraph:
+        from df2_pi.edges import EdgeGraph
+
+        return EdgeGraph(self)
+
+    def edge_graph(self) -> EdgeGraph:
+        """The edges as a graph - walks, shortest paths, forks. Built once."""
+        return self._edge_graph
 
     # ---- display --------------------------------------------------------------
 

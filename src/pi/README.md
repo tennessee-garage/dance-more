@@ -19,6 +19,10 @@ src/df2_pi/
                 grid, chain order, tile <-> cell <-> bus lookup tables
   pixels.py     TileFrame (one colour per tile) and PixelFrame (every LED,
                 chain order); grid view, conversions, gain/blend, ownership
+  edges.py      The floor as 256 runs of 15: Edge, seams, floor ring, rails,
+                and EdgeGraph walks/paths for effects that travel the edges
+  paint.py      splat / line / circle in continuous (x, y) cell coordinates,
+                rasterised onto lit cells only
   encode.py     The one gamma curve (linear <-> encoded bytes); the frame ->
                 SEND_DATA encoder lands here too
   cli.py        Command-line entry point (`df2-pi`)

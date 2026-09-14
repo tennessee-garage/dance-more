@@ -54,6 +54,7 @@ from typing import TypeVar
 
 import numpy as np
 
+from df2_pi import paint
 from df2_pi.encode import from_linear, to_linear
 from df2_pi.geometry import FloorGeometry
 
@@ -218,6 +219,13 @@ class PixelFrame(Frame):
         is frozen, in which case writes raise."""
         return self.data[tile]
 
+    @property
+    def flat(self) -> np.ndarray:
+        """`(led_count, 3)` view of every LED, indexed `tile * leds_per_tile
+        + led` - what the flat indices from edges.py (`floor_ring`, `rails`,
+        `Path.leds()`, `Edge.flat_leds`) index into. Writes go through."""
+        return self.data.reshape(-1, CHANNELS)
+
     # ---- the grid view ----------------------------------------------------------
 
     @property
@@ -281,6 +289,23 @@ class PixelFrame(Frame):
         # Fancy indexing copies, so the frame never aliases the caller's image.
         data = img[geometry.led_to_cell[..., 0], geometry.led_to_cell[..., 1]]
         return cls(data, geometry)
+
+    # ---- continuous-coordinate painting (see paint.py) ----------------------
+    #
+    # (x, y) in cell units. These draw onto lit cells only and MUTATE the
+    # frame - paint onto a copy of `previous`, never onto `previous` itself.
+
+    def splat(self, x, y, color, radius=4.0, falloff="gaussian", blend="add") -> None:
+        """A spot of `color` at (x, y) fading to nothing at `radius`."""
+        paint.splat(self, x, y, color, radius, falloff, blend)
+
+    def line(self, start, end, color, width=1.5, falloff="flat", blend="add") -> None:
+        """A segment from `start` to `end` (each (x, y)), `width` cells wide."""
+        paint.line(self, start, end, color, width, falloff, blend)
+
+    def circle(self, cx, cy, r, color, width=1.0, falloff="flat", blend="add") -> None:
+        """A ring of radius `r` about (cx, cy), `width` cells wide."""
+        paint.circle(self, cx, cy, r, color, width, falloff, blend)
 
     # ---- conversion ---------------------------------------------------------
 
