@@ -40,6 +40,9 @@ src/df2_pi/
                 hardware.py: HardwareSink, the one synchronous sink;
                 preview.py: the binary preview wire format, PreviewSink with
                 per-subscriber rate/format, RecorderSink; fanout.py: FanOut
+  playlists/    PlaylistStore: playlists, entries, settings and the play
+                log in SQLite (WAL, one connection per thread), resolved
+                against the animation registry; schema.py migrations
   cli.py        Command-line entry point (`df2-pi`)
 animations/     The animations themselves, one .py per animation; the
                 filename stem is the id playlists reference
