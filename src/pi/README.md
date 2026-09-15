@@ -35,6 +35,9 @@ src/df2_pi/
   engine/
     clock.py    FrameClock: drift-free deadlines, hybrid sleep, overrun and
                 stall policy, per-phase timing telemetry
+    runner.py   Runner: walks a playlist, renders, crossfades, isolates a
+                failing animation, and takes queued control commands at
+                frame boundaries; RunnerState is the per-frame snapshot
   output/       Where frames go. sink.py: the Sink protocol, the latest-wins
                 Mailbox and ThreadedSink observers (Null, Callback);
                 hardware.py: HardwareSink, the one synchronous sink;
