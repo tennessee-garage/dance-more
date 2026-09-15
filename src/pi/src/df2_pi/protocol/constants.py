@@ -9,6 +9,10 @@ from enum import IntEnum
 SYNC1 = 0xAA
 SYNC2 = 0x55
 
+# The Row Bus rate. Capped by the Pi's 50 MHz UART clock: 3.125 Mbps divides
+# exactly, and asking for more fails silently (docs/row-bus-protocol.md, 1).
+DEFAULT_BAUDRATE = 3_125_000
+
 ADDR_BROADCAST = 0xFF
 MIN_ROW_ADDR = 0x00
 MAX_ROW_ADDR = 0x07

@@ -20,6 +20,12 @@ dependencies = [
 dev = [
     "pytest>=8",
 ]
+# `df2-pi play --window` and `--record out.gif|.mp4`; the terminal sink needs nothing.
+preview = [
+    "pygame>=2.5",
+    "imageio>=2.31",
+    "imageio-ffmpeg>=0.4",
+]
 
 [project.scripts]
 df2-pi = "df2_pi.cli:main"

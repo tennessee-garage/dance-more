@@ -26,6 +26,7 @@ import serial
 from gpiozero import OutputDevice
 
 from ..protocol.constants import ADDR_BROADCAST
+from ..protocol.constants import DEFAULT_BAUDRATE as _DEFAULT_BAUDRATE
 from ..protocol.frame import Frame, FrameParser
 
 DEFAULT_PORT = "/dev/ttyAMA0"
@@ -34,7 +35,7 @@ DEFAULT_PORT = "/dev/ttyAMA0"
 # §1). It divides exactly on both ends. Requesting more doesn't raise - the
 # kernel silently clamps and the row controller then sees only framing
 # errors, which its UART driver discards uncounted, so the bus goes mute.
-DEFAULT_BAUDRATE = 3_125_000
+DEFAULT_BAUDRATE = _DEFAULT_BAUDRATE  # defined in protocol.constants; re-exported here
 DEFAULT_XDIR_PIN = 23  # BCM numbering; matches the pi-hat's XDIR wiring
 
 # Extra time to hold XDIR after the frame's computed on-wire duration, so a

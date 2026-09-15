@@ -46,7 +46,10 @@ src/df2_pi/
   playlists/    PlaylistStore: playlists, entries, settings and the play
                 log in SQLite (WAL, one connection per thread), resolved
                 against the animation registry; schema.py migrations
-  cli.py        Command-line entry point (`df2-pi`)
+  output/dev.py TerminalSink, WindowSink (pygame), FrameCollector with
+                GIF / mp4 / .df2rec export; all draw origin bottom-left
+  cli.py        Command-line entry point (`df2-pi`): play, animations,
+                playlists, ledwalk, tilewalk, and the Row Bus admin commands
 animations/     The animations themselves, one .py per animation; the
                 filename stem is the id playlists reference
 test/           Automated unit tests (pytest) - no hardware required
@@ -97,14 +100,48 @@ microseconds.
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]"            # + ".[preview]" for --window and --record to gif/mp4
 ```
 
 ## Usage
 
+Playing:
+
+```bash
+df2-pi play                                  # the startup playlist, on the floor
+df2-pi play --playlist "Party"
+df2-pi play --animation rainbow_sweep --param speed=2   # one animation, looping
+
+df2-pi play --no-hardware --terminal         # no floor: render in the terminal
+df2-pi play --no-hardware --terminal=tiles   # ...as the 8x8 tile view
+df2-pi play --animation ripple --window      # a real window (pip install -e ".[preview]")
+df2-pi play --no-hardware --animation chase --record out.gif --frames 90
+
+df2-pi animations -v                         # what was found, params, and load errors
+df2-pi playlists                             # list; also show/create/add/move/remove/set-startup/delete
+```
+
+`--no-hardware` never imports the serial or GPIO stack, so all of that
+runs on a laptop. Every dev renderer draws the floor with row 0 along the
+bottom, as you see it standing at the rack.
+
+Verifying a build:
+
+```bash
+df2-pi ledwalk --row 0 --slot 0   # one LED at a time: LED 0 must light lower-left, then climb the left side
+df2-pi tilewalk                   # one tile at a time: tile 0 nearest the Pi, 0-7 sweeping along row 0
+```
+
+Neither discovers anything - the LED winding and floor orientation are
+fixed in `geometry.py` - so a tile or row that walks the wrong way is a
+build fault to fix with a screwdriver, not a setting.
+
+Row Bus admin:
+
 ```bash
 df2-pi scan          # find responding row controllers on every chain
 df2-pi status 0      # query one row
+df2-pi version       # firmware versions across rows and tiles
 df2-pi blackout      # black out the whole floor
 ```
 

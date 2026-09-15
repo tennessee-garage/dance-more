@@ -57,7 +57,7 @@ import threading
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from df2_pi.animation.loader import AnimationDef, AnimationError, AnimationRun
 from df2_pi.animation.meta import AnimationMeta
@@ -65,9 +65,11 @@ from df2_pi.animation.registry import AnimationRegistry
 from df2_pi.effects import Effect
 from df2_pi.engine.clock import FrameClock, FrameInfo, TelemetrySnapshot
 from df2_pi.geometry import FloorGeometry
-from df2_pi.output.fanout import FanOut
 from df2_pi.pixels import Frame, PixelFrame, TileFrame, blend, default_geometry
 from df2_pi.playlists.store import PlaylistStore, ResolvedEntry, ResolvedPlaylist
+
+if TYPE_CHECKING:
+    from df2_pi.output.fanout import FanOut
 
 log = logging.getLogger(__name__)
 
@@ -289,6 +291,11 @@ class Runner:
     def join(self, timeout: float | None = None) -> None:
         if self._thread is not None:
             self._thread.join(timeout)
+
+    @property
+    def alive(self) -> bool:
+        """True while `start()`'s thread is running."""
+        return self._thread is not None and self._thread.is_alive()
 
     def install_signal_handlers(self) -> None:
         """SIGTERM and SIGINT become `stop()`. Main thread only."""
