@@ -23,8 +23,10 @@ src/df2_pi/
                 and EdgeGraph walks/paths for effects that travel the edges
   paint.py      splat / line / circle in continuous (x, y) cell coordinates,
                 rasterised onto lit cells only
-  encode.py     The one gamma curve (linear <-> encoded bytes); the frame ->
-                SEND_DATA encoder lands here too
+  gamma.py      The one gamma curve (linear <-> encoded bytes)
+  encode.py     FrameEncoder: frame -> one SEND_DATA payload per row, with
+                SET_COLOR for uniform tiles, effect entries, and the
+                brightness / white-balance / gamma LUT
   effects.py    Effect: the tile effect-register value (id + 4 params)
   animation/    The authoring contract: @animation + Param (meta.py),
                 FrameContext (context.py), one-file loading and

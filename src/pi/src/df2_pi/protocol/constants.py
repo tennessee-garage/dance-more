@@ -64,12 +64,13 @@ class TileCmd(IntEnum):
 
     SET_COLOR = 0x10
     SET_PATTERN = 0x11
+    SET_EFFECT = 0x11  # alias: the same command under its #72 name - see effects.py
     SET_LEDS = 0x12
 
 
 # Per-tile SEND_DATA entry size in bytes, including the 1-byte tile_cmd header.
 TILE_ENTRY_SIZE = {
     TileCmd.SET_COLOR: 4,
-    TileCmd.SET_PATTERN: 6,
+    TileCmd.SET_EFFECT: 6,
     TileCmd.SET_LEDS: 1 + SET_LEDS_PAYLOAD,  # 181
 }
