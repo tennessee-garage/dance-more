@@ -26,3 +26,8 @@ df2-pi = "df2_pi.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: needs real wall-clock time; skipped unless DF2_SLOW_TESTS=1",
+]

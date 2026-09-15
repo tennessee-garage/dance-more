@@ -32,6 +32,9 @@ src/df2_pi/
                 FrameContext (context.py), one-file loading and
                 AnimationRun (loader.py), AnimationRegistry with safe
                 reload (registry.py)
+  engine/
+    clock.py    FrameClock: drift-free deadlines, hybrid sleep, overrun and
+                stall policy, per-phase timing telemetry
   cli.py        Command-line entry point (`df2-pi`)
 animations/     The animations themselves, one .py per animation; the
                 filename stem is the id playlists reference
