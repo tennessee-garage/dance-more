@@ -92,8 +92,7 @@ from df2_pi.effects import Effect
 from df2_pi.gamma import DECODE_LUT, GAMMA, from_linear, to_linear  # noqa: F401 - re-exported
 from df2_pi.geometry import FloorGeometry
 from df2_pi.pixels import CHANNELS, Frame, PixelFrame, TileFrame, default_geometry
-from df2_pi.protocol.constants import FRAME_OVERHEAD, TILE_ENTRY_SIZE, TileCmd
-from df2_pi.transport.row_bus import DEFAULT_BAUDRATE
+from df2_pi.protocol.constants import DEFAULT_BAUDRATE, FRAME_OVERHEAD, TILE_ENTRY_SIZE, TileCmd
 
 # The gamma primitives live in gamma.py (pixels.py needs them and this
 # module needs pixels.py); they are re-exported here so `from df2_pi.encode

@@ -17,13 +17,15 @@ sink is where it is set. With a `FrameClock` attached it marks the
 from __future__ import annotations
 
 import logging
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
 
 from df2_pi.effects import Effect
 from df2_pi.encode import FrameEncoder
 from df2_pi.engine.clock import FrameClock, FrameInfo
 from df2_pi.pixels import Frame
-from df2_pi.transport.floor import Floor
+
+if TYPE_CHECKING:  # the transport pulls in gpiozero; a laptop must not
+    from df2_pi.transport.floor import Floor
 
 log = logging.getLogger(__name__)
 
