@@ -35,6 +35,11 @@ src/df2_pi/
   engine/
     clock.py    FrameClock: drift-free deadlines, hybrid sleep, overrun and
                 stall policy, per-phase timing telemetry
+  output/       Where frames go. sink.py: the Sink protocol, the latest-wins
+                Mailbox and ThreadedSink observers (Null, Callback);
+                hardware.py: HardwareSink, the one synchronous sink;
+                preview.py: the binary preview wire format, PreviewSink with
+                per-subscriber rate/format, RecorderSink; fanout.py: FanOut
   cli.py        Command-line entry point (`df2-pi`)
 animations/     The animations themselves, one .py per animation; the
                 filename stem is the id playlists reference
