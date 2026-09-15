@@ -66,6 +66,27 @@ class Param:
         # the default has to pass its own rules
         object.__setattr__(self, "default", self.coerce(self.default))
 
+    def clamp(self, value: Any) -> tuple[Any, str | None]:
+        """The forgiving counterpart of `coerce()`, for values read back
+        from storage after the spec may have changed: returns `(value,
+        warning)`, where a value outside min/max is clamped to the bound,
+        one not in `choices` or of the wrong type falls back to the
+        default, and `warning` says what happened (None if nothing)."""
+        try:
+            return self.coerce(value), None
+        except (TypeError, ValueError) as exc:
+            reason = str(exc)
+        if self.choices is None and self.type in (int, float) and not isinstance(value, bool):
+            try:
+                number = self.type(value)
+            except (TypeError, ValueError):
+                return self.default, f"{value!r}: {reason}; using default {self.default!r}"
+            if self.min is not None and number < self.min:
+                return self.min, f"{value!r} is below the minimum; clamped to {self.min!r}"
+            if self.max is not None and number > self.max:
+                return self.max, f"{value!r} is above the maximum; clamped to {self.max!r}"
+        return self.default, f"{value!r}: {reason}; using default {self.default!r}"
+
     def coerce(self, value: Any) -> Any:
         """Cast `value` to this param's type and check it against the
         bounds; raises ValueError (or TypeError) if it does not fit."""
