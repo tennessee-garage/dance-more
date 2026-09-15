@@ -89,7 +89,8 @@ Each is documented where it bites — this is just the index:
   to it in copper (two transceivers into one 8P8C), and the 33 ms frame budget
   does not close without it: serializing the chains takes the worst-case floor
   update from ~33.6 ms to ~52 ms, i.e. 30 FPS to 19. `docs/row-bus-protocol.md`
-  §1 and §8. `Floor.broadcast()` does this; `Floor.send()` does **not** yet.
+  §1 and §8. `Floor.broadcast()` and `Floor.send_rows()` do this; a loop of
+  `Floor.send()` calls does **not** - frame updates must go through `send_rows()`.
 - **LED geometry is 15/side, 60/tile, and everything derives from it.** Buffer
   and payload sizes are computed from `LEDS_PER_SIDE` in
   `src/common/tile_bus_protocol/protocol.h` (firmware) and `FloorGeometry`
