@@ -211,6 +211,39 @@ class Floor:
     def send_data(self, row: int, payload: bytes) -> None:
         self.send(row, Cmd.SEND_DATA, payload)
 
+    def send_rows(self, payloads: Sequence[bytes], cmd: int = Cmd.SEND_DATA) -> None:
+        """Unicast one frame to each row, `payloads[row]` to row `row`,
+        driving every chain concurrently.
+
+        This is the frame-update path, and it exists because the two
+        chains MUST be driven at the same time (docs/row-bus-protocol.md
+        section 1): serialising them takes the worst-case floor update from
+        ~19 ms to ~37 ms and the 33 ms budget does not close. Rows are dealt
+        to their chains, then sent in rounds - one frame started on every
+        chain, wait for the slowest to clear the wire, release them all -
+        so with the alternating map a full floor is 4 rounds of two frames
+        rather than 8 frames back to back. On a single chain it degrades to
+        `send()` in row order.
+        """
+        by_chain: dict[int, list[bytes]] = {}
+        for row, payload in enumerate(payloads):
+            chain = self.chain_map.chain_for(row)
+            by_chain.setdefault(chain, []).append(Frame(row, cmd, payload).encode())
+        rounds = max((len(frames) for frames in by_chain.values()), default=0)
+        for i in range(rounds):
+            started = []
+            try:
+                for chain, frames in by_chain.items():
+                    if i < len(frames):
+                        bus = self._buses[chain]
+                        started.append((bus, bus.start_write(frames[i])))
+                latest = max((deadline for _, deadline in started), default=0.0)
+                while time.perf_counter() < latest:
+                    pass
+            finally:
+                for bus, _ in started:
+                    bus.finish_write()
+
     # ---- discovery -------------------------------------------------------
 
     def scan(self, attempts: int = 2, timeout: float = 0.15) -> dict[int, int]:
