@@ -1,7 +1,10 @@
 """A hue gradient that sweeps diagonally across the floor.
 
-The reference animation: the smallest complete example of the file format
-in df2_pi/animation/meta.py. Copy it to start a new one.
+Demonstrates position plus time: each tile's hue comes from where it is
+(row + col, so the gradient runs diagonally) plus `ctx.t` scaled by a
+param, so it drifts at a speed the UI can change live. `period` tells the
+playlist editor how long one full cycle takes at the default speed, so a
+duration can land on whole cycles.
 """
 
 import colorsys
