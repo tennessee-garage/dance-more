@@ -125,6 +125,10 @@ df2-pi playlists                             # list; also show/create/add/move/r
 runs on a laptop. Every dev renderer draws the floor with row 0 along the
 bottom, as you see it standing at the rack.
 
+To write an animation, copy [animations/solid.py](animations/solid.py) and
+read [docs/animations.md](../../docs/animations.md); the rest of the
+starter pack in [animations/](animations/) is the tutorial.
+
 Verifying a build:
 
 ```bash
