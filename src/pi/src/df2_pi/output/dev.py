@@ -158,10 +158,12 @@ def render_terminal(frame: Frame, mode: str = "grid", truecolor: bool = True) ->
     reset = "\x1b[0m"
     lines: list[str] = []
     if mode == "grid":
-        img = display_grid(frame)
-        height = img.shape[0]
-        if height % 2:
-            img = np.concatenate([img, np.zeros((1, img.shape[1], 3), dtype=np.uint8)])
+        img = _pair_aligned(display_grid(frame), frame.geometry)
+        if img.shape[0] % 2:
+            # An odd row count leaves the bottom edge as a glyph over an
+            # empty background - a hairline of black under the floor.
+            # Repeating it makes the last cell colour over colour.
+            img = np.concatenate([img, img[-1:]])
         for y in range(0, img.shape[0], 2):
             upper, lower = img[y], img[y + 1]
             parts = [_fg(upper[x], truecolor) + _bg(lower[x], truecolor) + "▀" for x in range(img.shape[1])]
@@ -173,6 +175,37 @@ def render_terminal(frame: Frame, mode: str = "grid", truecolor: bool = True) ->
     else:
         raise ValueError(f"mode must be one of {TERMINAL_MODES}, got {mode!r}")
     return "\n".join(lines) + "\n"
+
+
+def _pair_aligned(img: np.ndarray, geometry: FloorGeometry) -> np.ndarray:
+    """Pad a display-orientation grid so every horizontal tile seam lands
+    on ONE half-block character.
+
+    A character shows two grid rows: the upper as the `▀` glyph in the
+    foreground colour, the lower as the background. A background fills
+    the cell exactly; a glyph has hairline gaps at its edges that show
+    whatever the background is. Tiles are `cell_size` rows tall, an odd
+    pitch, so the pairing drifts by one row per tile row: at one seam the
+    south edge above and the north edge below share a cell (glyph over
+    background in the other edge's colour - seamless), at the next they
+    fall in different cells and the north edge becomes a coloured glyph
+    on a BLACK background, whose gaps show as thin black bands. Repeating
+    each tile's middle row (dark interior, lit sides, so the vertical
+    edges stay unbroken) makes the pitch even, and one blank row on top
+    puts every seam pair in one cell. The only visible change is each
+    tile being one cell taller."""
+    cell = geometry.cell_size
+    if cell % 2 == 0:
+        return img
+    rows, width, channels = img.shape
+    out = [np.zeros((1, width, channels), dtype=img.dtype)]
+    mid = cell // 2
+    for start in range(0, rows, cell):
+        block = img[start : start + cell]
+        out.append(block[: mid + 1])
+        out.append(block[mid : mid + 1])  # the middle row, twice
+        out.append(block[mid + 1 :])
+    return np.concatenate(out)
 
 
 class TerminalSink(ThreadedSink):

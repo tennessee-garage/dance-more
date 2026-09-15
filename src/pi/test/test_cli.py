@@ -314,10 +314,32 @@ def test_terminal_render_is_byte_stable_for_a_known_frame():
 
     grid = render_terminal(frame, "grid", truecolor=True)
     grid_lines = grid.split("\n")
-    assert len(grid_lines) == 136 // 2 + 1
+    # 17-cell tiles are padded to an even 18 plus one blank row on top, so
+    # every horizontal seam lands on ONE half-block line: (1 + 8*18) -> 73
+    assert len(grid_lines) == 73 + 1
     assert grid_lines[0].count("▀") == 136
-    # the last text line holds grid rows 134-135 (display), i.e. canonical rows 1 and 0
-    assert "\x1b[38;2;255;0;0m\x1b[48;2;0;0;0m▀" in grid_lines[-2]  # LED 0 of tile 0, above the dark corner
+    cells = grid_lines[0].split("▀")
+    assert cells[7 * 17 + 1] == "\x1b[38;2;0;0;0m\x1b[48;2;0;0;255m"  # blank over the blue tile's north edge
+    assert cells[7 * 17] == "\x1b[38;2;0;0;0m\x1b[48;2;0;0;0m"  # its dark corner
+    # the last line: the south edge of canonical row 0 (red tile at col 0), repeated
+    # into the background so the bottom of the floor is colour over colour
+    assert grid_lines[72].startswith("\x1b[38;2;0;0;0m\x1b[48;2;0;0;0m▀\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m▀")
+
+
+def test_terminal_grid_puts_every_horizontal_seam_on_one_line():
+    frame = TileFrame.black()
+    for r in range(8):
+        frame.data[r, :] = (r * 30 + 10, 0, 0)  # each tile row its own red
+    lines = render_terminal(frame, "grid", truecolor=True).split("\n")[:-1]
+    reds = [r * 30 + 10 for r in range(8)]
+    for k in range(7):  # seam k: display block k (canonical row 7-k) over block k+1
+        line = lines[9 * (k + 1)]
+        upper, lower = reds[7 - k], reds[6 - k]
+        assert f"\x1b[38;2;{upper};0;0m\x1b[48;2;{lower};0;0m▀" in line
+    # and the vertical edge lines are unbroken: column 0 is lit on every line of every tile
+    for k in range(8):
+        for line in lines[9 * k + 1 : 9 * k + 9]:
+            assert line.startswith(f"\x1b[38;2;{reds[7 - k]};0;0m\x1b[48;2;{reds[7 - k]};0;0m▀")
 
     fallback = render_terminal(frame, "tiles", truecolor=False)
     assert "\x1b[38;5;196m██" in fallback and "38;2;" not in fallback  # 256-colour cube red
