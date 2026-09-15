@@ -106,6 +106,25 @@ class FanOut:
             if latch is not None:
                 latch()
 
+    def blackout(self) -> None:
+        """Forward to every sink that can black out (the hardware)."""
+        for sink in self.sinks:
+            blackout = getattr(sink, "blackout", None)
+            if blackout is not None:
+                blackout()
+
+    def unblackout(self) -> None:
+        for sink in self.sinks:
+            unblackout = getattr(sink, "unblackout", None)
+            if unblackout is not None:
+                unblackout()
+
+    def set_brightness(self, value: int) -> None:
+        """Forward to every sink with a brightness (the hardware)."""
+        for sink in self.sinks:
+            if hasattr(sink, "brightness"):
+                sink.brightness = value
+
     def close(self) -> None:
         for sink in self.sinks:
             self.detach(sink)
@@ -118,7 +137,7 @@ class FanOut:
         sinks = {}
         for sink in self.sinks:
             entry: dict[str, Any] = {"attached": True}
-            for attr in ("frames", "frames_handled", "dropped", "failures", "consecutive_failures", "healthy", "degraded"):
+            for attr in ("frames", "frames_handled", "dropped", "failures", "consecutive_failures", "healthy", "degraded", "muted"):
                 value = getattr(sink, attr, None)
                 if value is not None:
                     entry[attr] = value

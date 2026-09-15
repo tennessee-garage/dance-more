@@ -47,6 +47,7 @@ class HardwareSink:
         self.failures = 0
         self.consecutive_failures = 0
         self.last_error: str | None = None
+        self.muted = False
         self._sent = False
 
     # ---- settings --------------------------------------------------------------------
@@ -66,8 +67,14 @@ class HardwareSink:
     # ---- the Sink protocol -------------------------------------------------------------
 
     def submit(self, frame: Frame, info: FrameInfo, effects: Mapping[int, Effect] | None = None) -> None:
-        """Encode and put the frame on the Row Bus. Latching is separate."""
-        payloads = self.encoder.encode(frame, effects)
+        """Encode and put the frame on the Row Bus. Latching is separate.
+        While `muted` (a blackout), every row gets the black payload
+        instead, so observers still see the live content and the floor
+        stays dark."""
+        if self.muted:
+            payloads = [self.encoder.blackout_payload()] * self.encoder.geometry.tile_rows
+        else:
+            payloads = self.encoder.encode(frame, effects)
         if self.clock is not None:
             self.clock.mark("encode")
         try:
@@ -92,8 +99,17 @@ class HardwareSink:
         self._sent = False
 
     def blackout(self) -> None:
-        """Clear every tile's pixel buffer AND effect register, now."""
-        self.floor.blackout()
+        """Broadcast BLACKOUT - clears every tile's pixel buffer AND effect
+        register - and mute, so frames keep flowing but go out black
+        until `unblackout()`."""
+        self.muted = True
+        try:
+            self.floor.blackout()
+        except Exception as exc:
+            self._fail("blackout", None, exc)
+
+    def unblackout(self) -> None:
+        self.muted = False
 
     def close(self) -> None:
         pass  # the Floor's lifetime is the caller's
