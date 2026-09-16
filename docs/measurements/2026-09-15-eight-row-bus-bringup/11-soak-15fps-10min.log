@@ -1,0 +1,9 @@
+9000 frames, 0 dropped, jitter p95 0.15 ms
+row 0: state=2 uptime=1084s  11951mV 15mA  log[11]: row_boot(POR)@0s, crc_failure(count=1)@319s, crc_failure(count=14)@324s, sense_start(s7,0x00)@443s
+row 1: state=2 uptime=1503s  11956mV 15mA  log[11]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=3)@5s, sense_start(s7,0x00)@862s
+row 2: state=2 uptime=1085s  11952mV 15mA  log[13]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=9)@5s, crc_failure(count=1)@319s, crc_failure(count=14)@324s, sense_start(s7,0x00)@443s
+row 3: state=2 uptime=1503s  11951mV 15mA  log[11]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=8)@5s, sense_start(s7,0x00)@862s
+row 4: state=2 uptime=1085s  11952mV 13mA  log[13]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=7)@5s, crc_failure(count=1)@319s, crc_failure(count=14)@324s, sense_start(s7,0x00)@443s
+row 5: state=2 uptime=1503s  11955mV 13mA  log[11]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=14)@5s, sense_start(s7,0x00)@862s
+row 6: state=2 uptime=1084s  11947mV 14mA  log[30]: row_boot(POR)@0s, crc_failure(count=1)@319s, crc_failure(count=14)@324s, sense_start(s26,0x00)@443s
+row 7: state=2 uptime=1503s  11942mV 14mA  log[11]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=10)@5s, sense_start(s7,0x00)@862s

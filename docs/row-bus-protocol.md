@@ -122,10 +122,18 @@ established (see `poll()` in
 [pi_transport_rp2350.cpp](../src/row/src/rp2350/pi_transport_rp2350.cpp)).
 A different receive path — PIO, or DMA into a ring — is the real lever.
 
-One behaviour above the ceiling is worth knowing: at 27 FPS the row logs the
-overflow and keeps running, but by 30 FPS it restarts, reporting `HAD_POR`
-with no watchdog bit set. Why an overrun ends in a power-on reset rather than
-a watchdog reset is **not explained**.
+Above the ceiling the row restarts — continuously, for as long as the traffic
+lasts (`uptime_s` reads 0 at every one-second sample through a 30 FPS run) —
+and logs `ROW_BOOT` with `HAD_POR` and no watchdog bit. That is a watchdog
+reset nonetheless: the SDK's `watchdog_enable()` routes the watchdog through
+PSM only (`psm_hw->wdsel`), which does not reset POWMAN, so `POWMAN_CHIP_RESET`
+keeps the sticky POR bit from the original power-up and never gains a
+`HAD_WATCHDOG_RESET_*` bit. `log_boot()` has to read `WATCHDOG_REASON` as well
+before it can tell the two apart (measured 2026-09-15 with the 12 V rail
+steady at the row's own INA226 throughout; see
+[measurements/2026-09-15-eight-row-bus-bringup.md](measurements/2026-09-15-eight-row-bus-bringup.md)).
+Confirmed on all eight rows with four real neighbours per chain: 25 FPS
+passes, 27 FPS restarts, and the limit tracks bytes/s rather than frames/s.
 
 **The next lever after that is the Tile Bus baud rate**, which at 1 Mbps
 contributes more to end-to-end latency than the whole Row Bus phase. The

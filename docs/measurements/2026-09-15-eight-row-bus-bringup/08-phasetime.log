@@ -1,0 +1,3 @@
+payload sizes: [1448]
+encode ms: median 0.53 p95 0.74 max 0.75
+send_rows ms: median 47.79 p95 53.57 max 53.63

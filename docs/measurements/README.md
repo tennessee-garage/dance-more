@@ -48,6 +48,21 @@ close to the "~0.5 A measured" figure already in
 isolation as its own text suggests. Worth reconciling next time power.md is
 touched.
 
+## Row Bus ceilings, eight rows, no tiles (2026-09-15)
+
+**Tools:** [`test_chain_saturation.py`](../../src/pi/test/integration/test_chain_saturation.py),
+[`test_row_bus_scan.py`](../../src/pi/test/integration/test_row_bus_scan.py),
+`df2-pi play`.
+
+First run with all eight row controllers on the two-chain pi-hat. Confirms
+the row-side ingest ceiling (25 fps passes, 27 fps watchdog-resets, limit is
+bytes/s), shows the `ROW_BOOT` cause cannot see a watchdog reset, and times
+the host at ~48 ms per floor update against a 33 ms budget — 20 ms of
+pure-Python CRC and a pyserial `write()` that serialises the two chains.
+Cabling is clean: zero CRC failures over a 10-minute soak. Write-up in
+[`2026-09-15-eight-row-bus-bringup.md`](2026-09-15-eight-row-bus-bringup.md),
+raw logs alongside.
+
 ## Measuring a new strip or tile
 
 ```bash
