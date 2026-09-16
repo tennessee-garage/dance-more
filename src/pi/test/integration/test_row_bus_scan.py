@@ -65,7 +65,8 @@ from df2_pi.transport.row_bus import DEFAULT_BAUDRATE
 STATUS_STATE_NAMES = {0x00: "idle", 0x01: "discovering", 0x02: "running", 0x03: "error"}
 TILE_STATUS_NAMES = {0x00: "not_discovered", 0x01: "ok", 0x02: "non_responsive", 0x03: "test_failed"}
 ERROR_TYPE_NAMES = {0x01: "no_ack_after_retries", 0x02: "crc_failure", 0x03: "sense_collision",
-                    0x04: "latch_overrun", 0x05: "row_bus_rx_overflow"}
+                    0x04: "latch_overrun", 0x05: "row_bus_rx_overflow", 0x06: "row_boot",
+                    0x08: "sense_start", 0x09: "tile_no_version"}
 TEST_FAULT_BIT_NAMES = ["row_bus_uart", "tile_bus_xcvr", "sram"]
 
 
@@ -117,14 +118,21 @@ def check_status(floor: Floor, row: int, results: Results, expect_tiles: int = 0
     if frame is None:
         results.record("STATUS", False, "no valid STATUS_RESP")
         return
-    if len(frame.payload) != 10:
-        results.record("STATUS", False, f"payload len {len(frame.payload)} != 10")
+    # 10 bytes of state + tile status, plus uptime_s appended after them. A
+    # 10-byte payload is firmware that predates the field, not a malformed
+    # reply; anything else is.
+    if len(frame.payload) not in (10, 14):
+        results.record("STATUS", False, f"payload len {len(frame.payload)} not in (10, 14)")
         return
 
     state, tiles_found = frame.payload[0], frame.payload[1]
     tile_status = list(frame.payload[2:10])
+    up = ""
+    if len(frame.payload) == 14:
+        p = frame.payload
+        up = f" uptime={(p[10] << 24) | (p[11] << 16) | (p[12] << 8) | p[13]}s"
     print(f"      state={STATUS_STATE_NAMES.get(state, hex(state))} tiles_found={tiles_found} "
-          f"tile_status={[TILE_STATUS_NAMES.get(s, hex(s)) for s in tile_status]}")
+          f"tile_status={[TILE_STATUS_NAMES.get(s, hex(s)) for s in tile_status]}{up}")
     results.record("STATUS", True)
 
     # Discovery walks the chain in slot order, so the first `expect_tiles`
@@ -171,7 +179,13 @@ def check_error_log(floor: Floor, row: int, results: Results, label: str = "ERRO
     for i in range(count):
         slot, tile_cmd, err_type, ts_hi, ts_lo = frame.payload[1 + i * 5 : 6 + i * 5]
         name = ERROR_TYPE_NAMES.get(err_type, f"unknown(0x{err_type:02X})")
-        print(f"        slot={slot} tile_cmd=0x{tile_cmd:02X} type={name} t={(ts_hi << 8) | ts_lo}s")
+        # CRC_FAILURE repurposes slot/tile_cmd as a big-endian count of frames
+        # that failed the check since the previous such entry.
+        if err_type == 0x02:
+            fields = f"count={(slot << 8) | tile_cmd}"
+        else:
+            fields = f"slot={slot} tile_cmd=0x{tile_cmd:02X}"
+        print(f"        {fields} type={name} t={(ts_hi << 8) | ts_lo}s")
     results.record(label, True)
 
 
