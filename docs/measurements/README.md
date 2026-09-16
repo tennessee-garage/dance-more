@@ -58,8 +58,10 @@ First run with all eight row controllers on the two-chain pi-hat. Confirms
 the row-side ingest ceiling (25 fps passes, 27 fps watchdog-resets, limit is
 bytes/s), shows the `ROW_BOOT` cause cannot see a watchdog reset, and times
 the host at ~48 ms per floor update against a 33 ms budget — 20 ms of
-pure-Python CRC and a pyserial `write()` that serialises the two chains.
-Cabling is clean: zero CRC failures over a 10-minute soak. Write-up in
+pure-Python CRC and a pyserial `write()` that serialised the two chains,
+both fixed the same day (19.2 ms after). With the host fixed, 20 fps is the
+highest rate all eight rows sustain. Cabling is clean: zero CRC failures
+over a 10-minute soak. Write-up in
 [`2026-09-15-eight-row-bus-bringup.md`](2026-09-15-eight-row-bus-bringup.md),
 raw logs alongside.
 

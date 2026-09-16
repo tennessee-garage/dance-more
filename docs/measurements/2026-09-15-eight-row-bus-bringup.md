@@ -6,11 +6,12 @@ no tiles attached. Row firmware v5 on every board. Every number below was
 taken on the Pi 5 at `garth@testing-pi` with the tools named.
 
 The headline: **the floor cannot run at 30 fps yet, and both sides of the
-Row Bus are responsible.** The host takes ~48 ms to put one floor update on
-the wire against a 33 ms budget, and a row controller can only ingest
-~100–108 maximum-size frames per second before it wedges and is
-watchdog-reset — 4 rows × 30 fps is 120. Both are software; neither is the
-cabling, the transceivers or the supply.
+Row Bus were responsible.** The host took ~48 ms to put one floor update on
+the wire against a 33 ms budget — fixed the same day, now 19.2 ms — and a
+row controller can only ingest ~100–108 maximum-size frames per second
+before it wedges and is watchdog-reset; 4 rows × 30 fps is 120. With the
+host fixed, 20 fps is the highest rate all eight rows sustain. Both are
+software; neither is the cabling, the transceivers or the supply.
 
 ## Protocol conformance — `test_row_bus_scan.py`
 
@@ -109,9 +110,32 @@ other ~29 ms, both in Python and both fixable without touching hardware:
    `start_write()` gives the concurrency the method's docstring already
    promises.
 
-With both fixed the expected `send_rows()` is ~19–20 ms, which closes the
-33 ms budget on the host — and then immediately runs into the row-side
-ceiling above, because 30 fps × 4 rows per chain is 120 max-size frames/s.
+### After the two host fixes (same day)
+
+Both were applied (`crc.py` now wraps `binascii.crc_hqx`; `start_write()`
+queues with `os.write()`) and re-timed on the same bench:
+
+| Phase | Before | After |
+| --- | --- | --- |
+| `Frame.encode()`, 1448-byte payload | 2.5 ms | ~µs |
+| `RowBus.start_write()`, 1456-byte frame | 3.77 ms | 0.08 ms |
+| `Floor.send_rows()`, full floor | 47.8 ms (p95 53.6) | **19.19 ms (p95 19.20)** |
+
+19.2 ms is the §8 budget — four rounds of 4.66 ms plus margins — so the
+host side is now deterministic and the chains genuinely overlap. Through
+the show path:
+
+| Rate | Frames | Host dropped | Jitter p95 | Rows |
+| --- | --- | --- | --- | --- |
+| 30 fps | 300 (10 s) | 0 | 0.12 ms | **all 8 boot-loop** — host now delivers the byte rate that resets them |
+| 25 fps | 1500 (60 s) | 0 | 0.12 ms | rows 3 and 4 each reset once |
+| 20 fps | 2400 (120 s) | 0 | 0.13 ms | no resets, no new log entries on any row |
+
+So 25 fps — 94 % of a row's receive budget by the §1 figures — is not a
+safe operating point across eight boards over a minute, even though a
+single row passed a 15 s saturation run at it. **20 fps is the highest
+rate the floor sustains today**, and the remaining lever is entirely in
+the row firmware's receive path.
 
 ### Real show path — `df2-pi play`
 
@@ -170,12 +194,12 @@ with forwarding work on core 1 it can only get lower.
 
 ## Follow-ups
 
-- **Host:** `binascii.crc_hqx` in `crc.py`; `os.write()` in
-  `RowBus.start_write()`. Re-time `send_rows()` afterwards; expect ~19 ms.
+- ~~**Host:** `binascii.crc_hqx` in `crc.py`; `os.write()` in
+  `RowBus.start_write()`.~~ Done; `send_rows()` measured at 19.2 ms.
 - **Row firmware:** raise the ingest ceiling past 175 kB/s with headroom.
   `docs/row-bus-protocol.md` §1 already names the lever (a PIO or DMA
   receive path instead of `SerialUART::_pumpFIFO()`). Until then the floor
-  is capped at ~25 fps by the rows even after the host is fixed.
+  is capped at 20 fps by the rows now that the host is fixed.
 - **Row firmware:** `log_boot()` must consult `WATCHDOG_REASON` so a
   watchdog reset is not logged as POR.
 - **Row firmware:** the boot-loop under overload is the watchdog doing its

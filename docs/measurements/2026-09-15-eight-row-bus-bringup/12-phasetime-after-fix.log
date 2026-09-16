@@ -1,0 +1,5 @@
+349 passed, 10 skipped in 6.24s
+payload sizes: [1448]
+encode ms: median 0.53 p95 0.55 max 0.72
+send_rows ms: median 19.19 p95 19.20 max 19.31
+bus.start_write frame (on+write)              median 0.082 ms
