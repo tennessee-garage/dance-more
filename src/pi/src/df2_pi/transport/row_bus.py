@@ -20,6 +20,8 @@ the wrong hardware.
 
 from __future__ import annotations
 
+import os
+import select
 import time
 
 import serial
@@ -120,8 +122,45 @@ class RowBus:
 
         self._xdir.on()  # switch transceiver to TX
         start = time.perf_counter()
-        self._serial.write(data)
+        self._queue(data)
         return start + tx_seconds + self._tx_release_margin_s
+
+    def _queue(self, data: bytes) -> None:
+        """Hand `data` to the kernel and return the moment it is queued.
+
+        Deliberately not `self._serial.write()`. pyserial follows every
+        os.write() with a select() for writability, and Linux only reports
+        a tty writable once fewer than 256 bytes (WAKEUP_CHARS) remain in
+        its transmit buffer - so for anything bigger than that, write()
+        blocks until all but the last ~256 bytes have physically left the
+        wire. A 1,456-byte SEND_DATA held the caller for 3.8 ms of its
+        4.7 ms on-wire time, which meant Floor.send_rows() could not start
+        chain 1's frame until chain 0's was ~80% sent: the two chains ran
+        nearly serialised and a floor update took ~48 ms against the 33 ms
+        budget (docs/measurements/2026-09-15-eight-row-bus-bringup.md).
+        Frames under 256 bytes - every admin command, LATCH, BLACKOUT -
+        never hit this, which is why it went unnoticed until SEND_DATA was
+        timed.
+
+        A bare os.write() into the kernel's transmit buffer returns in tens
+        of microseconds regardless of size. pyserial leaves the fd
+        non-blocking, so a full buffer shows up as a short write or EAGAIN
+        rather than a stall; in that case wait for the port to drain and
+        finish. It cannot happen in normal use - the caller busy-waits for
+        the previous frame's on-wire deadline before sending the next - but
+        a truncated frame is the one outcome this must never produce.
+        """
+        fd = self._serial.fd
+        view = memoryview(data)
+        while view:
+            try:
+                n = os.write(fd, view)
+            except BlockingIOError:
+                n = 0
+            if n == 0:
+                select.select([], [fd], [])
+                continue
+            view = view[n:]
 
     def finish_write(self) -> None:
         """Release the bus after start_write()'s deadline has passed."""
