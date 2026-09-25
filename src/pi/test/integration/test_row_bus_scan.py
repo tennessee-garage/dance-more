@@ -183,6 +183,11 @@ def check_error_log(floor: Floor, row: int, results: Results, label: str = "ERRO
         # that failed the check since the previous such entry.
         if err_type == 0x02:
             fields = f"count={(slot << 8) | tile_cmd}"
+        elif err_type == 0x06:
+            # ROW_BOOT's cause word: POWMAN reset causes in bits 0-12, watchdog
+            # timeout/forced in 13-14 (row-bus-protocol.md 5.1; live_demo.py
+            # decodes it by name).
+            fields = f"cause=0x{(slot << 8) | tile_cmd:04X}"
         else:
             fields = f"slot={slot} tile_cmd=0x{tile_cmd:02X}"
         print(f"        {fields} type={name} t={(ts_hi << 8) | ts_lo}s")
