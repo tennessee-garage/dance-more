@@ -2,8 +2,9 @@
 
 Row firmware v6 (`v6+a1c5ad80`) on row 0; rows 1–7 still on v5 as real
 neighbours on the same two chains. Row 0 had four tiles on its Tile Bus, two
-of them with LED strips, but **discovered none of them** — see below. No
-other row discovered tiles either. Tools and
+of them with LED strips; the runs below the saturation table were first done
+with none of them discovered (a plug wiring fault), then repeated with three
+— see "With tiles forwarding". Tools and
 bench as in [the 2026-09-15 bring-up](2026-09-15-eight-row-bus-bringup.md),
 raw output in [`2026-09-24-row-dma-receive/`](2026-09-24-row-dma-receive/).
 
@@ -56,31 +57,37 @@ effect on row 0, which only listens.
 - **The bounded frame loop (#100).** It exists so an overloaded row keeps
   feeding its watchdog, but no load the wire can deliver overloads a v6
   row, so it could not be triggered here. It stays as a safeguard.
-- **Tiles.** With none discovered, the Tile Bus tail in
-  [row-bus-protocol.md](../row-bus-protocol.md) §8 — ~15 ms per row after its
-  frame arrives, putting the last row on each chain at ~33.6 ms against the
-  33.3 ms `LATCH` — is untested. It is now the binding constraint for 30 fps
-  with all `SET_LEDS`.
+- **The Tile Bus tail at full load.** [row-bus-protocol.md](../row-bus-protocol.md)
+  §8 puts the last row on each chain, forwarding to eight tiles, at ~33.6 ms
+  against the 33.3 ms `LATCH`. Only the first row with three tiles was
+  tested here (see below). That tail is now the binding constraint for
+  30 fps with all `SET_LEDS`.
 
-## Open: row 0 discovers none of its four tiles
+## With tiles forwarding
 
-Row 0 had four tiles connected (tiles 0 and 1 with LED strips, 2 and 3
-without), all showing their power-up test pattern, so each tile controller
-was running. Row 0 still reported `tiles_found = 0` all session, and an
-explicit `RE_DISCOVER` long after the tiles had booted finished in under
-100 ms with nothing found — the timing of slot 0 never answering
-`DETECT_SENSE` (20 ms settle plus three 5 ms attempts). Row 1, still on v5,
-did the same. Consequently no `SEND_DATA` reached a tile and nothing lit
-during any run above.
+Row 0's four tiles were not discovered during the runs above: the SENSE line
+in the row's Cat6 plug was wired wrong. Row 0's draw of ~315 mA at 11.71 V
+through those runs, against 13–18 mA for a bare row, was the four powered
+tiles, and nothing lit because no tile had an address to send to.
 
-v6 changes only the Row Bus side (UART1, DMA, the Row Bus parser, core 0's
-loop); discovery, SENSE and the Tile Bus on UART0 are untouched. That makes
-v6 an unlikely cause but does not rule it out. Not yet investigated.
+After the plug was rewired, `RE_DISCOVER` found tiles in slots 0–2 (tiles 0
+and 1 with strips); slot 3 still did not answer `DETECT_SENSE`, so discovery
+ended there. Slots 0 and 2 run tile firmware v2; slot 1 runs v2 from a dirty
+tree (`02df35e3-dirty`). Rerun with row 0 forwarding to those three tiles:
 
-Row 0's draw — ~315 mA at 11.71 V, flat before, during and after the soak,
-against 13–18 mA for a bare row — is consistent with the four tiles: the
-2026-08-16 sweep measured ~108 mA for a row plus one tile with its strip
-dark. Row 1 read 88 mA.
+| Run | Result |
+| --- | --- |
+| Saturation, 30 fps, 60 s | pass — no restart, 0 `LATCH_OVERRUN`, 0 `ROW_BUS_RX_OVERFLOW` |
+| Saturation, 35 fps, 60 s | pass — same |
+| `df2-pi play --animation plasma --fps 30`, 10 min | 18000 frames, 0 dropped, jitter p95 0.12 ms; uptime 434 → 1037 s; no new log entries; still 3 tiles discovered afterwards |
+
+Row 0 read 1,093 mA at 11.27 V after the soak against 319 mA before it, so
+the strips were receiving data (the last frame stays latched).
+
+This is not the §8 worst case. Row 0's frame is first on its chain, so it
+arrives by 4.7 ms and forwarding to three tiles is done long before `LATCH`.
+The binding case — the last row on a chain forwarding to eight tiles — needs
+a fully populated row to test.
 
 ## Pitfall hit on the first flash
 
