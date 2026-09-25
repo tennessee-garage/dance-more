@@ -81,8 +81,13 @@ void PiTransportRP2350::init() {
     channel_config_set_write_increment(&c, true);
     channel_config_set_ring(&c, true, RX_RING_BITS);
     channel_config_set_dreq(&c, uart_get_dreq_num(PI_UART, false));
+    // ENDLESS never decrements the count, but the count must still be
+    // non-zero: "triggering a channel with a mode of 0xf and a count of 0x0
+    // will result in the channel halting immediately" (RP2350 datasheet
+    // §12.6.2.2.1). A zero count here produced a row that booted, ran both
+    // cores and never received a byte.
     dma_channel_configure(rx_dma_chan_, &c, rx_ring_buf, &uart_get_hw(PI_UART)->dr,
-                          DMA_CH0_TRANS_COUNT_MODE_VALUE_ENDLESS << DMA_CH0_TRANS_COUNT_MODE_LSB,
+                          (DMA_CH0_TRANS_COUNT_MODE_VALUE_ENDLESS << DMA_CH0_TRANS_COUNT_MODE_LSB) | 1u,
                           true);
 
     last_poll_us_ = micros();
