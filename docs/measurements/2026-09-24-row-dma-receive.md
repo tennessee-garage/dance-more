@@ -89,6 +89,66 @@ arrives by 4.7 ms and forwarding to three tiles is done long before `LATCH`.
 The binding case — the last row on a chain forwarding to eight tiles — needs
 a fully populated row to test.
 
+## Rollout to all eight rows
+
+After #102 merged, all eight rows were flashed from `main`:
+
+| Check | Result |
+| --- | --- |
+| Addresses | each row answers only its own address on its own chain |
+| `df2-pi version` | all eight on `v6+3a15f42b` |
+| `ROW_BOOT` after the power cycle | cause `0x0001` on all eight — POR with no watchdog bit, correct for a power cycle (#101) |
+| `test_row_bus_scan.py` | rows 1–7 20/20; row 0 20/20 with `--expect-tiles 3` |
+| Saturation, row 6 (last on chain 0) | pass at 30 and 45 fps, 60 s each |
+| Saturation, row 7 (last on chain 1) | pass at 30 and 45 fps |
+| `df2-pi play --animation plasma --fps 30`, 10 min | 18000 frames, 0 dropped, jitter p95 0.13 ms; every uptime monotonic 306 → 909 s |
+
+No row logged `ROW_BUS_RX_OVERFLOW` or `LATCH_OVERRUN`. Every `CRC_FAILURE`
+entry predates the saturation runs and is accounted for by the two scan-test
+runs' deliberately corrupt frames, so no frame on either chain failed its CRC
+across the saturation runs and the soak.
+
+The first flash of row 7 used the `row6` image: a board answered at `0x06`
+on chain 1 and nothing at `0x07`. The Pi probes each address only on its own
+chain, so the only symptom was row 7 missing. Probing every address on both
+chains is what found it.
+
+Not verified on hardware: the `ROW_BOOT` watchdog-timeout bit, because a v6
+row cannot be made to reset by any load the wire carries.
+
+## Open: tiles stop listening after playback
+
+After `df2-pi play` ends, `BLACKOUT` often fails to darken some tiles, and
+the last frame stays lit. Six 5-second `plasma` runs each followed by two
+`BLACKOUT`s, measured by row 0's current (two strips lit ≈ 1,230 mA, dark ≈
+310 mA):
+
+| Result of both `BLACKOUT`s | Runs |
+| --- | --- |
+| both strips dark | 1 |
+| one strip dark, one still lit (~790 mA) | 3 |
+| neither strip dark | 2 |
+
+A second `BLACKOUT` never changed the outcome. In five further runs, every
+time `BLACKOUT` failed, one full-size `SEND_DATA` of black `SET_LEDS` plus
+`LATCH` darkened every tile, and `BLACKOUT` worked normally after that. With
+the tiles in a normal state, `BLACKOUT` and `SET_COLOR(0,0,0)` darkened a
+grey floor every time (four of four).
+
+That pattern — per-tile, cleared by enough following bytes but not by small
+frames — is the signature of a frame parser stuck partway through a frame,
+taking later frames as the rest of its payload. The row firmware has an
+idle-gap reset for exactly this (`RX_IDLE_RESET_US` in
+`pi_transport_rp2350.h`); the tile's `TransportAT::poll()` has none, so a
+tile that loses bytes mid-frame stays deaf until enough bytes have passed.
+
+What makes a tile lose bytes in the first place is not established. A tile
+disables interrupts for ~1.8 ms while it pushes 60 LEDs, during which its
+USART cannot be serviced, but the playback timing does not obviously put
+Tile Bus traffic inside that window. Whether frames are also lost *during*
+playback, which would be a skipped frame rather than a stuck one, is not
+known either.
+
 ## Pitfall hit on the first flash
 
 A DMA channel triggered in ENDLESS mode with a transfer count of 0 halts
