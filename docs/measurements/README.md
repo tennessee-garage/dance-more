@@ -73,7 +73,9 @@ raw logs alongside.
 Row firmware v6 receives the Row Bus by DMA. Row 0 kept up with a
 worst-case chain at 30, 35, 45 and 50 fps (93 % of the wire) and ran a
 10-minute 30 fps soak with no restarts or CRC failures; v5 failed at
-27 fps. Write-up in [`2026-09-24-row-dma-receive.md`](2026-09-24-row-dma-receive.md).
+27 fps. Then rolled out to all eight rows and re-verified floor-wide. Also
+records an open tile problem: after playback some tiles ignore `BLACKOUT`
+until a full-size frame unsticks them. Write-up in [`2026-09-24-row-dma-receive.md`](2026-09-24-row-dma-receive.md).
 
 ## Measuring a new strip or tile
 
