@@ -67,8 +67,7 @@ class TileCmd(IntEnum):
     """Tile Bus command codes, as embedded in a SEND_DATA per-tile entry."""
 
     SET_COLOR = 0x10
-    SET_PATTERN = 0x11
-    SET_EFFECT = 0x11  # alias: the same command under its #72 name - see effects.py
+    SET_EFFECT = 0x11  # see effects.py and docs/tile-effects.md
     SET_LEDS = 0x12
 
 
