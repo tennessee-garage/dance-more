@@ -85,7 +85,7 @@ with it the all-`SET_LEDS` case lands ~0.3 ms past the 33.3 ms period — and
 the measured ceiling below is lower still, for a reason this table does not
 model — close enough that the overrun path in §8 is a normal occurrence at
 full load rather than an exceptional one, and the last row illuminates
-slightly late. Typical frames mixing `SET_COLOR`/`SET_PATTERN` are far smaller
+slightly late. Typical frames mixing `SET_COLOR`/`SET_EFFECT` are far smaller
 and leave substantial slack.
 
 ### Measured ceiling: ~25 FPS, and the limit is receive, not forwarding
@@ -114,7 +114,7 @@ constant. The cost is `SerialUART`'s `_pumpFIFO()`, called once by
 puts the predicted ceiling at 28.7 FPS against a measured 25–27.
 
 **So the worst case runs at ~25 FPS, not 30.** Typical frames mixing
-`SET_COLOR`/`SET_PATTERN` are far smaller and unaffected; this bounds the
+`SET_COLOR`/`SET_EFFECT` are far smaller and unaffected; this bounds the
 all-`SET_LEDS` case only. Raising it means making the receive path cheaper —
 and note that the obvious fix does not work: hoisting `available()` out of the
 drain loop was tried and made things sharply worse, for reasons not
@@ -470,7 +470,7 @@ Display commands are fire-and-forget. The Pi does **not** retry them.
 
 Sends a full row's worth of display data to a single row controller. The row
 controller immediately forwards each tile's data as individual Tile Bus commands
-(SET_COLOR / SET_PATTERN / SET_LEDS); there is no frame-level buffering on
+(SET_COLOR / SET_EFFECT / SET_LEDS); there is no frame-level buffering on
 the row controller. Tiles buffer the received data and do not update their LEDs
 until the row controller relays a Tile Bus `LATCH (0x13)` triggered by the Pi's
 `LATCH (0x11)` broadcast.
@@ -490,10 +490,10 @@ different commands — they may be freely mixed within a single `SEND_DATA` fram
 
 | Bytes  | Field       | Description |
 | ------ | ----------- | ----------- |
-| 0      | `tile_cmd`  | `0x10` = SET_COLOR, `0x11` = SET_PATTERN, `0x12` = SET_LEDS (same codes as [tile-bus-protocol.md](tile-bus-protocol.md)) |
-| 1…     | `tile_data` | Payload for that command: 3 bytes for SET_COLOR, 5 bytes for SET_PATTERN, 180 bytes for SET_LEDS |
+| 0      | `tile_cmd`  | `0x10` = SET_COLOR, `0x11` = SET_EFFECT, `0x12` = SET_LEDS (same codes as [tile-bus-protocol.md](tile-bus-protocol.md)) |
+| 1…     | `tile_data` | Payload for that command: 3 bytes for SET_COLOR, 5 bytes for SET_EFFECT, 180 bytes for SET_LEDS |
 
-Entry sizes: SET_COLOR = 4 bytes, SET_PATTERN = 6 bytes, SET_LEDS = 181 bytes
+Entry sizes: SET_COLOR = 4 bytes, SET_EFFECT = 6 bytes, SET_LEDS = 181 bytes
 (1 + 60 LEDs × 3).
 
 **Payload size examples:**
@@ -501,7 +501,7 @@ Entry sizes: SET_COLOR = 4 bytes, SET_PATTERN = 6 bytes, SET_LEDS = 181 bytes
 | Mix                      | Total payload |
 | ------------------------ | ------------- |
 | All 8 × SET_COLOR        | 32 bytes      |
-| All 8 × SET_PATTERN      | 48 bytes      |
+| All 8 × SET_EFFECT       | 48 bytes      |
 | All 8 × SET_LEDS         | 1,448 bytes   |
 | 4 × SET_COLOR + 4 × SET_LEDS | 740 bytes |
 
@@ -539,16 +539,25 @@ If a row controller has no pending tile data (e.g. at boot, or after
 #### `0x12 BLACKOUT` — broadcast
 
 Commands all row controllers to immediately black out their tiles. Each row
-controller sends `SET_COLOR(0, 0, 0)` to each of its 8 tiles on Tile Bus and then
-broadcasts Tile Bus `LATCH (0x13)`, causing tiles to go dark without waiting for
-the Pi's next frame `LATCH`. Any data previously buffered in the tiles is
-overwritten with black.
+controller sends `SET_EFFECT(0)` and `SET_COLOR(0, 0, 0)` to each of its 8 tiles
+on Tile Bus and then broadcasts Tile Bus `LATCH (0x13)`, causing tiles to go dark
+without waiting for the Pi's next frame `LATCH`. Any data previously buffered in
+the tiles is overwritten with black.
+
+The `SET_EFFECT(0)` is not optional. A tile's effect register is independent of
+its pixel buffer ([tile-effects.md](tile-effects.md) §2), so `SET_COLOR` alone
+leaves a running effect in place — an overlaying effect such as `CHASE` would keep
+painting over the black buffer.
 
 A subsequent Pi `LATCH` with no new `SEND_DATA` results in a no-op Tile Bus LATCH
 relay (tiles have no pending data).
 
 All 64 tiles go dark within ~2 ms of the row controllers completing their Tile Bus
-`SET_COLOR` sweeps (8 × 10-byte SET_COLOR frames ≈ 0.8 ms + Tile Bus LATCH).
+sweeps (8 × (12-byte SET_EFFECT + 10-byte SET_COLOR) frames ≈ 1.8 ms + Tile Bus
+LATCH).
+
+> The row firmware currently sends only the `SET_COLOR` sweep; the `SET_EFFECT(0)`
+> half lands with the effect-register work in #72.
 
 | Field   | Value |
 | ------- | ----- |
@@ -634,7 +643,7 @@ finishing at **t≈33.6 ms** — roughly 0.3 ms past the 33.3 ms `LATCH`.
 So at *full* load the overrun path below is the normal case for the last row
 in each chain, not an exception: those two rows illuminate a fraction of a
 frame late and log `LATCH_OVERRUN`. This is a visible-only-under-worst-case
-condition — any frame mixing `SET_COLOR`/`SET_PATTERN` into some slots shrinks
+condition — any frame mixing `SET_COLOR`/`SET_EFFECT` into some slots shrinks
 the Row Bus phase and clears it entirely.
 
 Two things would remove the overrun outright, in order of leverage:
@@ -656,8 +665,8 @@ rather than an optimization.
 Pi → all: BLACKOUT (0xFF)
 ```
 
-Each row controller immediately issues `SET_COLOR(0,0,0)` to each of its 8
-tiles on Tile Bus then broadcasts Tile Bus `LATCH`. All 8 rows do this in parallel.
+Each row controller immediately issues `SET_EFFECT(0)` and `SET_COLOR(0,0,0)`
+to each of its 8 tiles on Tile Bus then broadcasts Tile Bus `LATCH`. All 8 rows do this in parallel.
 All tiles go dark within ~2 ms of the `BLACKOUT` frame completing.
 
 ---

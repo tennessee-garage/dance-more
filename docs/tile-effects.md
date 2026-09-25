@@ -10,7 +10,8 @@ is a transform applied *over* host data: the host owns the pixels, the effect
 changes how they reach the LEDs.
 
 Implementation: [src/tile/lib/df2_core/pattern.h](../src/tile/lib/df2_core/pattern.h)
-(still named for the old `SET_PATTERN` model; renamed in the rest of #72).
+(`PatternEngine` still implements the old pattern model; it moves to the
+effect-register model, and its name with it, in the rest of #72).
 
 ---
 
@@ -57,7 +58,7 @@ The LEDs always show **the buffer passed through the effect**:
 pixel buffer ──► effect(params, t) ──► output ──► WS2815
 ```
 
-With no effect set (`OFF`), the buffer goes out untouched. The two are
+With no effect set (`NONE`), the buffer goes out untouched. The two are
 orthogonal: pixel commands never touch the effect register, and `SET_EFFECT`
 never touches the buffer.
 
@@ -88,8 +89,8 @@ row's tiles start phase-aligned even though they were armed one at a time.
 | `LATCH` with an effect staged | Staged effect replaces the register; its clock starts from zero. |
 | `LATCH` with nothing staged | The buffer's current contents go out through the current effect. The effect's clock is **not** restarted. |
 | `SET_COLOR` / `SET_LEDS` | Buffer only. The effect register is untouched. |
-| `SET_EFFECT(OFF)` + `LATCH` | Register cleared. The buffer is shown as-is — the LEDs are **not** blanked. |
-| `BLACKOUT` | Clears the register, the buffer **and** any effect's private state. Otherwise a blackout cannot reliably blacken. |
+| `SET_EFFECT(NONE)` + `LATCH` | Register cleared. The buffer is shown as-is — the LEDs are **not** blanked. |
+| Row Bus `BLACKOUT` | Clears the register, the buffer **and** any effect's private state. Otherwise a blackout cannot reliably blacken. Tiles never see `BLACKOUT` itself: the row controller sends each tile `SET_EFFECT(NONE)` + `SET_COLOR(0,0,0)` and then `LATCH` ([row-bus-protocol.md](row-bus-protocol.md) §5, `BLACKOUT`). |
 | Power-up / re-discovery | Register and private state cleared. |
 
 Display commands carry no ACK ([tile-bus-protocol.md](tile-bus-protocol.md)
@@ -113,7 +114,7 @@ host sets the content and the effect independently, in either order:
 SET_COLOR(0, 0, 200)        →  LATCH   # tile is blue
 SET_EFFECT(SHIMMER, ...)    →  LATCH   # tile shimmers blue
 SET_LEDS(<gradient>)        →  LATCH   # the gradient shimmers
-SET_EFFECT(OFF)             →  LATCH   # static gradient
+SET_EFFECT(NONE)             →  LATCH   # static gradient
 ```
 
 This is also why four parameter bytes are enough for most effects — none of
@@ -138,7 +139,7 @@ Effects fall into four kinds, and each definition below says which:
 
 | id | Name | Status | Kind |
 | --- | --- | --- | --- |
-| 0 | `OFF` | **implemented** (semantics changing — see below) | none |
+| 0 | `NONE` | **implemented** as `OFF` (semantics and name changing — see below) | none |
 | 1 | — | unassigned (was `SOLID`, removed) | — |
 | 2 | — | unassigned (was `BREATHE`, dropped) | — |
 | 3 | `SHIMMER` | **implemented** | modulating |
@@ -158,15 +159,18 @@ because it was `SHIMMER` with `spread = 0`. Ids 1 and 2 stay unassigned rather
 than being reused, so a stale host that still sends one gets a no-op rather
 than a different effect.
 
-### `0 OFF` — no effect
+### `0 NONE` — no effect
 
 All four parameters ignored. Clears the effect register on the next `LATCH`;
 from then on the buffer goes out untouched. The LEDs keep showing whatever the
-buffer holds — `OFF` removes an effect, it does not darken the tile. To go dark,
+buffer holds — `NONE` removes an effect, it does not darken the tile. To go dark,
 send `SET_COLOR(0, 0, 0)`.
 
-> The current firmware still implements the old meaning — paint black once —
-> and changes with the rest of #72.
+Named `NONE` rather than `OFF` because "off" reads as "LEDs off", which is
+exactly what it doesn't do. The host already uses `NONE` / `Effect.NONE`.
+
+> The current firmware still calls it `OFF` and implements the old meaning —
+> paint black once — and changes with the rest of #72.
 
 ### `3 SHIMMER` — per-LED brightness modulation
 
@@ -324,7 +328,7 @@ for.
 
 **When the tile renders.** On every `LATCH` (new buffer contents must go out
 through the effect immediately), and every `FRAME_MS` while a time-varying
-effect is set. With `OFF`, `HUE_SPLIT`, or `SHIMMER` at `speed = 0`, the tile
+effect is set. With `NONE`, `HUE_SPLIT`, or `SHIMMER` at `speed = 0`, the tile
 renders only on `LATCH`. `FADE` renders every frame while any pixel is still
 decaying, and only on `LATCH` once they have all reached black.
 
@@ -369,10 +373,10 @@ active.
   needs a bit the four params don't have; bits 7:5 of byte 0 are reserved and
   could carry per-effect flags, but that is a wire-format change to
   [tile-bus-protocol.md](tile-bus-protocol.md) §5.2.
-- **No host-side API yet.** `df2-pi` can encode the command
-  (`TileCmd.SET_PATTERN`, 6 bytes per tile in a `SEND_DATA`) but has no
-  `Floor` method for arming effects. That is the next piece, and it is where
-  the bandwidth claim in §1 gets measured rather than calculated.
+- **Host bandwidth measurement.** `df2-pi` carries effects end to end —
+  `FrameContext.send_effect()` in an animation, a 6-byte `SET_EFFECT` entry in
+  `SEND_DATA` (see `effects.py`, `encode.py`) — but the bandwidth claim in §1
+  is still calculated, not measured.
 - **Sub-tile addressing.** Every effect here applies to all 60 LEDs. An effect
   that treats the four sides differently needs a side index the params don't
   currently carry. (`CHASE` goes round corners, but uniformly.)
