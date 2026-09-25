@@ -556,9 +556,6 @@ All 64 tiles go dark within ~2 ms of the row controllers completing their Tile B
 sweeps (8 × (12-byte SET_EFFECT + 10-byte SET_COLOR) frames ≈ 1.8 ms + Tile Bus
 LATCH).
 
-> The row firmware currently sends only the `SET_COLOR` sweep; the `SET_EFFECT(0)`
-> half lands with the effect-register work in #72.
-
 | Field   | Value |
 | ------- | ----- |
 | `ADDR`  | `0xFF` |

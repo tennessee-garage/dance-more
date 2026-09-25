@@ -9,9 +9,8 @@ An **effect** is not a preset animation the tile plays instead of host data. It
 is a transform applied *over* host data: the host owns the pixels, the effect
 changes how they reach the LEDs.
 
-Implementation: [src/tile/lib/df2_core/pattern.h](../src/tile/lib/df2_core/pattern.h)
-(`PatternEngine` still implements the old pattern model; it moves to the
-effect-register model, and its name with it, in the rest of #72).
+Implementation: [src/tile/lib/df2_core/effect.h](../src/tile/lib/df2_core/effect.h)
+(`EffectEngine`).
 
 ---
 
@@ -139,14 +138,14 @@ Effects fall into four kinds, and each definition below says which:
 
 | id | Name | Status | Kind |
 | --- | --- | --- | --- |
-| 0 | `NONE` | **implemented** as `OFF` (semantics and name changing — see below) | none |
+| 0 | `NONE` | **implemented** | none |
 | 1 | — | unassigned (was `SOLID`, removed) | — |
 | 2 | — | unassigned (was `BREATHE`, dropped) | — |
 | 3 | `SHIMMER` | **implemented** | modulating |
-| 4 | `CHASE` | specified, not implemented | overlaying |
+| 4 | `CHASE` | **implemented** | overlaying |
 | 5 | `SPARKLE` | reserved — see §5 | — |
-| 6 | `HUE_SPLIT` | specified, not implemented | recolouring |
-| 7 | `FADE` | specified, not implemented | history |
+| 6 | `HUE_SPLIT` | **implemented** | recolouring |
+| 7 | `FADE` | **implemented** | history |
 | 8–31 | — | reserved | — |
 
 Reserved ids are rejected, so a host that sends one gets a no-op rather than an
@@ -168,9 +167,6 @@ send `SET_COLOR(0, 0, 0)`.
 
 Named `NONE` rather than `OFF` because "off" reads as "LEDs off", which is
 exactly what it doesn't do. The host already uses `NONE` / `Effect.NONE`.
-
-> The current firmware still calls it `OFF` and implements the old meaning —
-> paint black once — and changes with the rest of #72.
 
 ### `3 SHIMMER` — per-LED brightness modulation
 
@@ -214,21 +210,29 @@ buffer, so a chase runs over whatever the host has painted.
 | 3 | `spacing` | 1–59 | Unlit LEDs between chase LEDs. `1` lights every other LED (30 lit); `59` leaves a single LED going round. `0` and `≥ 60` are **invalid** — the `SET_EFFECT` is dropped. |
 
 Chase LEDs repeat every `spacing + 1` LEDs along the chain, and each step moves
-them one LED in the direction of increasing LED index. An LED `i` is lit when
+them one LED in the direction of increasing LED index. An LED `i` (0–59) is lit
+when
 
 ```
-(i + 60 − step) mod (spacing + 1) == 0         step counts 0, 1, 2, ... mod 60
+i ≡ step  (mod spacing + 1)                    step counts 0, 1, 2, ... 59, 0, ...
 ```
 
-**The seam.** When `spacing + 1` doesn't divide 60, the last gap before LED 0
-comes out short. It sits at the corner where the WS2815 chain starts, which
-hides it about as well as anywhere can. Seamless spacings — those where
-`spacing + 1` divides 60 — are **1, 2, 3, 4, 5, 9, 11, 14, 19, 29, 59**.
+— that is, the lit LEDs are `step mod (spacing + 1)` and every `spacing + 1`
+after it, up to LED 59.
 
-**Timing.** The tile renders in 20 ms frames (§4), so step times land on
-frame boundaries. The step clock accumulates (`next_step += period`, not
-`now + period`), so a 50 ms period comes out as alternating 40/60 ms steps
-with the correct average rather than drifting slow to 60.
+**The seam.** When `spacing + 1` doesn't divide 60, the gap that wraps from
+LED 59 round to LED 0 comes out short (by `60 mod (spacing + 1)` LEDs) while
+every other gap is full length. It sits at the corner where the WS2815 chain
+starts, which hides it about as well as anywhere can. Seamless spacings — those
+where `spacing + 1` divides 60 — are **1, 2, 3, 4, 5, 9, 11, 14, 19, 29, 59**.
+
+**Timing.** Steps are timed in milliseconds on the tile's clock, not in render
+frames, and the step clock accumulates (`next_step += period`, not
+`now + period`), so the average step rate is exact at every `speed` rather
+than drifting slow. A tile that stalls for more than a whole step resyncs
+instead of bursting to catch up. The fastest step, 40 ms, is still only half
+the 50 Hz frame rate, so a chase never pushes the strip more often than a
+frame-clocked effect does.
 
 The hue is converted to RGB once, when the effect starts — not per LED, not per
 frame — so the colour wheel costs nothing at render time.
@@ -256,11 +260,14 @@ and greys have no hue and pass through untouched.
 
 **Not a colour-space conversion.** An RGB→HSV→RGB round trip on an AVR with no
 hardware divide is not something to run 60 times per latch. The implementation
-rotates in RGB space — a table-driven mix of each channel with its neighbour —
-which approximates a hue shift closely for the small `shift` values this is
-meant for. The exact curve is the implementation's; what this document fixes
-is `0` = identity, the sign convention, and brightness being preserved to
-within rounding.
+works in RGB space instead. A third of a turn (`shift = 85`) is exactly a
+cyclic rotation of the channels, red → green → blue → red; any shift in between
+is a linear mix of the two nearest such rotations. That keeps `r + g + b`
+constant, leaves greys and black exactly untouched, and costs two multiplies
+per channel with no divide. It approximates a true hue shift closely for the
+small `shift` values this is meant for. The exact curve is the
+implementation's; what this document fixes is `0` = identity, the sign
+convention, and brightness being preserved to within rounding.
 
 ### `7 FADE` — decay on release
 
@@ -318,7 +325,7 @@ everything else.
 
 ## 4. Implementation notes
 
-**Render rate is 50 Hz** (`PatternEngine::FRAME_MS = 20`). The ceiling is the
+**Render rate is 50 Hz** (`EffectEngine::FRAME_MS = 20`). The ceiling is the
 WS2815 push itself, which runs with interrupts disabled for ~1.8 ms and leaves
 the tile deaf to Tile Bus for that window. At 20 ms that is ~9% of the period,
 so a tile running an effect stays comfortably responsive to a `SET_LEDS` or a
@@ -350,12 +357,12 @@ re-derives it.
 **RAM.** The old pattern engine snapshotted the buffer into a 180-byte base
 image at start and rendered back into the buffer. The effect model inverts
 that: the buffer stays the input and the effect renders into a 180-byte output
-buffer, so the cost is the same — 180 for the output, 60 for `SHIMMER`'s per-LED
-phase offsets, the rest state. The old build measured **1,179 of 3,072 bytes
-(38%)** with patterns in; re-measure after the change. Effect-private state
-(`SHIMMER`'s phase offsets, and anything a later effect needs) should share one scratch region
-rather than each effect reserving its own, since only one effect is ever
-active.
+buffer, so the cost is the same — 180 for the output (which is also `FADE`'s
+history), 60 for `SHIMMER`'s per-LED phase offsets, a few bytes of state for
+the rest. The `ATtiny3226` build is at **1,262 of 3,072 bytes (41%)**, 16 bytes
+more than the pattern engine it replaced. Any further effect-private state
+should share one scratch region with `SHIMMER`'s offsets rather than reserve
+its own, since only one effect is ever active.
 
 ---
 
