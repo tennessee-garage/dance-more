@@ -413,6 +413,157 @@ void test_parser_counts_crc_failures() {
     TEST_ASSERT_EQUAL_UINT32(2, parser.crc_failures());
 }
 
+
+// ---------------------------------------------------------------------------
+// Bulk feed and address filtering
+// ---------------------------------------------------------------------------
+
+// A chain's worth of traffic as a row sees it: full SEND_DATA to every row
+// slot, a broadcast LATCH, an admin frame, a frame with a flipped CRC byte,
+// and line garbage between frames.
+static int build_chain_stream(uint8_t *out, int cap) {
+    int n = 0;
+    auto put = [&](const RowBusFrame &f, bool corrupt) {
+        int len = row_bus_frame_encode(f, out + n, (uint16_t)(cap - n));
+        TEST_ASSERT_TRUE(len > 0);
+        if (corrupt) out[n + len - 1] ^= 0x5A;
+        n += len;
+    };
+    for (uint8_t row = 0; row < 8; row += 2) {
+        RowBusFrame f = {};
+        f.addr = row; f.cmd = (uint8_t)RowBusCmd::SEND_DATA; f.len = ROWBUS_MAX_PAYLOAD;
+        for (uint16_t i = 0; i < f.len; i++) f.payload[i] = (uint8_t)(i * 7 + row);
+        put(f, row == 4);
+        out[n++] = 0x13;  // garbage between frames
+    }
+    RowBusFrame latch = {};
+    latch.addr = ROWBUS_ADDR_BROADCAST; latch.cmd = (uint8_t)RowBusCmd::LATCH;
+    put(latch, false);
+    RowBusFrame status = {};
+    status.addr = 0x02; status.cmd = (uint8_t)RowBusCmd::STATUS;
+    put(status, false);
+    return n;
+}
+
+struct Seen { uint8_t addr, cmd; uint16_t len; uint32_t sum; };
+
+static uint32_t payload_sum(const RowBusFrame &f) {
+    uint32_t s = 0;
+    for (uint16_t i = 0; i < f.len; i++) s = s * 31 + f.payload[i];
+    return s;
+}
+
+static int collect_bytewise(RowBusFrameParser &p, const uint8_t *buf, int n, Seen *seen) {
+    int count = 0;
+    RowBusFrame rx = {};
+    for (int i = 0; i < n; i++)
+        if (p.feed(buf[i], &rx)) seen[count++] = {rx.addr, rx.cmd, rx.len, payload_sum(rx)};
+    return count;
+}
+
+static int collect_bulk(RowBusFrameParser &p, const uint8_t *buf, int n, Seen *seen, int (*chunk)(int)) {
+    int count = 0, i = 0, call = 0;
+    RowBusFrame rx = {};
+    while (i < n) {
+        int want = chunk(call++);
+        if (want > n - i) want = n - i;
+        // A chunk can hold more than one frame; keep feeding the remainder.
+        int off = 0;
+        while (off < want) {
+            bool complete = false;
+            off += (int)p.feed(buf + i + off, (size_t)(want - off), &rx, &complete);
+            if (complete) seen[count++] = {rx.addr, rx.cmd, rx.len, payload_sum(rx)};
+        }
+        i += want;
+    }
+    return count;
+}
+
+static int chunk_1(int)      { return 1; }
+static int chunk_7(int)      { return 7; }
+static int chunk_181(int)    { return 181; }
+static int chunk_whole(int)  { return 1 << 20; }
+static int chunk_varied(int c) { return 1 + (c * 37) % 300; }
+
+void test_bulk_feed_matches_bytewise_feed() {
+    static uint8_t buf[8 * ROWBUS_MAX_FRAME];
+    int n = build_chain_stream(buf, sizeof(buf));
+
+    RowBusFrameParser ref;
+    Seen expect[16];
+    int expect_n = collect_bytewise(ref, buf, n, expect);
+    TEST_ASSERT_EQUAL(5, expect_n);  // 3 clean SEND_DATA (row 4's is corrupt), LATCH, STATUS
+
+    int (*chunkings[])(int) = {chunk_1, chunk_7, chunk_181, chunk_whole, chunk_varied};
+    for (auto chunk : chunkings) {
+        RowBusFrameParser p;
+        Seen got[16];
+        int got_n = collect_bulk(p, buf, n, got, chunk);
+        TEST_ASSERT_EQUAL(expect_n, got_n);
+        for (int k = 0; k < expect_n; k++) {
+            TEST_ASSERT_EQUAL_HEX8(expect[k].addr, got[k].addr);
+            TEST_ASSERT_EQUAL_HEX8(expect[k].cmd,  got[k].cmd);
+            TEST_ASSERT_EQUAL(expect[k].len, got[k].len);
+            TEST_ASSERT_EQUAL_UINT32(expect[k].sum, got[k].sum);
+        }
+        TEST_ASSERT_EQUAL_UINT32(ref.crc_failures(), p.crc_failures());
+        TEST_ASSERT_FALSE(p.in_progress());
+    }
+}
+
+void test_bulk_feed_stops_just_after_a_frame() {
+    RowBusFrame a = {}, b = {};
+    a.addr = 0x01; a.cmd = (uint8_t)RowBusCmd::STATUS;
+    b.addr = 0x01; b.cmd = (uint8_t)RowBusCmd::POWER;
+    uint8_t buf[32];
+    int na = row_bus_frame_encode(a, buf, sizeof(buf));
+    int nb = row_bus_frame_encode(b, buf + na, (uint16_t)(sizeof(buf) - na));
+
+    RowBusFrameParser p;
+    RowBusFrame rx = {};
+    bool complete = false;
+    TEST_ASSERT_EQUAL(na, (int)p.feed(buf, (size_t)(na + nb), &rx, &complete));
+    TEST_ASSERT_TRUE(complete);
+    TEST_ASSERT_EQUAL_HEX8(a.cmd, rx.cmd);
+    TEST_ASSERT_EQUAL(nb, (int)p.feed(buf + na, (size_t)nb, &rx, &complete));
+    TEST_ASSERT_TRUE(complete);
+    TEST_ASSERT_EQUAL_HEX8(b.cmd, rx.cmd);
+}
+
+void test_address_filter_returns_only_own_and_broadcast() {
+    static uint8_t buf[8 * ROWBUS_MAX_FRAME];
+    int n = build_chain_stream(buf, sizeof(buf));
+
+    RowBusFrameParser p;
+    p.set_address(0x02);
+    Seen got[16];
+    int got_n = collect_bulk(p, buf, n, got, chunk_varied);
+    TEST_ASSERT_EQUAL(3, got_n);
+    TEST_ASSERT_EQUAL_HEX8(0x02, got[0].addr);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)RowBusCmd::SEND_DATA, got[0].cmd);
+    TEST_ASSERT_EQUAL_HEX8(ROWBUS_ADDR_BROADCAST, got[1].addr);
+    TEST_ASSERT_EQUAL_HEX8(0x02, got[2].addr);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)RowBusCmd::STATUS, got[2].cmd);
+
+    // Row 2's payload must come through intact even though the parser skipped
+    // storing row 0's before it and rows 4 and 6's after.
+    RowBusFrameParser unfiltered;
+    Seen all[16];
+    collect_bytewise(unfiltered, buf, n, all);
+    TEST_ASSERT_EQUAL_UINT32(all[1].sum, got[0].sum);
+}
+
+void test_address_filter_still_counts_foreign_crc_failures() {
+    static uint8_t buf[8 * ROWBUS_MAX_FRAME];
+    int n = build_chain_stream(buf, sizeof(buf));  // row 4's frame is corrupt
+
+    RowBusFrameParser p;
+    p.set_address(0x02);
+    Seen got[16];
+    collect_bulk(p, buf, n, got, chunk_whole);
+    TEST_ASSERT_EQUAL_UINT32(1, p.crc_failures());
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -445,6 +596,11 @@ int main(int, char **) {
     RUN_TEST(test_parser_in_progress_tracks_frame_boundaries);
     RUN_TEST(test_parser_truncated_frame_swallows_following_frames);
     RUN_TEST(test_parser_counts_crc_failures);
+
+    RUN_TEST(test_bulk_feed_matches_bytewise_feed);
+    RUN_TEST(test_bulk_feed_stops_just_after_a_frame);
+    RUN_TEST(test_address_filter_returns_only_own_and_broadcast);
+    RUN_TEST(test_address_filter_still_counts_foreign_crc_failures);
 
     return UNITY_END();
 }
