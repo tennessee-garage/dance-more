@@ -1,0 +1,10 @@
+row 0: state=2 uptime=300s  11716mV 315mA  log[24]: row_boot(POR)@0s, crc_failure(count=1)@23s, crc_failure(count=3)@28s
+18000 frames, 0 dropped, jitter p95 0.13 ms
+row 0: state=2 uptime=903s  11708mV 315mA  log[24]: row_boot(POR)@0s, crc_failure(count=1)@23s, crc_failure(count=3)@28s
+row 1: state=2 uptime=2s  11822mV 88mA  log[4]: row_boot(POR)@0s, sense_start(s2,0x00)@2s
+row 2: state=2 uptime=2s  11820mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s2,0x00)@2s
+row 3: state=2 uptime=2s  11827mV 15mA  log[4]: row_boot(POR)@0s, sense_start(s2,0x00)@2s
+row 4: state=2 uptime=2s  11826mV 15mA  log[4]: row_boot(POR)@0s, sense_start(s2,0x00)@2s
+row 5: state=2 uptime=2s  11826mV 16mA  log[2]: row_boot(POR)@0s, sense_start(s0,0x00)@0s
+row 6: state=2 uptime=2s  11816mV 15mA  log[4]: row_boot(POR)@0s, latch_overrun(s7,0x12)@0s, rx_overflow(s0,0x00)@0s
+row 7: state=2 uptime=2s  11831mV 14mA  log[2]: row_boot(POR)@0s, sense_start(s0,0x00)@0s

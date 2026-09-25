@@ -65,6 +65,16 @@ over a 10-minute soak. Write-up in
 [`2026-09-15-eight-row-bus-bringup.md`](2026-09-15-eight-row-bus-bringup.md),
 raw logs alongside.
 
+## Row DMA receive (2026-09-24)
+
+**Tools:** [`test_chain_saturation.py`](../../src/pi/test/integration/test_chain_saturation.py),
+`df2-pi play`.
+
+Row firmware v6 receives the Row Bus by DMA. Row 0 kept up with a
+worst-case chain at 30, 35, 45 and 50 fps (93 % of the wire) and ran a
+10-minute 30 fps soak with no restarts or CRC failures; v5 failed at
+27 fps. Write-up in [`2026-09-24-row-dma-receive.md`](2026-09-24-row-dma-receive.md).
+
 ## Measuring a new strip or tile
 
 ```bash

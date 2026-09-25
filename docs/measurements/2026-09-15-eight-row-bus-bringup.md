@@ -196,13 +196,13 @@ with forwarding work on core 1 it can only get lower.
 
 - ~~**Host:** `binascii.crc_hqx` in `crc.py`; `os.write()` in
   `RowBus.start_write()`.~~ Done; `send_rows()` measured at 19.2 ms.
-- **Row firmware:** raise the ingest ceiling past 175 kB/s with headroom.
-  `docs/row-bus-protocol.md` §1 already names the lever (a PIO or DMA
-  receive path instead of `SerialUART::_pumpFIFO()`). Until then the floor
-  is capped at 20 fps by the rows now that the host is fixed.
+- ~~**Row firmware:** raise the ingest ceiling past 175 kB/s with
+  headroom.~~ Done in v6 with a DMA receive ring; a row keeps up at 50 fps
+  ([2026-09-24](2026-09-24-row-dma-receive.md)).
 - **Row firmware:** `log_boot()` must consult `WATCHDOG_REASON` so a
   watchdog reset is not logged as POR.
 - **Row firmware:** the boot-loop under overload is the watchdog doing its
   job, but a row that is reset every ~500 ms for as long as the host keeps
-  sending is not much better than one that is wedged. Dropping bytes
-  instead of stalling is the fix the watchdog comment already asks for.
+  sending is not much better than one that is wedged. v6 bounds core 0's
+  frame loop so the watchdog is always fed (#100); no load the wire can
+  deliver overloads a v6 row, so that bound is untested.

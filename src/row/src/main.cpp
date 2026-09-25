@@ -1,5 +1,6 @@
 #include <Arduino.h>
-#include <hardware/structs/powman.h>  // POWMAN_CHIP_RESET sticky causes, for the boot log
+#include <hardware/structs/powman.h>    // POWMAN_CHIP_RESET sticky causes, for the boot log
+#include <hardware/structs/watchdog.h>  // WATCHDOG_REASON, for the same
 #include "rp2350/pins.h"
 #include "row_address.h"
 #include "rp2350/pi_transport_rp2350.h"
@@ -247,15 +248,34 @@ static void feed_watchdog(uint32_t now_ms) {
     if (beat == 0 || (now_ms - last_heartbeat_ms) < CORE1_STALL_MS) rp2040.wdt_reset();
 }
 
+// Frames returned per loop() pass before the rest of the loop - and the
+// watchdog feed at its end - gets a turn. See loop().
+static constexpr int MAX_FRAMES_PER_PASS = 4;
+
 void loop() {
     static RowBusFrameParser parser;
+    static bool parser_ready = false;
     static uint32_t data_led_until_ms = 0;
     RowBusFrame frame;
 
+    // The parser drops frames addressed to other rows itself - still
+    // CRC-checking them, so crc_failures() covers the whole chain - rather
+    // than copying out ~1.4 KB per foreign SEND_DATA only for us to discard it.
+    if (!parser_ready) {
+        parser.set_address(MY_ROW_ADDR);
+        parser_ready = true;
+    }
+
     uint32_t now = millis();
 
-    while (pi_transport.poll(parser, &frame)) {
-        if (frame.addr != MY_ROW_ADDR && frame.addr != ROWBUS_ADDR_BROADCAST) continue;
+    // Bounded, so the watchdog is always fed. This used to be
+    // `while (poll(...))`, which kept going for as long as frames kept
+    // completing. When receive fell behind the wire there was always another
+    // complete frame waiting, so the loop never exited and feed_watchdog()
+    // never ran - the likely cause of rows resetting every ~500 ms for as
+    // long as the Pi kept sending more than they could parse (#100). Anything
+    // left over stays in the receive ring for the next pass.
+    for (int handled = 0; handled < MAX_FRAMES_PER_PASS && pi_transport.poll(parser, &frame); handled++) {
         bool queued = ingest_queue.try_push(frame); // dropped if core 1 has fallen behind
         data_led_until_ms = now + DATA_LED_PULSE_MS;
 #ifdef ROW_DEBUG
@@ -301,11 +321,14 @@ void setup1() {
     row_sense.init();
     power_monitor.init();
 
-    // Record why we booted before discovery runs. POWMAN's CHIP_RESET holds
-    // sticky cause bits (POR / BOR / RUN_LOW / watchdog / glitch detect),
-    // which is what separates a watchdog reset from a supply problem - the
-    // distinction that turned an apparent firmware fault into a bench one.
-    row_cmd_handler.log_boot(powman_hw->chip_reset >> 16, millis());
+    // Record why we booted before discovery runs: POWMAN's sticky cause bits
+    // plus the watchdog's own REASON, since a watchdog reset through PSM
+    // shows up only in the latter. Layout and interpretation at
+    // ERROR_TYPE_ROW_BOOT.
+    uint16_t cause = (uint16_t)((powman_hw->chip_reset >> 16) & ROW_BOOT_POWMAN_MASK);
+    if (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS) cause |= ROW_BOOT_WATCHDOG_TIMER;
+    if (watchdog_hw->reason & WATCHDOG_REASON_FORCE_BITS) cause |= ROW_BOOT_WATCHDOG_FORCE;
+    row_cmd_handler.log_boot(cause, millis());
 
     sense_mapper.start();
 }

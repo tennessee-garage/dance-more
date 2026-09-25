@@ -1,0 +1,11 @@
+===== row 0 @ 30 fps, 60 s, 3 tiles =====
+sent 1798 frame-periods in 60.0s = 30.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 351s (no restart)
+PASS: row kept up with a saturated chain at 30.0 fps
+===== row 0 @ 35 fps, 60 s, 3 tiles =====
+sent 2097 frame-periods in 60.0s = 34.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 415s (no restart)
+PASS: row kept up with a saturated chain at 34.9 fps
+before: state=2 tiles_found=3 slots=[1, 1, 1, 0, 0, 0, 0, 0]

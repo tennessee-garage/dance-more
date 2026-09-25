@@ -88,52 +88,48 @@ full load rather than an exceptional one, and the last row illuminates
 slightly late. Typical frames mixing `SET_COLOR`/`SET_PATTERN` are far smaller
 and leave substantial slack.
 
-### Measured ceiling: ~25 FPS, and the limit is receive, not forwarding
+### Receive: DMA ring, measured to 50 FPS
 
 The table above models the Row Bus phase and the Tile Bus tail. It does not
-model what a row spends **receiving** — and that turns out to be the binding
-constraint. Address filtering happens after a frame is assembled, so every row
-parses every byte on its chain, including the three frames addressed to its
-neighbours.
+model what a row spends **receiving**, and every row receives every byte on
+its chain — the three frames addressed to its neighbours as well as its own
+— because it cannot know a frame's address until it has read the header.
+A chain's worst case is `4 × 1,456 = 5,824` bytes per floor update.
 
-Measured on the bench (2026-09-08, `test/integration/test_chain_saturation.py`,
-one row driven with a full chain's worth of worst-case frames):
-
-| Target | Period | Core-0 receive load | Result |
-| --- | --- | --- | --- |
-| 15 FPS | 66.7 ms | 52% | pass |
-| 25 FPS | 40.0 ms | 87% | pass |
-| 27 FPS | 37.0 ms | 94% | **`ROW_BUS_RX_OVERFLOW`** |
-| 30 FPS | 33.3 ms | 105% | row restarts |
-
-A row ingests Row Bus bytes at **~6.0 µs each** against the 3.2 µs/byte the
-wire delivers them at — measured across seven frame sizes with forwarding held
-constant. The cost is `SerialUART`'s `_pumpFIFO()`, called once by
-`available()` and again by `read()`. A chain's worst case is
-`4 × 1,456 = 5,824` bytes, so 34.9 ms of core-0 time per floor update, which
-puts the predicted ceiling at 28.7 FPS against a measured 25–27.
-
-**So the worst case runs at ~25 FPS, not 30.** Typical frames mixing
-`SET_COLOR`/`SET_PATTERN` are far smaller and unaffected; this bounds the
-all-`SET_LEDS` case only. Raising it means making the receive path cheaper —
-and note that the obvious fix does not work: hoisting `available()` out of the
-drain loop was tried and made things sharply worse, for reasons not
-established (see `poll()` in
+Row firmware v6 receives the Row Bus by DMA: a channel paced by the UART's
+RX request copies each byte into a 16 KB ring in RAM, and core 0 parses
+straight out of the ring, CRC-checking other rows' frames but not copying
+them (see `init()` and `poll()` in
 [pi_transport_rp2350.cpp](../src/row/src/rp2350/pi_transport_rp2350.cpp)).
-A different receive path — PIO, or DMA into a ring — is the real lever.
+Receiving costs the CPU nothing per byte.
 
-Above the ceiling the row restarts — continuously, for as long as the traffic
-lasts (`uptime_s` reads 0 at every one-second sample through a 30 FPS run) —
-and logs `ROW_BOOT` with `HAD_POR` and no watchdog bit. That is a watchdog
-reset nonetheless: the SDK's `watchdog_enable()` routes the watchdog through
-PSM only (`psm_hw->wdsel`), which does not reset POWMAN, so `POWMAN_CHIP_RESET`
-keeps the sticky POR bit from the original power-up and never gains a
-`HAD_WATCHDOG_RESET_*` bit. `log_boot()` has to read `WATCHDOG_REASON` as well
-before it can tell the two apart (measured 2026-09-15 with the 12 V rail
-steady at the row's own INA226 throughout; see
-[measurements/2026-09-15-eight-row-bus-bringup.md](measurements/2026-09-15-eight-row-bus-bringup.md)).
-Confirmed on all eight rows with four real neighbours per chain: 25 FPS
-passes, 27 FPS restarts, and the limit tracks bytes/s rather than frames/s.
+Measured 2026-09-24 with `test/integration/test_chain_saturation.py`, 60 s
+per rate, full `SET_LEDS` frames to all four rows on the chain:
+
+| Target | Chain byte rate | Share of wire | Result |
+| --- | --- | --- | --- |
+| 30 FPS | 175 kB/s | 56% | pass |
+| 35 FPS | 204 kB/s | 65% | pass |
+| 45 FPS | 262 kB/s | 84% | pass |
+| 50 FPS | 291 kB/s | 93% | pass |
+
+and a 10-minute `df2-pi play` soak at 30 FPS through `Floor.send_rows()`
+with no restarts, no overflows and no CRC failures
+([measurements/2026-09-24-row-dma-receive.md](measurements/2026-09-24-row-dma-receive.md)).
+**Receive is no longer a limit at any rate the wire can carry.** One chain
+tops out at ~53 FPS of worst-case frames on the wire alone.
+
+Up to v5 the row used arduino-pico's `SerialUART`, which cost ~6.0 µs per
+byte against the 3.2 µs/byte the wire delivers — 34.9 ms of core-0 time per
+floor update — and capped the worst case at ~25 FPS
+([measurements/2026-09-15-eight-row-bus-bringup.md](measurements/2026-09-15-eight-row-bus-bringup.md)).
+Past that ceiling a v5 row restarts continuously, for as long as the traffic
+lasts, and logs `ROW_BOOT` with `HAD_POR` and no watchdog bit. That is a
+watchdog reset nonetheless: the SDK's `watchdog_enable()` routes the watchdog
+through PSM only (`psm_hw->wdsel`), which does not reset POWMAN, so
+`POWMAN_CHIP_RESET` keeps the sticky POR bit from the original power-up and
+never gains a `HAD_WATCHDOG_RESET_*` bit. From v6 the `ROW_BOOT` entry also
+carries `WATCHDOG_REASON`, so such a reset is logged as one (§5.1).
 
 **The next lever after that is the Tile Bus baud rate**, which at 1 Mbps
 contributes more to end-to-end latency than the whole Row Bus phase. The
@@ -384,13 +380,18 @@ Three further entry types are **diagnostics rather than faults**, and also
 repurpose the fields:
 
 - `ROW_BOOT` (`0x06`) — logged once per boot, before discovery runs. `slot` and
-  `tile_bus_cmd` are the high and low bytes of `POWMAN_CHIP_RESET >> 16`, the
-  RP2350's sticky reset causes: power-on, brownout, RUN low, the four watchdog
-  variants, glitch detect and so on. More than one bit can be set. A plain
-  "was it the watchdog" flag would not be enough: the distinction that matters
-  is watchdog versus supply, and a POR with no watchdog or brownout bit set is
-  what identified a row restarting mid-boot as a power problem rather than a
-  firmware one.
+  `tile_bus_cmd` are the high and low bytes of a 16-bit cause word. Bits 0–12
+  are `POWMAN_CHIP_RESET >> 16`, the RP2350's sticky reset causes: power-on,
+  brownout, RUN low, the POWMAN-routed watchdog variants, glitch detect and so
+  on. Bit 13 is `WATCHDOG_REASON.TIMER` (the watchdog timed out) and bit 14 is
+  `WATCHDOG_REASON.FORCE` (software forced a watchdog reset); both from row
+  firmware v6. More than one bit can be set. The watchdog bits are needed
+  because the SDK's watchdog resets through PSM only, leaving POWMAN showing
+  the POR from the original power-up: **POR alone is a power cycle, POR plus
+  bit 13 is a watchdog timeout.** A power problem shows as POR or brownout
+  with no watchdog bit, which is how a row restarting mid-boot was traced to
+  the bench supply rather than the firmware. Firmware before v6 has no
+  bits 13–14, so there a POR-only entry means "power cycle or watchdog".
 - `SENSE_START` (`0x08`) — one per discovery sweep, `slot` a wrapping sweep
   counter, `tile_bus_cmd` `0`. The error log is cleared by a chip reset, so
   these also answer whether a restart *was* a reset: sweeps logged either side

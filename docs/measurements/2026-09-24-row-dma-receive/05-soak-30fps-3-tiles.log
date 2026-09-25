@@ -1,0 +1,4 @@
+row 0: state=2 uptime=434s  11758mV 319mA  log[23]: row_boot(POR)@0s, sense_start(s21,0x00)@418s
+18000 frames, 0 dropped, jitter p95 0.12 ms
+row 0: state=2 uptime=1037s  11265mV 1093mA  log[23]: row_boot(POR)@0s, sense_start(s21,0x00)@418s
+before: state=2 tiles_found=3 slots=[1, 1, 1, 0, 0, 0, 0, 0]
