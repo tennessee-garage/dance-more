@@ -313,7 +313,7 @@ Payload layout (5 bytes):
 | `params[3]`  | byte 4 | Parameter 3; meaning defined per pattern |
 
 Pattern ids and their parameter semantics are defined in
-[tile-patterns.md](tile-patterns.md). Two points that affect this layer:
+[tile-effects.md](tile-effects.md). Two points that affect this layer:
 
 - A pattern is **staged**, not started, by `SET_PATTERN`. It begins on the next
   `LATCH`, so a row's tiles can be armed one at a time and started in step.
@@ -532,7 +532,7 @@ by silence at `DETECT_SENSE` (§7).
   retry. If reliable delivery for `SET_LEDS` is later needed, a lightweight
   per-frame CRC check or a heartbeat could be added.
 - **`SET_PATTERN` param count:** resolved for the patterns defined so far —
-  [tile-patterns.md](tile-patterns.md) takes the tile's existing buffer as the
+  [tile-effects.md](tile-effects.md) takes the tile's existing buffer as the
   pattern's base image, so no parameter byte is spent on colour and 4 is
   enough. A pattern needing two *independent* colours would still not fit;
   revisit then.
