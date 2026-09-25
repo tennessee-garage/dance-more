@@ -7,8 +7,8 @@
 // Row-wide bring-up test: runs SENSE auto-mapping to discover as many tiles
 // as are actually wired (0-8, whatever's really there), then cycles display
 // commands to every discovered tile forever: SET_COLOR, then SET_LEDS, each
-// followed by the mandatory LATCH. SET_PATTERN is out of scope (no pattern
-// library defined yet).
+// followed by the mandatory LATCH. SET_EFFECT is out of scope (not
+// exercised here).
 
 static TileTransportRP2350 transport;
 static RowSenseRP2350      sense;

@@ -2,7 +2,7 @@
 
 An 8×8 grid of light-up acrylic tiles driven by a three-tier hierarchy:
 **Raspberry Pi** (host) → **8 row controllers** (Xiao RP2350) → **64 tile
-controllers** (ATtiny3224 + WS2815).
+controllers** (ATtiny3226 + WS2815).
 
 Design docs live in [docs/](docs/) — start with
 [architecture.md](docs/architecture.md), then the two wire protocols
@@ -16,11 +16,11 @@ detail here; those files are the source of truth.
 | --- | --- |
 | `src/pi/` | Python host controller (`df2-pi`) — drives the Row Bus |
 | `src/row/` | PlatformIO firmware, Xiao RP2350 row controller |
-| `src/tile/` | PlatformIO firmware, ATtiny3224 tile controller |
+| `src/tile/` | PlatformIO firmware, ATtiny3226 tile controller |
 | `src/common/tile_bus_protocol/` | Wire protocol shared by row + tile firmware |
 | `src/simulation/` | Vite/TypeScript acrylic light-propagation simulator |
 | `src/native-simulator/` | Standalone ModernGL simulator (unrelated to firmware) |
-| `pcb/{pi-hat,row-controller,tile}/` | KiCad projects; versioned gerbers **are** committed |
+| `pcb/{pi-hat,row-controller,tile,tile-pcba}/` | KiCad projects; versioned gerbers **are** committed. `tile-pcba` (ATtiny3226, JLCPCB-assembled) supersedes `tile` (ATtiny3224) |
 
 ## Build & test
 
@@ -38,7 +38,7 @@ tools/flash_row.sh 3                   # build + upload the row3 env
 
 # Tile controller  (src/tile)
 pio test -e test_native
-pio run  -e ATtiny3224
+pio run  -e ATtiny3226
 
 # Simulator  (src/simulation)
 npm run dev

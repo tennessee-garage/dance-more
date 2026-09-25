@@ -14,7 +14,7 @@ and the SENSE auto-mapping overview see [communication.md](communication.md).
 | Baud rate      | 1 Mbps                         |
 | UART framing   | 8N1 (8 data bits, no parity, 1 stop bit) |
 | Master         | Row controller (Xiao RP2350)   |
-| Slaves         | Up to 8 tiles (ATtiny3224 + THVD1420DR) |
+| Slaves         | Up to 8 tiles (ATtiny3226 + THVD1420DR) |
 | Default state  | Tiles in RX; only transmit when commanded |
 
 ---
@@ -281,9 +281,10 @@ Sets all 60 LEDs on the addressed tile to a single RGB color.
 
 ---
 
-#### `0x11 SET_PATTERN` — unicast
+#### `0x11 SET_EFFECT` — unicast
 
-Applies a preset animation pattern to the addressed tile.
+Writes the addressed tile's effect register: a transform applied over the
+tile's pixel buffer on its way to the LEDs.
 
 | Field   | Value |
 | ------- | ----- |
@@ -297,30 +298,35 @@ Payload layout (5 bytes):
 ```
  Byte 0          Bytes 1–4
 +---------------+-------------------------------+
-| pattern_id    | params[0..3]                  |
-| bits 4-0 used | pattern-defined               |
+| effect_id     | params[0..3]                  |
+| bits 4-0 used | effect-defined                |
 | bits 7-5 = 0  |                               |
 +---------------+-------------------------------+
 ```
 
 | Field        | Bits  | Description |
 | ------------ | ----- | ----------- |
-| `pattern_id` | 4:0   | Selects one of 32 preset patterns (0–31); values 0–31 |
+| `effect_id`  | 4:0   | Selects one of 32 effects (0–31); `0` is no effect |
 | reserved     | 7:5   | Must be `0` |
-| `params[0]`  | byte 1 | Parameter 0; meaning defined per pattern |
-| `params[1]`  | byte 2 | Parameter 1; meaning defined per pattern |
-| `params[2]`  | byte 3 | Parameter 2; meaning defined per pattern |
-| `params[3]`  | byte 4 | Parameter 3; meaning defined per pattern |
+| `params[0]`  | byte 1 | Parameter 0; meaning defined per effect |
+| `params[1]`  | byte 2 | Parameter 1; meaning defined per effect |
+| `params[2]`  | byte 3 | Parameter 2; meaning defined per effect |
+| `params[3]`  | byte 4 | Parameter 3; meaning defined per effect |
 
-Pattern ids and their parameter semantics are defined in
-[tile-patterns.md](tile-patterns.md). Two points that affect this layer:
+Effect ids and their parameter semantics are defined in
+[tile-effects.md](tile-effects.md). Points that affect this layer:
 
-- A pattern is **staged**, not started, by `SET_PATTERN`. It begins on the next
-  `LATCH`, so a row's tiles can be armed one at a time and started in step.
-  A `LATCH` with nothing staged does not restart a running pattern.
-- A running pattern **modulates the tile's existing buffer contents** rather
-  than carrying its own colour, so `SET_COLOR`/`SET_LEDS` set the base first.
-  Either of those commands also cancels a running pattern.
+- The effect register and the pixel buffer are **independent**. `SET_COLOR`
+  and `SET_LEDS` write only the buffer and never cancel an effect;
+  `SET_EFFECT` never touches the buffer. The LEDs show the buffer passed
+  through the effect.
+- An effect is **staged**, not started, by `SET_EFFECT`. It takes effect on
+  the next `LATCH`, so a row's tiles can be armed one at a time and started in
+  step. A `LATCH` with nothing staged does not restart a running effect.
+- `effect_id = 0` clears the effect; it does **not** blank the LEDs. That is
+  why the row controller's blackout sweep sends `SET_EFFECT(0)` as well as
+  `SET_COLOR(0, 0, 0)` ([row-bus-protocol.md](row-bus-protocol.md) §5,
+  `BLACKOUT`).
 
 ---
 
@@ -452,7 +458,7 @@ Each UART byte is 10 bits (1 start + 8 data + 1 stop).
 | ------------ | ---------- | ----------------- |
 | Admin (no payload) | 7 B | 70 µs |
 | `SET_COLOR`  | 10 B       | 100 µs |
-| `SET_PATTERN`| 12 B       | 120 µs |
+| `SET_EFFECT` | 12 B       | 120 µs |
 | `SET_LEDS`   | 187 B      | 1.87 ms |
 | ACK response | 8 B        | 80 µs |
 | `DETECT_RESP`| 7 B        | 70 µs |
@@ -483,7 +489,7 @@ overlapping, not serial).
 latency** — larger than the whole Row Bus phase, which two concurrent chains
 bring down to ~18.6 ms for all 8 rows. Raising Tile Bus to 2 Mbps would halve
 it and is the identified next lever on frame rate; see
-[row-bus-protocol.md](row-bus-protocol.md) §8. The blocker is the ATtiny3224's
+[row-bus-protocol.md](row-bus-protocol.md) §8. The blocker is the ATtiny3226's
 USART ceiling, which needs confirming against the datasheet — the THVD1420DR
 transceiver is rated to 12 Mbps and is not the constraint.
 
@@ -524,17 +530,17 @@ by silence at `DETECT_SENSE` (§7).
 
 ## 10. Open Questions
 
-- **Baud rate confirmation:** 1 Mbps requires validation against the ATtiny3224
+- **Baud rate confirmation:** 1 Mbps requires validation against the ATtiny3226
   UART tolerance and cable length/capacitance on the tile bus.
 - **Response timeout value:** 5 ms is a placeholder. Tune after measuring
   actual tile firmware processing latency.
 - **Display command errors:** currently display commands have no ACK and no
   retry. If reliable delivery for `SET_LEDS` is later needed, a lightweight
   per-frame CRC check or a heartbeat could be added.
-- **`SET_PATTERN` param count:** resolved for the patterns defined so far —
-  [tile-patterns.md](tile-patterns.md) takes the tile's existing buffer as the
-  pattern's base image, so no parameter byte is spent on colour and 4 is
-  enough. A pattern needing two *independent* colours would still not fit;
-  revisit then.
+- **`SET_EFFECT` param count:** resolved for the effects defined so far —
+  [tile-effects.md](tile-effects.md) effects read the tile's pixel buffer
+  rather than carrying their own image, so at most one byte (a hue) is spent
+  on colour and 4 is enough. An effect needing two *independent* colours
+  would still not fit; revisit then.
 - **LED ordering convention:** LED 0 = start of WS2815 chain; confirm physical
   position relative to the tile's corner/connector.

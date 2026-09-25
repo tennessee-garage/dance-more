@@ -45,7 +45,7 @@ enum class Cmd : uint8_t {
     VERSION        = 0x05,
     SET_ADDRESS    = 0x06,
     SET_COLOR      = 0x10,
-    SET_PATTERN    = 0x11,
+    SET_EFFECT     = 0x11,
     SET_LEDS       = 0x12,
     LATCH          = 0x13,
     // Responses: tile → row controller

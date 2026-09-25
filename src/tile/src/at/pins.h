@@ -1,7 +1,11 @@
 #pragma once
-// Pin assignments for the ATtiny3224 tile board.
-// Verified against pcb/tile/tile.kicad_sch (U1's net connections) — the
-// nets there are LED_Data, SENSE_IN, SENSE_OUT, XDIR, TxD and RxD.
+// Pin assignments for the ATtiny3226 tile board (pcb/tile-pcba, SSOP-20).
+// Verified against pcb/tile-pcba/production/netlist.ipc and the U1 symbol in
+// tile-pcba.kicad_sch — the nets are LED_DATA (pin 17), SENSE_IN (18),
+// SENSE_OUT (19), XDIR (11), TXD (9) and RXD (8).
+//
+// The earlier ATtiny3224 board (pcb/tile, TSSOP-14) used the same port pins,
+// so these assignments hold for both; only the package pin numbers differ.
 
 // WS2815 LED data line (800 KHz, GRB)
 #define PIN_LED_DATA  PIN_PA1
@@ -18,8 +22,8 @@
 #define PIN_SENSE_OUT PIN_PA3
 
 // UART0 pin selection (PORTMUX.USARTROUTEA). megaTinyCore maps USART0 pins
-// via Serial.swap(n) before Serial.begin(); per the txy4 variant's
-// pins_arduino.h (HWSERIAL0_MUX_DEFAULT = 0):
+// via Serial.swap(n) before Serial.begin(); per the txy6 variant's
+// pins_arduino.h (HWSERIAL0_MUX_DEFAULT = 0; txy4 is identical here):
 //   swap 0 (default): TX=PB2, RX=PB3   <- what the PCB wires to the transceiver
 //   swap 1 (alt):     TX=PA1, RX=PA2
 // The default mux is already the one we want, so TransportAT::init() calls
