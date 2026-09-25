@@ -121,12 +121,16 @@ them have to spend three bytes on a colour, which was the concern left open in
 [tile-bus-protocol.md](tile-bus-protocol.md) §10. An effect that paints its own
 light (`CHASE`) is the exception and spends one byte on a hue instead.
 
-Effects fall into two kinds, and each definition below says which:
+Effects fall into four kinds, and each definition below says which:
 
 - **Modulating** — output is a darkened copy of the buffer (`SHIMMER`). The
   buffer is the ceiling, so these can never clip a channel.
+- **Recolouring** — output is the buffer with its colour shifted, brightness
+  kept (`HUE_SPLIT`). Stateless: the output depends only on the buffer.
 - **Overlaying** — some LEDs show the effect's own light instead of the buffer
   (`CHASE`). The rest pass the buffer through.
+- **History** — output depends on what was shown before, not just on the
+  buffer now (`FADE`). The only kind with per-LED private state.
 
 ---
 
@@ -136,12 +140,12 @@ Effects fall into two kinds, and each definition below says which:
 | --- | --- | --- | --- |
 | 0 | `OFF` | **implemented** (semantics changing — see below) | none |
 | 1 | — | unassigned (was `SOLID`, removed) | — |
-| 2 | `BREATHE` | reserved — see §5 | — |
+| 2 | — | unassigned (was `BREATHE`, dropped) | — |
 | 3 | `SHIMMER` | **implemented** | modulating |
 | 4 | `CHASE` | specified, not implemented | overlaying |
 | 5 | `SPARKLE` | reserved — see §5 | — |
-| 6 | `RAINBOW` | reserved — see §5 | — |
-| 7 | `FADE_TO` | reserved — see §5 | — |
+| 6 | `HUE_SPLIT` | specified, not implemented | recolouring |
+| 7 | `FADE` | specified, not implemented | history |
 | 8–31 | — | reserved | — |
 
 Reserved ids are rejected, so a host that sends one gets a no-op rather than an
@@ -149,9 +153,10 @@ undefined effect. Names are recorded here so the numbering doesn't get
 re-litigated when they are implemented; nothing depends on them yet.
 
 `SOLID` was removed because it was `SET_COLOR` under another name: it painted a
-colour and stopped, which is not a transform of anything. Id 1 stays unassigned
-rather than being reused, so a stale host that still sends it gets a no-op
-rather than a different effect.
+colour and stopped, which is not a transform of anything. `BREATHE` was dropped
+because it was `SHIMMER` with `spread = 0`. Ids 1 and 2 stay unassigned rather
+than being reused, so a stale host that still sends one gets a no-op rather
+than a different effect.
 
 ### `0 OFF` — no effect
 
@@ -224,6 +229,87 @@ with the correct average rather than drifting slow to 60.
 The hue is converted to RGB once, when the effect starts — not per LED, not per
 frame — so the colour wheel costs nothing at render time.
 
+### `6 HUE_SPLIT` — opposite hue shifts on two halves
+
+**Recolouring.** One half of the tile's perimeter has its hue nudged one way
+round the colour wheel, the other half the other way. A flat colour becomes two
+neighbouring colours meeting at two points on the edge; an image keeps its
+shape and gains a split tint.
+
+| Param | Name | Range | Meaning |
+| --- | --- | --- | --- |
+| 0 | `shift` | 0–255 | Hue shift applied to each half, `+shift` on one and `−shift` on the other, in units where 256 is a full turn. `0` is the identity. Small values are the intended use; large ones stay valid but stop reading as a tint. |
+| 1 | `offset` | 0–59 | Where the split falls. The `+` half is LEDs `offset … offset+29` (mod 60), the `−` half the other 30. `0` splits at the corner where the chain starts; `≥ 60` is **invalid**. |
+| 2–3 | — | 0 | Reserved, **must be 0** — non-zero makes the `SET_EFFECT` invalid, so they can be given meaning later. |
+
+`offset` is in LEDs rather than as a named axis so the doc doesn't have to know
+how the chain is laid round the tile: with 15 LEDs per side, `0` and `15` split
+corner-to-corner, and `7`/`8` split through the middle of two opposite sides.
+
+Stateless and not time-varying: the tile renders it only on `LATCH`, and
+repeated latches with an unchanged buffer produce an unchanged output. Black
+and greys have no hue and pass through untouched.
+
+**Not a colour-space conversion.** An RGB→HSV→RGB round trip on an AVR with no
+hardware divide is not something to run 60 times per latch. The implementation
+rotates in RGB space — a table-driven mix of each channel with its neighbour —
+which approximates a hue shift closely for the small `shift` values this is
+meant for. The exact curve is the implementation's; what this document fixes
+is `0` = identity, the sign convention, and brightness being preserved to
+within rounding.
+
+### `7 FADE` — decay on release
+
+**History.** Leaves a decaying trail behind moving content while the host sends
+only the leading edge. The host lights a pixel; when it stops lighting it
+(sends it black), the tile fades it out instead of cutting it.
+
+Per LED, every render:
+
+```
+if buffer[i] == (0,0,0) and out[i] != (0,0,0):
+    out[i] = decay(out[i])        # host released it - fade it out
+else:
+    out[i] = buffer[i]            # host is driving it - follow exactly
+```
+
+It **never dims an actively-lit pixel**. Only pixels the host has released
+decay, so a bright moving dot stays full brightness and drags a tail. A released
+pixel that the host lights again jumps straight to the new value.
+
+| Param | Name | Range | Meaning |
+| --- | --- | --- | --- |
+| 0 | `decay` | 0–255 | Per-frame retention, `out = out × decay / 256` per channel, per 20 ms render frame. `0` is instant off — indistinguishable from no effect. |
+| 1–3 | — | 0 | Reserved, **must be 0** — non-zero makes the `SET_EFFECT` invalid. |
+
+From full brightness (255), with the floor scale described below:
+
+| `decay` | Down to 10% | Fully black |
+| --- | --- | --- |
+| 128 | 80 ms | 160 ms |
+| 200 | 200 ms | 380 ms |
+| 230 | 420 ms | 720 ms |
+| 245 | 0.9 s | 1.4 s |
+| 252 | 2.2 s | 2.7 s |
+| 255 | 4.6 s | 5.1 s |
+
+**Decay runs on the tile's clock, not per `LATCH`.** #72 first proposed one
+decay step per latch. That makes the tail length depend on the host's frame
+rate, and freezes a half-faded tail on the floor whenever the host goes quiet —
+exactly when the tile is supposed to keep animating on its own. Per 20 ms frame,
+a tail is the same length at any host frame rate and always finishes.
+
+**Integer-math trap.** A released pixel must reach exactly `(0,0,0)`, not
+stall one step above it. A *rounded* scale stalls: `(1 × 230 + 128) >> 8` is
+`1`, so the pixel sits dim forever. A plain floor, `v × k >> 8`, cannot — with
+`k ≤ 255` it is always strictly less than `v`. Keep the floor, and don't
+"improve" it with rounding. The figures above use it.
+
+The history is the output buffer itself, so `FADE` costs no RAM beyond what
+every effect already uses. When `FADE` starts, the history is whatever the tile
+was showing, so arming it causes no visible jump. `BLACKOUT` clears it with
+everything else.
+
 ---
 
 ## 4. Implementation notes
@@ -238,8 +324,9 @@ for.
 
 **When the tile renders.** On every `LATCH` (new buffer contents must go out
 through the effect immediately), and every `FRAME_MS` while a time-varying
-effect is set. With `OFF`, or `SHIMMER` at `speed = 0`, the tile renders only on
-`LATCH`.
+effect is set. With `OFF`, `HUE_SPLIT`, or `SHIMMER` at `speed = 0`, the tile
+renders only on `LATCH`. `FADE` renders every frame while any pixel is still
+decaying, and only on `LATCH` once they have all reached black.
 
 **Effect math runs with interrupts enabled.** Only the WS2815 push must not.
 The two costs are budgeted separately: effect render time adds to
@@ -262,7 +349,7 @@ that: the buffer stays the input and the effect renders into a 180-byte output
 buffer, so the cost is the same — 180 for the output, 60 for `SHIMMER`'s per-LED
 phase offsets, the rest state. The old build measured **1,179 of 3,072 bytes
 (38%)** with patterns in; re-measure after the change. Effect-private state
-(phase offsets, and any future per-LED history) should share one scratch region
+(`SHIMMER`'s phase offsets, and anything a later effect needs) should share one scratch region
 rather than each effect reserving its own, since only one effect is ever
 active.
 
@@ -270,7 +357,7 @@ active.
 
 ## 5. Open questions
 
-- **`SPARKLE` (5) vs `SHIMMER`.** `SHIMMER` is continuous and periodic: every
+- **`SPARKLE` (5).** `SHIMMER` is continuous and periodic: every
   LED is always somewhere in its cycle, and it only darkens. A distinct
   `SPARKLE` would be the opposite on both counts — *sparse* and *random*
   (individual LEDs fire at unpredictable times, most of the tile untouched at
@@ -278,26 +365,6 @@ active.
   or white and decays back to the buffer). Candidate params: `density`
   (sparkles per second), `decay` (flash length), `hue`/`brightness` or a
   white-mix amount, `seed`. Not yet decided.
-- **`RAINBOW` (6).** As a standalone animation it no longer fits — it would
-  ignore the buffer. As an effect, the candidates are a hue rotation of the
-  buffer over time (every colour drifts round the wheel), or #72's
-  `HUE_SPLIT` (a static hue shift in opposite directions on two halves of the
-  tile). Both need a per-LED hue operation, which on an AVR with no hardware
-  divide must be a lookup or an RGB-space approximation, not a literal
-  RGB→HSV→RGB round trip 60 times a frame. Otherwise drop the id.
-- **`FADE_TO` (7).** The effect-model reading is #72's `FADE`: keep the last
-  output as history, and when the host releases a pixel (sends it black) decay
-  it instead of cutting it, so moving content drags a tail while the host sends
-  only the leading edge. A more general form is a crossfade — every pixel eases
-  from its previous output toward the new buffer value over N frames, with
-  `FADE` as the fast-attack/slow-release case. Either way the output buffer
-  doubles as the history, so it costs no extra RAM. Not yet decided.
-- **Numbering against #72.** #72 proposes `FADE` = 1 and `HUE_SPLIT` = 2. This
-  document keeps the existing ids instead (only `OFF` and `SHIMMER` are
-  implemented, but `SHIMMER = 3` is in firmware). If `FADE` and `HUE_SPLIT`
-  land as the definitions of 7 and 6, #72 needs updating to match.
-- **`BREATHE` (2) vs `SHIMMER` with `spread = 0`.** They are the same thing
-  today. Either drop id 2 or give it a distinct waveform before implementing it.
 - **`CHASE` direction.** Steps always run in increasing LED index. Reversing
   needs a bit the four params don't have; bits 7:5 of byte 0 are reserved and
   could carry per-effect flags, but that is a wire-format change to
