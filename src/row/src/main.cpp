@@ -1,5 +1,6 @@
 #include <Arduino.h>
-#include <hardware/structs/powman.h>  // POWMAN_CHIP_RESET sticky causes, for the boot log
+#include <hardware/structs/powman.h>    // POWMAN_CHIP_RESET sticky causes, for the boot log
+#include <hardware/structs/watchdog.h>  // WATCHDOG_REASON, for the same
 #include "rp2350/pins.h"
 #include "row_address.h"
 #include "rp2350/pi_transport_rp2350.h"
@@ -320,11 +321,14 @@ void setup1() {
     row_sense.init();
     power_monitor.init();
 
-    // Record why we booted before discovery runs. POWMAN's CHIP_RESET holds
-    // sticky cause bits (POR / BOR / RUN_LOW / watchdog / glitch detect),
-    // which is what separates a watchdog reset from a supply problem - the
-    // distinction that turned an apparent firmware fault into a bench one.
-    row_cmd_handler.log_boot(powman_hw->chip_reset >> 16, millis());
+    // Record why we booted before discovery runs: POWMAN's sticky cause bits
+    // plus the watchdog's own REASON, since a watchdog reset through PSM
+    // shows up only in the latter. Layout and interpretation at
+    // ERROR_TYPE_ROW_BOOT.
+    uint16_t cause = (uint16_t)((powman_hw->chip_reset >> 16) & ROW_BOOT_POWMAN_MASK);
+    if (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS) cause |= ROW_BOOT_WATCHDOG_TIMER;
+    if (watchdog_hw->reason & WATCHDOG_REASON_FORCE_BITS) cause |= ROW_BOOT_WATCHDOG_FORCE;
+    row_cmd_handler.log_boot(cause, millis());
 
     sense_mapper.start();
 }

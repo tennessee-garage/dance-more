@@ -405,6 +405,29 @@ void test_status_uptime_survives_past_16_bit_seconds() {
 // The boot entry is the one whose value grows with age, so it must outlive a
 // full ring. Two per-sweep diagnostics once flooded 32 slots in 16 seconds and
 // evicted it - which is why it now lives outside the ring entirely.
+void test_boot_entry_carries_watchdog_reason_bits() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    RowCommandHandler handler(transport, sense, power, 0x00);
+
+    // A watchdog timeout after a power-up: POWMAN still shows the original
+    // POR, and only the watchdog bit says this boot was not a power cycle.
+    handler.log_boot(ROW_BOOT_WATCHDOG_TIMER | 0x0001, 3000);
+
+    RowBusFrame req = make_frame(0x00, RowBusCmd::ERROR_LOG, nullptr, 0);
+    const RowBusFrame *resp = handler.handle(req);
+
+    TEST_ASSERT_NOT_NULL(resp);
+    TEST_ASSERT_EQUAL(1, resp->payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x20, resp->payload[1 + 0]);  // bit 13 in the high byte
+    TEST_ASSERT_EQUAL_HEX8(0x01, resp->payload[1 + 1]);  // HAD_POR
+    TEST_ASSERT_EQUAL_HEX8(ERROR_TYPE_ROW_BOOT, resp->payload[1 + 2]);
+    TEST_ASSERT_EQUAL(3, (resp->payload[1 + 3] << 8) | resp->payload[1 + 4]);
+}
+
 void test_boot_entry_survives_a_full_ring_and_reports_first() {
     FakeTileTransport transport;
     FakeRowSense      row_sense;
@@ -661,6 +684,7 @@ int main(int, char **) {
     RUN_TEST(test_status_reports_uptime_from_poll_clock);
     RUN_TEST(test_status_uptime_survives_past_16_bit_seconds);
     RUN_TEST(test_boot_entry_survives_a_full_ring_and_reports_first);
+    RUN_TEST(test_boot_entry_carries_watchdog_reason_bits);
     RUN_TEST(test_tile_no_version_records_slot_and_address);
     RUN_TEST(test_crc_failures_record_a_count_not_one_entry_each);
     RUN_TEST(test_blackout_sends_black_to_each_discovered_tile_then_latch);

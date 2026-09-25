@@ -128,7 +128,8 @@ lasts, and logs `ROW_BOOT` with `HAD_POR` and no watchdog bit. That is a
 watchdog reset nonetheless: the SDK's `watchdog_enable()` routes the watchdog
 through PSM only (`psm_hw->wdsel`), which does not reset POWMAN, so
 `POWMAN_CHIP_RESET` keeps the sticky POR bit from the original power-up and
-never gains a `HAD_WATCHDOG_RESET_*` bit (#101).
+never gains a `HAD_WATCHDOG_RESET_*` bit. From v6 the `ROW_BOOT` entry also
+carries `WATCHDOG_REASON`, so such a reset is logged as one (§5.1).
 
 **The next lever after that is the Tile Bus baud rate**, which at 1 Mbps
 contributes more to end-to-end latency than the whole Row Bus phase. The
@@ -379,13 +380,18 @@ Three further entry types are **diagnostics rather than faults**, and also
 repurpose the fields:
 
 - `ROW_BOOT` (`0x06`) — logged once per boot, before discovery runs. `slot` and
-  `tile_bus_cmd` are the high and low bytes of `POWMAN_CHIP_RESET >> 16`, the
-  RP2350's sticky reset causes: power-on, brownout, RUN low, the four watchdog
-  variants, glitch detect and so on. More than one bit can be set. A plain
-  "was it the watchdog" flag would not be enough: the distinction that matters
-  is watchdog versus supply, and a POR with no watchdog or brownout bit set is
-  what identified a row restarting mid-boot as a power problem rather than a
-  firmware one.
+  `tile_bus_cmd` are the high and low bytes of a 16-bit cause word. Bits 0–12
+  are `POWMAN_CHIP_RESET >> 16`, the RP2350's sticky reset causes: power-on,
+  brownout, RUN low, the POWMAN-routed watchdog variants, glitch detect and so
+  on. Bit 13 is `WATCHDOG_REASON.TIMER` (the watchdog timed out) and bit 14 is
+  `WATCHDOG_REASON.FORCE` (software forced a watchdog reset); both from row
+  firmware v6. More than one bit can be set. The watchdog bits are needed
+  because the SDK's watchdog resets through PSM only, leaving POWMAN showing
+  the POR from the original power-up: **POR alone is a power cycle, POR plus
+  bit 13 is a watchdog timeout.** A power problem shows as POR or brownout
+  with no watchdog bit, which is how a row restarting mid-boot was traced to
+  the bench supply rather than the firmware. Firmware before v6 has no
+  bits 13–14, so there a POR-only entry means "power cycle or watchdog".
 - `SENSE_START` (`0x08`) — one per discovery sweep, `slot` a wrapping sweep
   counter, `tile_bus_cmd` `0`. The error log is cleared by a chip reset, so
   these also answer whether a restart *was* a reset: sweeps logged either side

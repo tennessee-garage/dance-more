@@ -149,16 +149,15 @@ void RowCommandHandler::log_row_bus_overflow(uint32_t now_ms) {
     log_error(0, 0, ERROR_TYPE_ROW_BUS_RX_OVERFLOW, now_ms);
 }
 
-void RowCommandHandler::log_boot(uint32_t chip_reset_reason, uint32_t now_ms) {
-    // Every HAD_* cause bit sits in POWMAN_CHIP_RESET bits 16-28, so the
-    // caller's >> 16 leaves them all inside 16 bits - split across the two
+void RowCommandHandler::log_boot(uint16_t reset_cause, uint32_t now_ms) {
+    // The cause word (layout at ERROR_TYPE_ROW_BOOT) is split across the two
     // spare bytes this entry has.
     //
     // Written outside the ring: this is the only entry whose value grows with
     // age, since it answers "did this row restart, and why" long after any
     // fault that followed it has scrolled away.
-    boot_entry_.slot         = (uint8_t)(chip_reset_reason >> 8);
-    boot_entry_.tile_bus_cmd = (uint8_t)(chip_reset_reason & 0xFF);
+    boot_entry_.slot         = (uint8_t)(reset_cause >> 8);
+    boot_entry_.tile_bus_cmd = (uint8_t)(reset_cause & 0xFF);
     boot_entry_.error_type   = ERROR_TYPE_ROW_BOOT;
     boot_entry_.timestamp_s  = (uint16_t)(now_ms / 1000);
     has_boot_entry_          = true;
