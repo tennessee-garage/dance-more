@@ -205,7 +205,7 @@ void test_latch_broadcasts_tile_latch() {
     TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH, transport.sent[0].cmd);
 }
 
-void test_blackout_sends_black_to_each_discovered_tile_then_latch() {
+void test_blackout_clears_effect_and_sends_black_to_each_discovered_tile_then_latch() {
     FakeTileTransport transport;
     FakeRowSense      row_sense;
     TileMap           map;
@@ -219,10 +219,17 @@ void test_blackout_sends_black_to_each_discovered_tile_then_latch() {
     const RowBusFrame *resp = handler.handle(req);
 
     TEST_ASSERT_NULL(resp);
-    TEST_ASSERT_EQUAL(9, transport.sent.size()); // 8 SET_COLOR + 1 LATCH
+    TEST_ASSERT_EQUAL(17, transport.sent.size()); // 8 × (SET_EFFECT + SET_COLOR) + LATCH
 
     for (uint8_t i = 0; i < 8; i++) {
-        const Frame &f = transport.sent[i];
+        // SET_EFFECT(NONE) first: SET_COLOR does not cancel a running effect.
+        const Frame &fx = transport.sent[i * 2];
+        TEST_ASSERT_EQUAL_HEX8(i + 1, fx.addr);
+        TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_EFFECT, fx.cmd);
+        TEST_ASSERT_EQUAL(5, fx.len);
+        for (uint8_t b = 0; b < 5; b++) TEST_ASSERT_EQUAL_HEX8(0, fx.payload[b]);
+
+        const Frame &f = transport.sent[i * 2 + 1];
         TEST_ASSERT_EQUAL_HEX8(i + 1, f.addr);
         TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR, f.cmd);
         TEST_ASSERT_EQUAL(3, f.len);
@@ -231,7 +238,7 @@ void test_blackout_sends_black_to_each_discovered_tile_then_latch() {
         TEST_ASSERT_EQUAL_HEX8(0, f.payload[2]);
     }
 
-    const Frame &latch = transport.sent[8];
+    const Frame &latch = transport.sent[16];
     TEST_ASSERT_EQUAL_HEX8(ADDR_BROADCAST, latch.addr);
     TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH, latch.cmd);
     TEST_ASSERT_EQUAL(0, latch.len);
@@ -663,7 +670,7 @@ int main(int, char **) {
     RUN_TEST(test_boot_entry_survives_a_full_ring_and_reports_first);
     RUN_TEST(test_tile_no_version_records_slot_and_address);
     RUN_TEST(test_crc_failures_record_a_count_not_one_entry_each);
-    RUN_TEST(test_blackout_sends_black_to_each_discovered_tile_then_latch);
+    RUN_TEST(test_blackout_clears_effect_and_sends_black_to_each_discovered_tile_then_latch);
     RUN_TEST(test_re_discover_starts_sense_mapping_and_acks);
     RUN_TEST(test_test_command_returns_always_pass_stub);
     RUN_TEST(test_error_log_returns_empty_when_no_errors_logged);

@@ -262,11 +262,18 @@ void RowCommandHandler::handle_latch() {
 
 void RowCommandHandler::handle_blackout() {
     const TileMap &map = sense_.result();
-    const uint8_t black[3] = {0, 0, 0};
+    const uint8_t black[3]     = {0, 0, 0};
+    const uint8_t no_effect[5] = {0, 0, 0, 0, 0};   // effect_id 0 = NONE
 
+    // SET_COLOR alone is not enough: a tile's effect register is independent
+    // of its pixel buffer, so an effect like CHASE would keep painting over
+    // the black buffer. Clearing the effect first makes the blackout black
+    // whatever the tile was running (docs/row-bus-protocol.md §5 BLACKOUT).
     for (uint8_t slot = 0; slot < TileMap::NUM_SLOTS; slot++) {
         if (!map.is_discovered(slot)) continue;
-        send_tile_frame(map.address_for(slot), Cmd::SET_COLOR, black, sizeof(black));
+        const uint8_t addr = map.address_for(slot);
+        send_tile_frame(addr, Cmd::SET_EFFECT, no_effect, sizeof(no_effect));
+        send_tile_frame(addr, Cmd::SET_COLOR, black, sizeof(black));
     }
     broadcast_tile_latch();
 }
