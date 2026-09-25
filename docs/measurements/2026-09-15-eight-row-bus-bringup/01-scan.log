@@ -1,0 +1,552 @@
+Chain 0: /dev/ttyAMA0 @ 3125000 baud, XDIR=17, rows [0, 2, 4, 6]
+Chain 1: /dev/ttyAMA2 @ 3125000 baud, XDIR=7, rows [1, 3, 5, 7]
+
+Scanning rows 0-7, each on its mapped chain...
+Found 8 row controller(s): 0x00(chain 0), 0x01(chain 1), 0x02(chain 0), 0x03(chain 1), 0x04(chain 0), 0x05(chain 1), 0x06(chain 0), 0x07(chain 1)
+
+=== Row controller 0x00 (chain 0) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=740s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11943 mV  current=17 mA  power=215 mW
+  [PASS] POWER
+      15 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        count=1 type=crc_failure t=8s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=3 type=crc_failure t=13s
+        count=1 type=crc_failure t=494s
+        slot=9 tile_cmd=0x00 type=sense_start t=494s
+        count=3 type=crc_failure t=499s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      16 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        count=1 type=crc_failure t=8s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=3 type=crc_failure t=13s
+        count=1 type=crc_failure t=494s
+        slot=9 tile_cmd=0x00 type=sense_start t=494s
+        count=3 type=crc_failure t=499s
+        count=1 type=crc_failure t=740s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=740s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x01 (chain 1) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=740s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11958 mV  current=15 mA  power=230 mW
+  [PASS] POWER
+      16 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=9s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=3 type=crc_failure t=14s
+        count=1 type=crc_failure t=495s
+        slot=10 tile_cmd=0x00 type=sense_start t=495s
+        count=3 type=crc_failure t=500s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      17 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=9s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=3 type=crc_failure t=14s
+        count=1 type=crc_failure t=495s
+        slot=10 tile_cmd=0x00 type=sense_start t=495s
+        count=3 type=crc_failure t=500s
+        count=1 type=crc_failure t=741s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=741s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x02 (chain 0) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=741s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11950 mV  current=14 mA  power=215 mW
+  [PASS] POWER
+      18 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        count=3 type=crc_failure t=13s
+        count=1 type=crc_failure t=494s
+        slot=11 tile_cmd=0x00 type=sense_start t=496s
+        count=3 type=crc_failure t=499s
+        count=1 type=crc_failure t=740s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      18 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        count=3 type=crc_failure t=13s
+        count=1 type=crc_failure t=494s
+        slot=11 tile_cmd=0x00 type=sense_start t=496s
+        count=3 type=crc_failure t=499s
+        count=1 type=crc_failure t=740s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=742s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x03 (chain 1) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=742s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11953 mV  current=17 mA  power=205 mW
+  [PASS] POWER
+      19 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=1 type=crc_failure t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        count=3 type=crc_failure t=14s
+        count=1 type=crc_failure t=495s
+        slot=12 tile_cmd=0x00 type=sense_start t=497s
+        count=3 type=crc_failure t=500s
+        count=1 type=crc_failure t=741s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      19 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=1 type=crc_failure t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        count=3 type=crc_failure t=14s
+        count=1 type=crc_failure t=495s
+        slot=12 tile_cmd=0x00 type=sense_start t=497s
+        count=3 type=crc_failure t=500s
+        count=1 type=crc_failure t=741s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=743s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x04 (chain 0) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=743s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11952 mV  current=14 mA  power=170 mW
+  [PASS] POWER
+      20 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=11s
+        count=3 type=crc_failure t=13s
+        count=1 type=crc_failure t=494s
+        slot=13 tile_cmd=0x00 type=sense_start t=497s
+        count=3 type=crc_failure t=499s
+        count=1 type=crc_failure t=740s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      20 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=11s
+        count=3 type=crc_failure t=13s
+        count=1 type=crc_failure t=494s
+        slot=13 tile_cmd=0x00 type=sense_start t=497s
+        count=3 type=crc_failure t=499s
+        count=1 type=crc_failure t=740s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=744s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x05 (chain 1) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=744s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11951 mV  current=15 mA  power=180 mW
+  [PASS] POWER
+      21 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=1 type=crc_failure t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        slot=13 tile_cmd=0x00 type=sense_start t=12s
+        count=3 type=crc_failure t=14s
+        count=1 type=crc_failure t=495s
+        slot=14 tile_cmd=0x00 type=sense_start t=498s
+        count=3 type=crc_failure t=500s
+        count=1 type=crc_failure t=741s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      21 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=1 type=crc_failure t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        slot=13 tile_cmd=0x00 type=sense_start t=12s
+        count=3 type=crc_failure t=14s
+        count=1 type=crc_failure t=495s
+        slot=14 tile_cmd=0x00 type=sense_start t=498s
+        count=3 type=crc_failure t=500s
+        count=1 type=crc_failure t=741s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=745s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x06 (chain 0) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=745s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11952 mV  current=15 mA  power=205 mW
+  [PASS] POWER
+      21 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        count=3 type=crc_failure t=13s
+        slot=13 tile_cmd=0x00 type=sense_start t=13s
+        count=1 type=crc_failure t=494s
+        count=3 type=crc_failure t=499s
+        slot=14 tile_cmd=0x00 type=sense_start t=499s
+        count=1 type=crc_failure t=740s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      22 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        count=1 type=crc_failure t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        count=3 type=crc_failure t=13s
+        slot=13 tile_cmd=0x00 type=sense_start t=13s
+        count=1 type=crc_failure t=494s
+        count=3 type=crc_failure t=499s
+        slot=14 tile_cmd=0x00 type=sense_start t=499s
+        count=1 type=crc_failure t=740s
+        count=3 type=crc_failure t=745s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=745s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Row controller 0x07 (chain 1) ===
+  [PASS] TEST - self-test reports all-pass
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=745s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+      voltage=11946 mV  current=13 mA  power=215 mW
+  [PASS] POWER
+      22 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=1 type=crc_failure t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        slot=13 tile_cmd=0x00 type=sense_start t=13s
+        count=3 type=crc_failure t=14s
+        slot=14 tile_cmd=0x00 type=sense_start t=14s
+        count=1 type=crc_failure t=495s
+        count=3 type=crc_failure t=500s
+        slot=15 tile_cmd=0x00 type=sense_start t=500s
+        count=1 type=crc_failure t=741s
+  [PASS] ERROR_LOG (before)
+  [PASS] SEND_DATA (no ack) - no response, as expected
+  [PASS] LATCH (no ack) - no response, as expected
+  [PASS] responsive after SEND_DATA + LATCH
+  [PASS] BLACKOUT (no ack) - no response, as expected
+  [PASS] responsive after BLACKOUT
+  [PASS] unrecognized command is ignored - no response, as expected
+  [PASS] responsive after unrecognized command
+  [PASS] ignores frames addressed elsewhere - skipped - every row on this chain is present
+  [PASS] drops frame with corrupt CRC
+  [PASS] responsive after corrupt-CRC frame
+      23 entries
+        slot=0 tile_cmd=0x01 type=row_boot t=0s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        count=1 type=crc_failure t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        slot=13 tile_cmd=0x00 type=sense_start t=13s
+        count=3 type=crc_failure t=14s
+        slot=14 tile_cmd=0x00 type=sense_start t=14s
+        count=1 type=crc_failure t=495s
+        count=3 type=crc_failure t=500s
+        slot=15 tile_cmd=0x00 type=sense_start t=500s
+        count=1 type=crc_failure t=741s
+        count=3 type=crc_failure t=746s
+  [PASS] ERROR_LOG (after)
+  [PASS] RE_DISCOVER ack - status byte=0x00
+  [PASS] RE_DISCOVER completes - state=running, 0 tile(s)
+      state=running tiles_found=0 tile_status=['not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=746s
+  [PASS] STATUS
+  [PASS] STATUS: 0 tile(s) discovered - none attached
+  -- 20/20 checks passed
+
+=== Broadcast admin commands must get no response ===
+  [PASS] broadcast TEST on chain 0: no response
+  [PASS] broadcast TEST on chain 1: no response
+  [PASS] broadcast STATUS on chain 0: no response
+  [PASS] broadcast STATUS on chain 1: no response
+  [PASS] broadcast POWER on chain 0: no response
+  [PASS] broadcast POWER on chain 1: no response
+  [PASS] broadcast RE_DISCOVER on chain 0: no response
+  [PASS] broadcast RE_DISCOVER on chain 1: no response
+  [PASS] broadcast ERROR_LOG on chain 0: no response
+  [PASS] broadcast ERROR_LOG on chain 1: no response
+  -- 10/10 checks passed
+
+ALL CHECKS PASSED
