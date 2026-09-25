@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <hardware/dma.h>
+#include <hardware/gpio.h>
+#include <hardware/uart.h>
 #include "pi_transport_rp2350.h"
 #include "pins.h"
 
@@ -10,109 +13,149 @@
 //
 // Do not raise this without changing hardware. Asking for more fails
 // silently rather than loudly: the Pi clamps to its maximum, the RP2350
-// happily runs at whatever it was told, and every byte then dies as a
-// framing error inside the core's UART IRQ handler, which drops bad chars
-// without counting them. The symptom is a totally mute bus, identical to a
-// broken wire. Overridable via -DROW_BUS_BAUD for bring-up experiments.
-#ifndef ROW_BUS_BAUD
-#define ROW_BUS_BAUD 3125000UL
-#endif
+// happily runs at whatever it was told, and the row then receives nothing
+// but framing errors. (Serial2 dropped those uncounted; the DMA receive path
+// passes them to the parser, where at most the odd one resembles a frame and
+// fails its CRC.) The symptom is a mute bus, identical to a broken wire.
+// Overridable via -DROW_BUS_BAUD for bring-up experiments.
+// The value itself is in pi_transport_rp2350.h, which sizes the receive
+// ring's lapping guard from it.
 
 // Bus turnaround guard: hold the bus idle for >= 100 us after the last stop
 // bit before releasing XDIR back to RX, same guard used on Tile Bus
 // (docs/row-bus-protocol.md §9 "Bus turnaround timing").
 static constexpr unsigned int TURNAROUND_GUARD_US = 100;
 
-// PIN_PI_TX/PIN_PI_RX (D9/D3) are not this board's default Serial2 (UART1)
-// pins, so they need an explicit remap before begin() - unlike the Tile Bus
-// side (PIN_ROW_TX/PIN_ROW_RX), which uses Serial1's defaults as-is.
-//
-// setTX()/setRX() return false for a GPIO that UART1 can't reach and
-// begin() then quietly uses the variant defaults instead, so a bad remap
-// produces a board that transmits and receives on unconnected pins with no
-// error anywhere. Assert the valid sets (SerialUART.cpp) at compile time.
+// The Row Bus runs on UART1, driven through the pico-sdk directly rather than
+// arduino-pico's Serial2 - see init() for why. PIN_PI_TX/PIN_PI_RX (D9/D3)
+// are not UART1's default pins, and a GPIO that UART1 cannot reach simply
+// never carries the signal: gpio_set_function() does not fail, it just
+// selects a function that isn't wired to this UART, so a bad pin produces a
+// board that transmits and receives on unconnected pins with no error
+// anywhere. Assert the valid sets (RP2350 datasheet GPIO function table,
+// matching arduino-pico's SerialUART.cpp) at compile time.
 static_assert(PIN_PI_TX == 4 || PIN_PI_TX == 8 || PIN_PI_TX == 20 || PIN_PI_TX == 24,
               "PIN_PI_TX must be a UART1 TX-capable GPIO (4, 8, 20, 24)");
 static_assert(PIN_PI_RX == 5 || PIN_PI_RX == 9 || PIN_PI_RX == 21 || PIN_PI_RX == 25,
               "PIN_PI_RX must be a UART1 RX-capable GPIO (5, 9, 21, 25)");
 
+static uart_inst_t *const PI_UART = uart1;
+
+// The receive ring. The DMA channel's ring mode wraps the write address on a
+// boundary of its own size, so the buffer must be aligned to that size.
+alignas(PiTransportRP2350::RX_RING_SIZE) static uint8_t rx_ring_buf[PiTransportRP2350::RX_RING_SIZE];
+
+PiTransportRP2350::PiTransportRP2350() : ring_(rx_ring_buf) {}
+
 void PiTransportRP2350::init() {
-    // Size the RX FIFO to hold a whole maximum-size frame.
+    // Receive by DMA into a ring in RAM, not through arduino-pico's Serial2.
     //
-    // arduino-pico's SerialUART defaults to a 32-byte software FIFO - about
-    // 100 us of buffering at 3.125 Mbps. A full SEND_DATA frame is
-    // ROWBUS_MAX_FRAME bytes arriving back-to-back over ~4.7 ms, some 45x
-    // longer than that window, and poll() below costs two _pumpFIFO() round
-    // trips per byte (one in available(), one in read()) against a 3.2 us/byte
-    // arrival rate. Core 0 cannot keep up, the FIFO absorbs the shortfall, and
-    // past its depth the core wedges hard enough to need a power cycle - not
-    // merely dropped bytes.
+    // Serial2 cost ~6.0 us per received byte against the 3.2 us/byte the
+    // wire delivers them at. Its IRQ copies the UART FIFO into a software
+    // queue, and every available() and read() then takes a mutex, disables
+    // the UART IRQ, takes a second mutex and pumps the FIFO again - two such
+    // round trips per byte, ~900 cycles. A row parses every byte on its
+    // chain, so a chain of four maximum-size frames cost 34.9 ms of core-0
+    // time per 33.3 ms frame and capped the floor at ~25 fps
+    // (docs/measurements/2026-09-15-eight-row-bus-bringup.md, #99).
     //
-    // Measured on the bench (at the 976-byte frame size of the 40-LED build):
-    // continuous frames died above ~170 bytes, while the same 976-byte frame
-    // paced at 16 bytes per 400 us survived intact. That is what makes this a
-    // receive-rate problem rather than a frame-size one, and why the fix is
-    // buffer depth rather than anything in the parser.
+    // Here the UART's RX DREQ paces a DMA channel that copies each byte into
+    // rx_ring_buf as it arrives, wrapping forever (ENDLESS mode, RP2350
+    // only). The CPU does nothing per byte to receive; poll() reads the
+    // channel's write address to see how far the ring has filled and parses
+    // straight out of it.
     //
-    // Sized for one max frame plus the LATCH and admin command that can
-    // legitimately follow it back-to-back in the same burst. 2048 was ~2.1x a
-    // 976-byte frame; at 60 LEDs/tile the frame is 1456 bytes and that same
-    // 2048 would leave only 1.4x - so this scales with ROWBUS_MAX_FRAME rather
-    // than sitting at a literal. Given the failure mode is a wedge and not a
-    // dropped frame, this is the wrong margin to shave. Must precede begin():
-    // setFIFOSize() returns false once the port is running, and it is begin()
-    // that actually allocates the buffer.
-    Serial2.setFIFOSize(2 * ROWBUS_MAX_FRAME + 512);  // 3520 at 60 LEDs/tile
-    Serial2.setTX(PIN_PI_TX);
-    Serial2.setRX(PIN_PI_RX);
-    Serial2.begin(ROW_BUS_BAUD, SERIAL_8N1);
+    // One behaviour change from Serial2: it dropped characters with a
+    // framing or parity error, whereas DMA takes the data byte regardless.
+    // Such a byte now reaches the parser, fails that frame's CRC and is
+    // counted - which is the more useful outcome on a noisy link.
+    uart_init(PI_UART, ROW_BUS_BAUD);   // 8N1, FIFOs on, RX/TX DMA requests on
+    uart_set_hw_flow(PI_UART, false, false);
+    gpio_set_function(PIN_PI_TX, GPIO_FUNC_UART);
+    gpio_set_function(PIN_PI_RX, GPIO_FUNC_UART);
+
+    rx_dma_chan_ = dma_claim_unused_channel(true);
+    dma_channel_config c = dma_channel_get_default_config(rx_dma_chan_);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&c, false);
+    channel_config_set_write_increment(&c, true);
+    channel_config_set_ring(&c, true, RX_RING_BITS);
+    channel_config_set_dreq(&c, uart_get_dreq_num(PI_UART, false));
+    dma_channel_configure(rx_dma_chan_, &c, rx_ring_buf, &uart_get_hw(PI_UART)->dr,
+                          DMA_CH0_TRANS_COUNT_MODE_VALUE_ENDLESS << DMA_CH0_TRANS_COUNT_MODE_LSB,
+                          true);
+
+    last_poll_us_ = micros();
 
     // XDIR starts low: RS-485 transceiver in RX mode.
     digitalWrite(PIN_PI_XDIR, LOW);
     pinMode(PIN_PI_XDIR, OUTPUT);
 }
 
-bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
-    // Recover from a truncated frame before reading anything more.
-    //
-    // The parser cannot resync on its own: mid-payload it takes every byte as
-    // payload, so the next frame's SYNC1/SYNC2 is swallowed and only the byte
-    // count in LEN can end the state. A frame cut short - the host
-    // interrupted mid-write, or bytes lost to a brownout - therefore leaves
-    // the row deaf until up to ROWBUS_MAX_PAYLOAD further bytes have arrived
-    // to reach the CRC and fail it. That is the cruel part: the Pi's response
-    // to a silent row is a scan, whose 8-byte admin frames supply a couple of
-    // hundred bytes where 1,448 are owed, so the row looks permanently dead
-    // while both its cores run normally and its watchdog sees nothing wrong.
-    // Observed on the bench: a row unreachable across a full scan came back
-    // on the second, having been fed just enough bytes by the first.
-    //
-    // A gap this long cannot occur inside a real frame - the Pi writes one
-    // contiguously, 3.2 us per byte, and a whole maximum-size frame is 4.7 ms
-    // - so this can only fire between frames.
-    if (parser.in_progress() && (uint32_t)(micros() - last_rx_byte_us_) >= RX_IDLE_RESET_US)
-        parser.reset();
+size_t PiTransportRP2350::rx_write_index() const {
+    return (size_t)((uintptr_t)dma_hw->ch[rx_dma_chan_].write_addr - (uintptr_t)rx_ring_buf);
+}
 
-    // Drain all available RX bytes. Return true on the first complete frame.
-    //
-    // This is deliberately still two _pumpFIFO() round trips per byte - one in
-    // available(), one in read() - which measured ~6.0 us per byte against a
-    // 3.2 us/byte arrival rate at 3.125 Mbps, so the row finishes parsing a
-    // maximum-size frame roughly 4 ms after its last bit is on the wire.
-    //
-    // Hoisting available() out of the loop was tried on 2026-09-08 and made
-    // things worse, not better: with the row settled past its boot-discovery
-    // window, a saturated chain at 15 fps went from passing to failing
-    // (test/integration/test_chain_saturation.py). Why is not established -
-    // the change should strictly reduce work - so it is reverted rather than
-    // kept on the theory that the measurement was unlucky. Whatever ends the
-    // row under load is not simply per-byte cost, and the next move is
-    // measurement, not another rewrite of this loop.
-    while (Serial2.available()) {
-        uint8_t byte = (uint8_t)Serial2.read();
-        last_rx_byte_us_ = micros();
-        rx_bytes++;
-        if (parser.feed(byte, out)) {
+bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
+    const uint32_t now = micros();
+    const size_t   w   = rx_write_index();
+
+    // Lapping guard. The DMA never stops, so if the reader falls a whole ring
+    // behind, the writer silently overwrites bytes not yet parsed and the
+    // indices look like a nearly empty ring. Nothing on this core should
+    // ever stall long enough - poll() runs every loop() pass and each pass is
+    // bounded (see main.cpp) - but a guard that costs nothing beats trusting
+    // that. Two signs the reader can no longer trust what is in the ring:
+    //   - the backlog is within RX_RING_HEADROOM of the ring's size, or
+    //   - long enough has passed since the last poll for the wire to have
+    //     delivered that much, whatever the backlog now claims.
+    // Either way, discard what is buffered, resync on the next frame, and
+    // report it as a receive overflow. A frame or two is lost; the row is not.
+    const size_t backlog = ring_.available(w);
+    if (backlog > RX_RING_SIZE - RX_RING_HEADROOM ||
+        (uint32_t)(now - last_poll_us_) >= RX_LAP_GUARD_US) {
+        ring_.skip_to(w);
+        parser.reset();
+        overflow_ = true;
+    }
+    last_poll_us_ = now;
+
+    if (ring_.available(w) != 0) {
+        last_rx_byte_us_ = now;
+    } else if (parser.in_progress() && (uint32_t)(now - last_rx_byte_us_) >= RX_IDLE_RESET_US) {
+        // Recover from a truncated frame.
+        //
+        // The parser cannot resync on its own: mid-payload it takes every
+        // byte as payload, so the next frame's SYNC1/SYNC2 is swallowed and
+        // only the byte count in LEN can end the state. A frame cut short -
+        // the host interrupted mid-write, or bytes lost to a brownout -
+        // therefore leaves the row deaf until up to ROWBUS_MAX_PAYLOAD
+        // further bytes have arrived to reach the CRC and fail it. That is
+        // the cruel part: the Pi's response to a silent row is a scan, whose
+        // 8-byte admin frames supply a couple of hundred bytes where 1,448
+        // are owed, so the row looks permanently dead while both its cores
+        // run normally and its watchdog sees nothing wrong. Observed on the
+        // bench: a row unreachable across a full scan came back on the
+        // second, having been fed just enough bytes by the first.
+        //
+        // A gap this long cannot occur inside a real frame - the Pi writes
+        // one contiguously, 3.2 us per byte, and a whole maximum-size frame
+        // is 4.7 ms - so this can only fire between frames.
+        parser.reset();
+    }
+
+    // Parse whatever has arrived, returning at the first frame for this row.
+    // Frames for other rows are CRC-checked but never returned (see
+    // RowBusFrameParser::set_address()), so they are consumed here in one
+    // call. A wrapped backlog takes two contiguous runs.
+    const uint8_t *data;
+    size_t n;
+    while ((n = ring_.contiguous(w, &data)) != 0) {
+        bool complete = false;
+        size_t used = parser.feed(data, n, out, &complete);
+        ring_.consume(used);
+        rx_bytes += used;
+        if (complete) {
             rx_frames++;
             return true;
         }
@@ -121,8 +164,9 @@ bool PiTransportRP2350::poll(RowBusFrameParser &parser, RowBusFrame *out) {
 }
 
 bool PiTransportRP2350::take_rx_overflow() {
-    // SerialUART::overflow() is itself read-and-clear.
-    return Serial2.overflow();
+    bool ovf  = overflow_;
+    overflow_ = false;
+    return ovf;
 }
 
 void PiTransportRP2350::send(const RowBusFrame &frame) {
@@ -142,10 +186,11 @@ void PiTransportRP2350::send(const RowBusFrame &frame) {
     // Assert XDIR: switch transceiver to TX.
     digitalWrite(PIN_PI_XDIR, HIGH);
 
-    Serial2.write(buf, (size_t)len);
+    uart_write_blocking(PI_UART, buf, (size_t)len);
 
-    // Wait for the last stop bit to leave the wire, not just FIFO-empty.
-    Serial2.flush();
+    // Wait for the last stop bit to leave the wire, not just FIFO-empty:
+    // BUSY stays set until the shift register is empty.
+    uart_tx_wait_blocking(PI_UART);
 
     // Return transceiver to RX mode.
     digitalWrite(PIN_PI_XDIR, LOW);

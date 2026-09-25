@@ -247,15 +247,34 @@ static void feed_watchdog(uint32_t now_ms) {
     if (beat == 0 || (now_ms - last_heartbeat_ms) < CORE1_STALL_MS) rp2040.wdt_reset();
 }
 
+// Frames returned per loop() pass before the rest of the loop - and the
+// watchdog feed at its end - gets a turn. See loop().
+static constexpr int MAX_FRAMES_PER_PASS = 4;
+
 void loop() {
     static RowBusFrameParser parser;
+    static bool parser_ready = false;
     static uint32_t data_led_until_ms = 0;
     RowBusFrame frame;
 
+    // The parser drops frames addressed to other rows itself - still
+    // CRC-checking them, so crc_failures() covers the whole chain - rather
+    // than copying out ~1.4 KB per foreign SEND_DATA only for us to discard it.
+    if (!parser_ready) {
+        parser.set_address(MY_ROW_ADDR);
+        parser_ready = true;
+    }
+
     uint32_t now = millis();
 
-    while (pi_transport.poll(parser, &frame)) {
-        if (frame.addr != MY_ROW_ADDR && frame.addr != ROWBUS_ADDR_BROADCAST) continue;
+    // Bounded, so the watchdog is always fed. This used to be
+    // `while (poll(...))`, which kept going for as long as frames kept
+    // completing. When receive fell behind the wire there was always another
+    // complete frame waiting, so the loop never exited and feed_watchdog()
+    // never ran - the likely cause of rows resetting every ~500 ms for as
+    // long as the Pi kept sending more than they could parse (#100). Anything
+    // left over stays in the receive ring for the next pass.
+    for (int handled = 0; handled < MAX_FRAMES_PER_PASS && pi_transport.poll(parser, &frame); handled++) {
         bool queued = ingest_queue.try_push(frame); // dropped if core 1 has fallen behind
         data_led_until_ms = now + DATA_LED_PULSE_MS;
 #ifdef ROW_DEBUG
