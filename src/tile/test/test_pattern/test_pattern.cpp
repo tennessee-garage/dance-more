@@ -5,7 +5,7 @@
 static PatternEngine  pat;
 static PixelBuffer    buf;
 
-// SET_PATTERN payload: id + speed + depth + spread + seed.
+// SET_EFFECT payload: id + speed + depth + spread + seed.
 static void arm(PatternEngine &p, uint8_t id, uint8_t speed, uint8_t depth,
                 uint8_t spread, uint8_t seed) {
     const uint8_t payload[5] = {id, speed, depth, spread, seed};

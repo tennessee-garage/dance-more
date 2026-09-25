@@ -103,7 +103,7 @@ void loop() {
         pixel_buf.latch_pending = false;
     } else if (pattern.poll(pixel_buf, now)) {
         // A running pattern drives the strip on its own clock - no Tile Bus
-        // traffic per frame, and no LATCH needed. See docs/tile-patterns.md.
+        // traffic per frame, and no LATCH needed. See docs/tile-effects.md.
         startup_done = true;
         led_driver.push(pixel_buf);
     } else {

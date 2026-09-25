@@ -29,12 +29,12 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
         }
         return nullptr;
 
-    case Cmd::SET_PATTERN:
+    case Cmd::SET_EFFECT:
         // Staged, not started: the pattern begins on the next LATCH so a row's
         // tiles can be armed one at a time and started together. Malformed or
         // unimplemented ids are ignored - display commands carry no ACK, so
         // there is nothing to report and the tile keeps what it has.
-        // See docs/tile-patterns.md.
+        // See docs/tile-effects.md.
         if (pattern) pattern->arm(in.payload, in.len);
         return nullptr;
 

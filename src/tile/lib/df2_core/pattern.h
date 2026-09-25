@@ -5,13 +5,13 @@
 #include "../../../common/tile_bus_protocol/protocol.h"
 #include "pixel_buffer.h"
 
-// Tile-local pattern rendering. See docs/tile-patterns.md for the wire-level
+// Tile-local pattern rendering. See docs/tile-effects.md for the wire-level
 // definition of each pattern and its params.
 //
 // The point of rendering here rather than on the Pi is bandwidth, not compute:
 // a full-pixel floor frame is ~11.6 kB and the Row Bus ceiling is 3.125 Mbps
 // (docs/row-bus-protocol.md §1), so pixel frames alone run the bus at ~90%.
-// A SET_PATTERN is 12 bytes once, after which the tile animates on its own and
+// A SET_EFFECT is 12 bytes once, after which the tile animates on its own and
 // the bus goes quiet. That also decouples the animation rate from the frame
 // rate - the tile renders at PATTERN_HZ regardless of what the host is doing.
 class PatternEngine {
@@ -32,7 +32,7 @@ public:
         SHIMMER = 3,
     };
 
-    // Stage a pattern from a SET_PATTERN payload. Returns false - leaving any
+    // Stage a pattern from a SET_EFFECT payload. Returns false - leaving any
     // running pattern untouched - if the payload is short, the reserved bits
     // are set, or the id isn't implemented. The pattern does not begin until
     // the next on_latch(), so a row's tiles can be armed one at a time and

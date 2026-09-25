@@ -107,12 +107,12 @@ void test_set_leds_noop_when_len_too_short() {
 }
 
 // ---------------------------------------------------------------------------
-// SET_PATTERN
+// SET_EFFECT
 // ---------------------------------------------------------------------------
 
-void test_set_pattern_returns_null() {
+void test_set_effect_returns_null() {
     Frame in = {};
-    in.cmd = (uint8_t)Cmd::SET_PATTERN;
+    in.cmd = (uint8_t)Cmd::SET_EFFECT;
     in.len = 0;
     TEST_ASSERT_NULL(handle_command(in, buf, mock_sense, MY_ADDR));
 }
@@ -323,7 +323,7 @@ int main(int, char **) {
     RUN_TEST(test_set_leds_copies_all_pixels);
     RUN_TEST(test_set_leds_noop_when_len_too_short);
 
-    RUN_TEST(test_set_pattern_returns_null);
+    RUN_TEST(test_set_effect_returns_null);
 
     RUN_TEST(test_latch_sets_pending_flag);
 

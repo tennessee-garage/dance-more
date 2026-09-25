@@ -17,9 +17,9 @@
 // Caller must pre-filter: only call when frame.addr == my_addr or
 // ADDR_BROADCAST. An unaddressed tile therefore sees broadcasts only, which
 // is enough - DETECT_SENSE and SET_ADDRESS are both broadcast.
-// pattern is optional: pass the tile's PatternEngine to enable SET_PATTERN and
+// pattern is optional: pass the tile's PatternEngine to enable SET_EFFECT and
 // the pattern-cancelling side effect of SET_COLOR/SET_LEDS. When it is nullptr
-// (harnesses and tests that don't exercise patterns) SET_PATTERN stays the
+// (harnesses and tests that don't exercise patterns) SET_EFFECT stays the
 // no-op it was before the pattern library existed.
 // Returns a pointer to a statically-allocated response frame, or nullptr if no
 // response is needed.
