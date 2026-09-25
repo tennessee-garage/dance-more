@@ -14,7 +14,7 @@ and the SENSE auto-mapping overview see [communication.md](communication.md).
 | Baud rate      | 1 Mbps                         |
 | UART framing   | 8N1 (8 data bits, no parity, 1 stop bit) |
 | Master         | Row controller (Xiao RP2350)   |
-| Slaves         | Up to 8 tiles (ATtiny3224 + THVD1420DR) |
+| Slaves         | Up to 8 tiles (ATtiny3226 + THVD1420DR) |
 | Default state  | Tiles in RX; only transmit when commanded |
 
 ---
@@ -489,7 +489,7 @@ overlapping, not serial).
 latency** — larger than the whole Row Bus phase, which two concurrent chains
 bring down to ~18.6 ms for all 8 rows. Raising Tile Bus to 2 Mbps would halve
 it and is the identified next lever on frame rate; see
-[row-bus-protocol.md](row-bus-protocol.md) §8. The blocker is the ATtiny3224's
+[row-bus-protocol.md](row-bus-protocol.md) §8. The blocker is the ATtiny3226's
 USART ceiling, which needs confirming against the datasheet — the THVD1420DR
 transceiver is rated to 12 Mbps and is not the constraint.
 
@@ -530,7 +530,7 @@ by silence at `DETECT_SENSE` (§7).
 
 ## 10. Open Questions
 
-- **Baud rate confirmation:** 1 Mbps requires validation against the ATtiny3224
+- **Baud rate confirmation:** 1 Mbps requires validation against the ATtiny3226
   UART tolerance and cable length/capacitance on the tile bus.
 - **Response timeout value:** 5 ms is a placeholder. Tune after measuring
   actual tile firmware processing latency.

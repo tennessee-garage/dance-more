@@ -28,7 +28,7 @@ control hierarchy so that every tile can be addressed independently.
         │  half-duplex, multidrop, daisy-chained)
    ┌────┼────┬────┬────┬────┬────┬────┬────┐
  ┌─┴─┐┌─┴─┐┌─┴─┐ ...                    ┌─┴─┐    (8 tiles per row)
- │T0 ││T1 ││T2 │                        │T7 │    ATtiny3224 + WS2815
+ │T0 ││T1 ││T2 │                        │T7 │    ATtiny3226 + WS2815
  └───┘└───┘└───┘                        └───┘
 ```
 
@@ -60,7 +60,7 @@ control hierarchy so that every tile can be addressed independently.
 
 ### Tier 3 — Tile controllers (×64)
 
-- MCU: **ATtiny3224**.
+- MCU: **ATtiny3226**.
 - One per tile; drives that tile's WS2815 LEDs.
 - RS-485 transceiver: **THVD1420DR**, held in **RX by default** (always
   listening). Switches to **TX only** when a command requires a reply.
@@ -75,7 +75,7 @@ control hierarchy so that every tile can be addressed independently.
 | Rows | 8 | One row controller each |
 | Tiles per row | 8 | One tile controller each |
 | Row controllers | 8 | Xiao RP2350 |
-| Tile controllers | 64 | ATtiny3224 |
+| Tile controllers | 64 | ATtiny3226 |
 | RS-485 buses | 9 | 1 host bus (A) + 8 row→tile buses (B) |
 | LEDs per tile | 60 | WS2815; 15 per side around the square perimeter, corners dark |
 | LEDs total | 3,840 | 64 tiles × 60 |

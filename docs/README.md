@@ -17,7 +17,7 @@ placeholders to be resolved as the design firms up.
 | [tile-bus-protocol.md](tile-bus-protocol.md) | Tile Bus (Row Controller ↔ Tile) command protocol: frame format, command set, timing |
 | [tile-effects.md](tile-effects.md) | `SET_EFFECT` ids and parameters: tile-local effects over host pixel data, and why they exist |
 | [animations.md](animations.md) | Writing animations for the Pi driver: the contract, the two frame formats, the cell model, edges and the edge graph, params, the authoring loop |
-| [hardware-tile.md](hardware-tile.md) | Tile: wood frame, acrylic, WS2815 LEDs, ATtiny3224, connectors |
+| [hardware-tile.md](hardware-tile.md) | Tile: wood frame, acrylic, WS2815 LEDs, ATtiny3226, connectors |
 | [hardware-row-controller.md](hardware-row-controller.md) | Row controller: Xiao RP2350, dual RS-485 buses, connectors |
 | [power.md](power.md) | 12 V distribution and daisy-chain power architecture |
 | [glossary.md](glossary.md) | Shared terminology |
@@ -26,9 +26,10 @@ placeholders to be resolved as the design firms up.
 
 | Path | Purpose |
 | --- | --- |
-| `pcb/tile/` | KiCad project for the tile controller PCB |
+| `pcb/tile/` | KiCad project for the original tile controller PCB (ATtiny3224) |
+| `pcb/tile-pcba/` | KiCad project for the JLCPCB-assembled tile PCB (ATtiny3226) — current |
 | `pcb/row-controller/` | KiCad project for the row controller PCB |
-| `src/tile/DF2-Tile/` | PlatformIO firmware for the ATtiny3224 tile controller |
+| `src/tile/DF2-Tile/` | PlatformIO firmware for the ATtiny3226 tile controller |
 | `src/simulation/` | Three.js/TypeScript acrylic light-propagation simulator |
 | `src/native-simulator/` | Python (pyglet/numpy) light-propagation simulator |
 | `docs/` | This design documentation |

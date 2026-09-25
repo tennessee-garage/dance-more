@@ -129,7 +129,7 @@ a watchdog reset is **not explained**.
 
 **The next lever after that is the Tile Bus baud rate**, which at 1 Mbps
 contributes more to end-to-end latency than the whole Row Bus phase. The
-THVD1420DR is rated to 12 Mbps; the binding constraint is the ATtiny3224's
+THVD1420DR is rated to 12 Mbps; the binding constraint is the ATtiny3226's
 USART, whose ceiling must be confirmed against the datasheet before this is
 relied on. See [tile-bus-protocol.md](tile-bus-protocol.md) §1.
 
@@ -649,7 +649,7 @@ the Row Bus phase and clears it entirely.
 Two things would remove the overrun outright, in order of leverage:
 
 1. **Tile Bus at 2 Mbps** halves the 15.0 ms tail to 7.5 ms, finishing at
-   t≈26.1 ms with ~7 ms of slack. Gated on the ATtiny3224's USART ceiling —
+   t≈26.1 ms with ~7 ms of slack. Gated on the ATtiny3226's USART ceiling —
    confirm against the datasheet.
 2. **Fewer bytes per LED.** At 2 bytes/LED, RGB565 puts 60 LEDs on the wire
    in the 120 bytes/tile that 40 LEDs at RGB888 used — restoring the old
@@ -677,7 +677,7 @@ All tiles go dark within ~2 ms of the `BLACKOUT` frame completing.
   same as Tile Bus) after the Pi's last stop bit before they begin a response
   frame. Confirm this is sufficient at 3.125 Mbps cable lengths.
 - **Tile Bus baud ceiling:** §8's first-choice fix for the worst-case overrun
-  is 2 Mbps on Tile Bus. Confirm the ATtiny3224's USART can reach it (and at
+  is 2 Mbps on Tile Bus. Confirm the ATtiny3226's USART can reach it (and at
   what system clock) against the datasheet before planning around it.
 - **Error log ring buffer size:** 32 entries chosen arbitrarily. Tune to fit
   within RP2350 SRAM budget once firmware is written.

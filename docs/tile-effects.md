@@ -385,5 +385,5 @@ active.
   real display data. Untested against a `SET_EFFECT` that arrives
   mid-diagnostic.
 - **Not yet run on hardware.** Everything above is verified by unit test and by
-  the `ATtiny3224` build fitting; the 1.8 ms push figure and the 50 Hz
+  the `ATtiny3226` build fitting; the 1.8 ms push figure and the 50 Hz
   responsiveness claim want a bench check.

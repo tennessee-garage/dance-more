@@ -83,7 +83,7 @@ budget for Tile Bus are documented in [tile-bus-protocol.md](tile-bus-protocol.m
 - **Termination & biasing:** RS-485 termination resistor placement (Pi end,
   last tile) and fail-safe bias for both buses.
 - **SENSE electrical detail:** pull-up/pull-down values for the internal
-  RP2350 / ATtiny3224 pull-ups, drive strength when a tile pulls SENSE low,
+  RP2350 / ATtiny3226 pull-ups, drive strength when a tile pulls SENSE low,
   and maximum cable capacitance on the SENSE pair.
 - **Failure handling:** whether the SENSE map rebuilds at runtime (e.g. on
   tile hot-swap) or only at startup.
