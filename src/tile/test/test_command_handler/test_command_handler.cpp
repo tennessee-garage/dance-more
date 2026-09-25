@@ -117,6 +117,55 @@ void test_set_effect_returns_null() {
     TEST_ASSERT_NULL(handle_command(in, buf, mock_sense, MY_ADDR));
 }
 
+static Frame set_effect_frame(uint8_t id, uint8_t p0 = 0, uint8_t p1 = 0,
+                              uint8_t p2 = 0, uint8_t p3 = 0) {
+    Frame in = {};
+    in.cmd = (uint8_t)Cmd::SET_EFFECT;
+    in.len = 5;
+    const uint8_t payload[5] = {id, p0, p1, p2, p3};
+    memcpy(in.payload, payload, sizeof(payload));
+    return in;
+}
+
+void test_set_effect_stages_on_the_engine() {
+    EffectEngine fx;
+    TEST_ASSERT_NULL(handle_command(set_effect_frame(EffectEngine::FADE, 230),
+                                    buf, mock_sense, MY_ADDR, &fx));
+    TEST_ASSERT_TRUE(fx.staged());
+}
+
+// The buffer and the effect register are orthogonal (docs/tile-effects.md §2):
+// pixel commands must not cancel an effect, and SET_EFFECT must not touch pixels.
+void test_pixel_commands_do_not_touch_the_effect() {
+    EffectEngine fx;
+    handle_command(set_effect_frame(EffectEngine::FADE, 230), buf, mock_sense, MY_ADDR, &fx);
+    fx.on_latch(buf, 0);
+
+    Frame color = {};
+    color.cmd = (uint8_t)Cmd::SET_COLOR;
+    color.len = 3;
+    color.payload[0] = 9;
+    handle_command(color, buf, mock_sense, MY_ADDR, &fx);
+
+    Frame leds = {};
+    leds.cmd = (uint8_t)Cmd::SET_LEDS;
+    leds.len = PixelBuffer::NUM_LEDS * 3;
+    handle_command(leds, buf, mock_sense, MY_ADDR, &fx);
+
+    TEST_ASSERT_EQUAL_UINT8(EffectEngine::FADE, fx.id());
+}
+
+void test_set_effect_does_not_touch_pixels() {
+    EffectEngine fx;
+    for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++) buf.leds[i] = {1, 2, 3};
+    handle_command(set_effect_frame(EffectEngine::SHIMMER, 60, 255, 255, 1),
+                   buf, mock_sense, MY_ADDR, &fx);
+    for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++) {
+        TEST_ASSERT_EQUAL_UINT8(1, buf.leds[i].r);
+        TEST_ASSERT_EQUAL_UINT8(3, buf.leds[i].b);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // LATCH
 // ---------------------------------------------------------------------------
@@ -308,6 +357,30 @@ void test_set_address_overwrites_an_existing_address() {
     TEST_ASSERT_EQUAL_HEX8(0x01, resp->addr);
 }
 
+// Re-addressing is re-discovery: the effect register starts clean, as at
+// power-up (docs/tile-effects.md §2).
+void test_set_address_clears_the_effect_register() {
+    EffectEngine fx;
+    handle_command(set_effect_frame(EffectEngine::CHASE, 0, 255, 0, 3), buf, mock_sense, MY_ADDR, &fx);
+    fx.on_latch(buf, 0);
+    handle_command(set_effect_frame(EffectEngine::FADE, 200), buf, mock_sense, MY_ADDR, &fx);
+
+    mock_sense.asserted = true;
+    TEST_ASSERT_NOT_NULL(handle_command(set_address_frame(0x02), buf, mock_sense, MY_ADDR, &fx));
+    TEST_ASSERT_EQUAL_UINT8(EffectEngine::NONE, fx.id());
+    TEST_ASSERT_FALSE(fx.staged());
+}
+
+void test_ignored_set_address_leaves_the_effect_alone() {
+    EffectEngine fx;
+    handle_command(set_effect_frame(EffectEngine::FADE, 200), buf, mock_sense, MY_ADDR, &fx);
+    fx.on_latch(buf, 0);
+
+    mock_sense.asserted = false;              // not the tile being addressed
+    TEST_ASSERT_NULL(handle_command(set_address_frame(0x02), buf, mock_sense, MY_ADDR, &fx));
+    TEST_ASSERT_EQUAL_UINT8(EffectEngine::FADE, fx.id());
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -324,6 +397,9 @@ int main(int, char **) {
     RUN_TEST(test_set_leds_noop_when_len_too_short);
 
     RUN_TEST(test_set_effect_returns_null);
+    RUN_TEST(test_set_effect_stages_on_the_engine);
+    RUN_TEST(test_pixel_commands_do_not_touch_the_effect);
+    RUN_TEST(test_set_effect_does_not_touch_pixels);
 
     RUN_TEST(test_latch_sets_pending_flag);
 
@@ -343,6 +419,8 @@ int main(int, char **) {
     RUN_TEST(test_set_address_rejects_reserved_and_broadcast_addresses);
     RUN_TEST(test_set_address_ignores_empty_payload);
     RUN_TEST(test_set_address_overwrites_an_existing_address);
+    RUN_TEST(test_set_address_clears_the_effect_register);
+    RUN_TEST(test_ignored_set_address_leaves_the_effect_alone);
 
     return UNITY_END();
 }

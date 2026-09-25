@@ -19,7 +19,7 @@ static LedDriverAT led_driver;
 static SenseAT     sense;
 static PixelBuffer pixel_buf;
 static FrameParser parser;
-static PatternEngine pattern;
+static EffectEngine effect;
 
 // ---- Start-up pattern ----
 // Six 600 ms colour steps (red/green/blue, twice) confirming the MCU booted
@@ -86,7 +86,7 @@ void loop() {
         // make every unaddressed tile on the bus answer the same frame.
         const bool for_us = (my_addr != ADDR_UNASSIGNED && f.addr == my_addr);
         if (for_us || f.addr == ADDR_BROADCAST) {
-            const Frame *resp = handle_command(f, pixel_buf, sense, my_addr, &pattern);
+            const Frame *resp = handle_command(f, pixel_buf, sense, my_addr, &effect);
             if (resp) transport.send(*resp);
         }
     }
@@ -96,16 +96,17 @@ void loop() {
     if (pixel_buf.latch_pending) {
         // Real display data supersedes the start-up diagnostic.
         startup_done = true;
-        // Before the push, so a pattern armed since the last LATCH snapshots
-        // this frame as its base and starts in step with the rest of the row.
-        pattern.on_latch(pixel_buf, now);
-        led_driver.push(pixel_buf);
+        // The LEDs show buffer -> effect, never the buffer directly. An effect
+        // staged since the last LATCH takes over here, in step with the rest
+        // of the row.
+        effect.on_latch(pixel_buf, now);
+        led_driver.push(effect.output());
         pixel_buf.latch_pending = false;
-    } else if (pattern.poll(pixel_buf, now)) {
-        // A running pattern drives the strip on its own clock - no Tile Bus
-        // traffic per frame, and no LATCH needed. See docs/tile-effects.md.
+    } else if (effect.poll(pixel_buf, now)) {
+        // A time-varying effect drives the strip on its own clock - no Tile
+        // Bus traffic per frame, and no LATCH needed. See docs/tile-effects.md.
         startup_done = true;
-        led_driver.push(pixel_buf);
+        led_driver.push(effect.output());
     } else {
         startup_pattern_poll(now);
     }

@@ -3,15 +3,15 @@
 
 const Frame *handle_command(const Frame &in, PixelBuffer &buf,
                              ISenseControl &sense, uint8_t &my_addr,
-                             PatternEngine *pattern) {
+                             EffectEngine *effect) {
     static Frame response;
 
     switch (static_cast<Cmd>(in.cmd)) {
 
+    // Pixel commands write the buffer only. They never touch the effect
+    // register: the two are orthogonal, and a running effect carries on over
+    // the new content (docs/tile-effects.md §2).
     case Cmd::SET_COLOR:
-        // Explicit pixel data always wins - the host must be able to take a
-        // tile back from a running pattern.
-        if (pattern) pattern->cancel();
         if (in.len >= 3) {
             for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++)
                 buf.leds[i] = {in.payload[0], in.payload[1], in.payload[2]};
@@ -19,7 +19,6 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
         return nullptr;
 
     case Cmd::SET_LEDS:
-        if (pattern) pattern->cancel();
         if (in.len >= PixelBuffer::NUM_LEDS * 3) {
             for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++) {
                 buf.leds[i].r = in.payload[i * 3];
@@ -30,12 +29,12 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
         return nullptr;
 
     case Cmd::SET_EFFECT:
-        // Staged, not started: the pattern begins on the next LATCH so a row's
-        // tiles can be armed one at a time and started together. Malformed or
-        // unimplemented ids are ignored - display commands carry no ACK, so
+        // Staged, not started: the effect takes over on the next LATCH so a
+        // row's tiles can be armed one at a time and started together.
+        // Invalid payloads are ignored - display commands carry no ACK, so
         // there is nothing to report and the tile keeps what it has.
         // See docs/tile-effects.md.
-        if (pattern) pattern->arm(in.payload, in.len);
+        if (effect) effect->stage(in.payload, in.len);
         return nullptr;
 
     case Cmd::LATCH:
@@ -76,6 +75,10 @@ const Frame *handle_command(const Frame &in, PixelBuffer &buf,
             return nullptr;  // neither is a usable unicast address (§3)
 
         my_addr = in.payload[0];
+        // Being (re-)addressed is (re-)discovery: start from a clean effect
+        // register, as at power-up, rather than carry one over from whatever
+        // position this tile held before (docs/tile-effects.md §2).
+        if (effect) effect->reset();
         // Answering *from* the new address is the acknowledgement that
         // matters: it proves the assignment took, rather than only that the
         // command was received.
