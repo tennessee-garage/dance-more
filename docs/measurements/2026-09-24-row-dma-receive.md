@@ -1,7 +1,9 @@
 # Row DMA receive, 2026-09-24
 
 Row firmware v6 (`v6+a1c5ad80`) on row 0; rows 1–7 still on v5 as real
-neighbours on the same two chains. No tiles discovered on any row. Tools and
+neighbours on the same two chains. Row 0 had four tiles on its Tile Bus, two
+of them with LED strips, but **discovered none of them** — see below. No
+other row discovered tiles either. Tools and
 bench as in [the 2026-09-15 bring-up](2026-09-15-eight-row-bus-bringup.md),
 raw output in [`2026-09-24-row-dma-receive/`](2026-09-24-row-dma-receive/).
 
@@ -54,20 +56,31 @@ effect on row 0, which only listens.
 - **The bounded frame loop (#100).** It exists so an overloaded row keeps
   feeding its watchdog, but no load the wire can deliver overloads a v6
   row, so it could not be triggered here. It stays as a safeguard.
-- **Tiles.** With none attached, the Tile Bus tail in
+- **Tiles.** With none discovered, the Tile Bus tail in
   [row-bus-protocol.md](../row-bus-protocol.md) §8 — ~15 ms per row after its
   frame arrives, putting the last row on each chain at ~33.6 ms against the
   33.3 ms `LATCH` — is untested. It is now the binding constraint for 30 fps
   with all `SET_LEDS`.
 
-## Unexplained: row current
+## Open: row 0 discovers none of its four tiles
 
-Row 0 read **~315 mA at 11.71 V** throughout this session, against 13–18 mA
-at 11.95 V for every row on 2026-09-15. Row 1 read 88 mA; rows 2–7 read
-14–18 mA as before. The reading did not change under load (315 mA before
-and after the soak). Row 1 is still on v5 firmware, so the change is not
-obviously the new firmware; something on the bench may have changed.
-Not investigated.
+Row 0 had four tiles connected (tiles 0 and 1 with LED strips, 2 and 3
+without), all showing their power-up test pattern, so each tile controller
+was running. Row 0 still reported `tiles_found = 0` all session, and an
+explicit `RE_DISCOVER` long after the tiles had booted finished in under
+100 ms with nothing found — the timing of slot 0 never answering
+`DETECT_SENSE` (20 ms settle plus three 5 ms attempts). Row 1, still on v5,
+did the same. Consequently no `SEND_DATA` reached a tile and nothing lit
+during any run above.
+
+v6 changes only the Row Bus side (UART1, DMA, the Row Bus parser, core 0's
+loop); discovery, SENSE and the Tile Bus on UART0 are untouched. That makes
+v6 an unlikely cause but does not rule it out. Not yet investigated.
+
+Row 0's draw — ~315 mA at 11.71 V, flat before, during and after the soak,
+against 13–18 mA for a bare row — is consistent with the four tiles: the
+2026-08-16 sweep measured ~108 mA for a row plus one tile with its strip
+dark. Row 1 read 88 mA.
 
 ## Pitfall hit on the first flash
 
