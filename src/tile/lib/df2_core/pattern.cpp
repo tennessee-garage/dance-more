@@ -1,7 +1,7 @@
 #include "pattern.h"
 #include <string.h>
 
-// PROGMEM keeps the 256-byte wave table out of the ATtiny3224's SRAM; on the
+// PROGMEM keeps the 256-byte wave table out of the ATtiny3226's SRAM; on the
 // native build the macros collapse to plain memory access.
 #if defined(__AVR__)
 #include <avr/pgmspace.h>
