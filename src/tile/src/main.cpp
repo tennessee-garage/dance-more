@@ -38,9 +38,10 @@ static PatternEngine pattern;
 // data cancels it, so a LATCH is never fought over by the start-up pattern.
 //
 // Note this does not make the tile continuously listening: led_driver.push()
-// bit-bangs the WS2815 line with interrupts off for ~1.2 ms, so there is a
-// brief deaf window per step (and per latch, in normal operation too). The
-// Tile Bus retries in SenseMapper cover it.
+// bit-bangs the WS2815 line with interrupts off for TILE_LED_PUSH_US (~1.8 ms
+// at 60 LEDs), so there is a brief deaf window per step, and per latch in
+// normal operation. SenseMapper's retries cover discovery; for display
+// traffic the row keeps the Tile Bus quiet after each LATCH (#104).
 static constexpr uint8_t  STARTUP_STEPS   = 6;
 static constexpr uint16_t STARTUP_STEP_MS = 600;
 

@@ -557,7 +557,10 @@ A subsequent Pi `LATCH` with no new `SEND_DATA` results in a no-op Tile Bus LATC
 relay (tiles have no pending data).
 
 All 64 tiles go dark within ~2 ms of the row controllers completing their Tile Bus
-`SET_COLOR` sweeps (8 × 10-byte SET_COLOR frames ≈ 0.8 ms + Tile Bus LATCH).
+`SET_COLOR` sweeps (8 × 10-byte SET_COLOR frames ≈ 0.8 ms + Tile Bus LATCH). A
+`BLACKOUT` arriving within 4 ms of a `LATCH` waits for the tiles to finish
+pushing that frame first (tile-bus-protocol.md, `LATCH`), so it can take up to
+4 ms longer.
 
 | Field   | Value |
 | ------- | ----- |
