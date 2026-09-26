@@ -319,6 +319,90 @@ void test_latch_without_forwarding_is_unaffected_by_overrun_logic() {
     TEST_ASSERT_EQUAL(0, log_resp->payload[0]); // no overrun logged
 }
 
+// ---------------------------------------------------------------------------
+// Quiet window after LATCH (#104)
+// ---------------------------------------------------------------------------
+
+// A BLACKOUT straight after a LATCH - what `df2-pi play` sends on exit - must
+// not reach tiles still pushing their LEDs. It waits out the window.
+void test_blackout_straight_after_latch_waits_for_quiet_window() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    map.set_discovered(0, 0x01);
+    map.set_discovered(1, 0x02);
+
+    RowCommandHandler handler(transport, sense, power, 0x00);
+    handler.poll(1000);
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::LATCH, nullptr, 0));
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::BLACKOUT, nullptr, 0));
+    TEST_ASSERT_EQUAL(1, transport.sent.size());           // only the LATCH so far
+
+    handler.poll(1000);                                      // window timed from here
+    handler.poll(1000 + TILE_LATCH_QUIET_MS - 1);
+    TEST_ASSERT_EQUAL(1, transport.sent.size());
+
+    handler.poll(1000 + TILE_LATCH_QUIET_MS);
+    TEST_ASSERT_EQUAL(4, transport.sent.size());             // 2 x SET_COLOR black + LATCH
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR, transport.sent[1].cmd);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR, transport.sent[2].cmd);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,     transport.sent[3].cmd);
+}
+
+// LATCH, BLACKOUT, LATCH in quick succession keeps its order, each Tile Bus
+// LATCH opening a fresh window before the next thing goes out.
+void test_queued_blackout_and_latch_go_out_in_order() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    map.set_discovered(0, 0x01);
+
+    RowCommandHandler handler(transport, sense, power, 0x00);
+    handler.poll(0);
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::LATCH, nullptr, 0));
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::BLACKOUT, nullptr, 0));
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::LATCH, nullptr, 0));
+
+    uint32_t t = 0;
+    for (int i = 0; i < 40; i++, t++) handler.poll(t);
+
+    TEST_ASSERT_EQUAL(4, transport.sent.size());
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,     transport.sent[0].cmd);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR, transport.sent[1].cmd);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,     transport.sent[2].cmd);
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,     transport.sent[3].cmd);
+}
+
+// A small frame arriving just after a LATCH - the case that lost 9/10 frames
+// on the bench - is forwarded only once the window has passed.
+void test_forwarding_waits_for_quiet_window() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    map.set_discovered(0, 0x01);
+
+    uint8_t payload[4] = {(uint8_t)Cmd::SET_COLOR, 10, 20, 30};
+
+    RowCommandHandler handler(transport, sense, power, 0x00);
+    handler.poll(500);
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::LATCH, nullptr, 0));
+    handler.poll(500);
+    handler.handle(make_frame(0x00, RowBusCmd::SEND_DATA, payload, sizeof(payload)));
+
+    handler.poll(500 + TILE_LATCH_QUIET_MS - 1);
+    TEST_ASSERT_EQUAL(1, transport.sent.size());
+
+    handler.poll(500 + TILE_LATCH_QUIET_MS);
+    TEST_ASSERT_EQUAL(2, transport.sent.size());
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR, transport.sent[1].cmd);
+}
+
 void test_error_log_ring_buffer_caps_at_31_and_drops_oldest() {
     FakeTileTransport transport;
     FakeRowSense      row_sense;
@@ -347,6 +431,10 @@ void test_error_log_ring_buffer_caps_at_31_and_drops_oldest() {
         handler.poll(now_ms);                            // advance 1 slot, then defer
         handler.handle(latch_req);
         for (int s = 0; s < 7; s++) handler.poll(now_ms); // finish the remaining 7 slots
+        // Let the deferred LATCH's quiet window pass, as real time would, so
+        // the next cycle's forwarding is not held back by it.
+        handler.poll(now_ms);
+        handler.poll(now_ms + TILE_LATCH_QUIET_MS);
     }
 
     RowBusFrame log_req = make_frame(0x00, RowBusCmd::ERROR_LOG, nullptr, 0);
@@ -681,6 +769,9 @@ int main(int, char **) {
     RUN_TEST(test_latch_defers_when_send_data_still_forwarding);
     RUN_TEST(test_latch_without_forwarding_is_unaffected_by_overrun_logic);
     RUN_TEST(test_error_log_ring_buffer_caps_at_31_and_drops_oldest);
+    RUN_TEST(test_blackout_straight_after_latch_waits_for_quiet_window);
+    RUN_TEST(test_queued_blackout_and_latch_go_out_in_order);
+    RUN_TEST(test_forwarding_waits_for_quiet_window);
     RUN_TEST(test_status_reports_uptime_from_poll_clock);
     RUN_TEST(test_status_uptime_survives_past_16_bit_seconds);
     RUN_TEST(test_boot_entry_survives_a_full_ring_and_reports_first);
