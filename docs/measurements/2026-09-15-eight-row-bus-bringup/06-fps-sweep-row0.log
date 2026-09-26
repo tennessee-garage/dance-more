@@ -1,0 +1,42 @@
+===== row 0 @ 10 fps =====
+sent 150 frame-periods in 15.0s = 10.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+PASS: row kept up with a saturated chain at 10.0 fps
+===== row 0 @ 15 fps =====
+sent 225 frame-periods in 15.0s = 15.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+PASS: row kept up with a saturated chain at 15.0 fps
+===== row 0 @ 20 fps =====
+sent 300 frame-periods in 15.0s = 20.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+PASS: row kept up with a saturated chain at 20.0 fps
+===== row 0 @ 25 fps =====
+sent 375 frame-periods in 15.0s = 25.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+PASS: row kept up with a saturated chain at 25.0 fps
+===== row 0 @ 27 fps =====
+sent 405 frame-periods in 15.0s = 27.0 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+FAIL: row RESTARTED (uptime 192s -> 0s)
+===== row 0 @ 28 fps =====
+sent 420 frame-periods in 15.0s = 28.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+FAIL: row RESTARTED (uptime 2s -> 0s)
+===== row 0 @ 29 fps =====
+sent 435 frame-periods in 15.0s = 29.0 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+FAIL: row RESTARTED (uptime 2s -> 0s)
+===== row 0 @ 30 fps =====
+sent 450 frame-periods in 15.0s = 30.0 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+FAIL: row RESTARTED (uptime 2s -> 0s)
+===== row 0 @ 30 fps, peers=3 =====
+row 0x00 on chain 0; 3 frames/frame-period (0x00, 0x02, 0x04) = 131 kB/s on the wire
+sent 450 frame-periods in 15.0s = 29.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+PASS: row kept up with a saturated chain at 29.9 fps
+===== row 0 @ 30 fps, peers=2 =====
+row 0x00 on chain 0; 2 frames/frame-period (0x00, 0x02) = 87 kB/s on the wire
+sent 450 frame-periods in 15.0s = 29.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+PASS: row kept up with a saturated chain at 29.9 fps

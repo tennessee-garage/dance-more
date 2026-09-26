@@ -69,8 +69,10 @@ ERROR_TYPE_NAMES = {0x01: "no_ack_after_retries", 0x02: "crc_failure", 0x03: "se
 # usual "tile slot / Tile Bus command", so the generic line would misread them.
 #
 # row_boot carries POWMAN_CHIP_RESET >> 16, where the RP2350 keeps its sticky
-# reset causes. More than one can be set at once, so these are decoded as
-# flags rather than a single reason.
+# reset causes, plus the watchdog's own REASON in bits 13-14 from row firmware
+# v6 - a PSM-routed watchdog reset shows up only there (docs/row-bus-protocol.md
+# 5.1). More than one can be set at once, so these are decoded as flags rather
+# than a single reason.
 RESET_CAUSES = [
     (0x0001, "power-on"),
     (0x0002, "brownout"),
@@ -84,6 +86,8 @@ RESET_CAUSES = [
     (0x0400, "glitch detect"),
     (0x0800, "hazard sys reset"),
     (0x1000, "watchdog(rsm)"),
+    (0x2000, "watchdog timeout"),
+    (0x4000, "watchdog forced"),
 ]
 
 

@@ -37,18 +37,30 @@ static constexpr uint8_t ERROR_TYPE_LATCH_OVERRUN = 0x04;
 // fault on the *upstream* link, so slot and tile_bus_cmd carry no meaning
 // and are logged as 0.
 static constexpr uint8_t ERROR_TYPE_ROW_BUS_RX_OVERFLOW = 0x05;
-// Diagnostic, not a fault: one entry per boot carrying the RP2350's sticky
-// reset-cause bits, so a restart says *why* it happened rather than just
-// that it did. slot/tile_bus_cmd are the high/low bytes of
-// POWMAN_CHIP_RESET >> 16, which is where every HAD_* cause bit lives
-// (POR, BOR, RUN_LOW, the four watchdog flavours, GLITCH_DETECT, ...).
+// Diagnostic, not a fault: one entry per boot carrying the RP2350's reset
+// causes, so a restart says *why* it happened rather than just that it did.
+// slot/tile_bus_cmd are the high/low bytes of a 16-bit cause word:
 //
-// Added to explain a restart ~3.6 s into every power-up that neither bus
-// showed the cause of, and it earned its keep immediately: POR with no
-// watchdog, BOR or glitch bit set is what pointed at the supply rather than
-// the firmware, and the row was in fact browning out. A plain
-// watchdog_caused_reboot() bool could not have told those apart.
+//   bits 0-12  POWMAN_CHIP_RESET >> 16 - the sticky HAD_* bits (POR, BOR,
+//              RUN_LOW, GLITCH_DETECT, the POWMAN-routed watchdog flavours...)
+//   bit  13    WATCHDOG_REASON.TIMER - the watchdog timed out
+//   bit  14    WATCHDOG_REASON.FORCE - software forced a watchdog reset
+//
+// Both halves are needed. The SDK's watchdog_enable() resets the chip through
+// PSM only, which never touches POWMAN, so a watchdog timeout sets no HAD_*
+// bit and leaves the POR bit from the original power-up in place: from
+// POWMAN alone it is indistinguishable from a power cycle (#101). The
+// watchdog records itself in WATCHDOG_REASON instead, which any hardware
+// reset clears. So POR alone is a power cycle; POR plus TIMER is a watchdog
+// timeout since the last one.
+//
+// A power problem shows as POR, or BOR, with no watchdog bit - which is how
+// a restart ~3.6 s into every power-up was traced to the bench supply's
+// current limit rather than the firmware.
 static constexpr uint8_t ERROR_TYPE_ROW_BOOT = 0x06;
+static constexpr uint16_t ROW_BOOT_POWMAN_MASK    = 0x1FFF;
+static constexpr uint16_t ROW_BOOT_WATCHDOG_TIMER = 1u << 13;
+static constexpr uint16_t ROW_BOOT_WATCHDOG_FORCE = 1u << 14;
 // 0x07 is retired. It used to flag "discovery assigned a tile to slot 1 or
 // higher", which was a usable proxy for the phantom-8 cascade only while the
 // bench had a single tile. Since addresses are assigned by position
@@ -107,7 +119,7 @@ public:
     // sweep, and one per discovered tile that then would not answer VERSION.
     // All go in the error log because it is the only channel that already
     // reaches the Pi with a timestamp attached.
-    void log_boot(uint32_t chip_reset_reason, uint32_t now_ms);
+    void log_boot(uint16_t reset_cause, uint32_t now_ms);  // see ERROR_TYPE_ROW_BOOT
     void log_crc_failures(uint16_t count, uint32_t now_ms);
     void log_tile_no_version(uint8_t slot, uint8_t addr, uint32_t now_ms);
     void log_sense_start(uint32_t now_ms);

@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 #include "protocol.h"   // src/common/tile_bus_protocol/, via lib_extra_dirs
 
@@ -17,9 +18,9 @@ static constexpr uint16_t ROWBUS_MAX_PAYLOAD    = ROWBUS_SLOTS * ROWBUS_TILE_ENT
 static constexpr uint16_t ROWBUS_FRAME_OVERHEAD = 8;
 static constexpr uint16_t ROWBUS_MAX_FRAME      = ROWBUS_FRAME_OVERHEAD + ROWBUS_MAX_PAYLOAD; // 1456
 
-// Row Bus's LEN is 2 bytes, so there's room to spare here - but the RX FIFO in
-// src/rp2350/pi_transport_rp2350.cpp is sized against ROWBUS_MAX_FRAME and an
-// overrun there wedges the core (see main.cpp's watchdog note). Keep them in step.
+// Row Bus's LEN is 2 bytes, so there's room to spare here - but the receive
+// ring in src/rp2350/pi_transport_rp2350.h is sized against ROWBUS_MAX_FRAME
+// (a static_assert there holds it to a chain's worth of frames).
 static_assert(ROWBUS_MAX_FRAME <= 65535, "Row Bus frame no longer fits a uint16_t length");
 
 enum class RowBusCmd : uint8_t {
@@ -56,6 +57,22 @@ class RowBusFrameParser {
 public:
     // Feed one byte; returns true (and populates *out) when a valid frame arrives.
     bool feed(uint8_t byte, RowBusFrame *out);
+
+    // Feed a run of bytes, stopping just after the first frame that
+    // completes. Returns how many bytes were consumed and sets *complete if
+    // *out now holds a frame; the caller hands back the rest on its next
+    // call. Behaves exactly like feeding the same bytes one at a time, but
+    // takes a payload in one tight loop rather than a state-machine dispatch
+    // per byte - which is where nearly every Row Bus byte is.
+    size_t feed(const uint8_t *data, size_t len, RowBusFrame *out, bool *complete);
+
+    // Only frames addressed to `addr` or broadcast are returned. Every other
+    // frame is still CRC-checked - a failure still counts, so crc_failures()
+    // keeps reporting on the whole chain rather than this row's quarter of
+    // it - but its payload is neither stored nor copied out. Without a call
+    // to this, every valid frame is returned.
+    void set_address(uint8_t addr) { filter_ = true; my_addr_ = addr; }
+
     void reset();
 
     // Frames discarded on a failed CRC since construction.
@@ -91,4 +108,7 @@ private:
     uint8_t     crc_high    = 0;
     uint16_t    running_crc = 0;
     uint32_t    crc_failures_ = 0;
+    bool        filter_     = false;
+    uint8_t     my_addr_    = 0;
+    bool        keep_       = true;   // current frame is ours: store and return it
 };

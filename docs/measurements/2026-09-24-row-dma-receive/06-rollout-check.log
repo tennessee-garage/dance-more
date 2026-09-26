@@ -1,0 +1,39 @@
+chain 0: addr 0x00 answered (reply addr 0x00)
+chain 0: addr 0x02 answered (reply addr 0x02)
+chain 0: addr 0x04 answered (reply addr 0x04)
+chain 0: addr 0x06 answered (reply addr 0x06)
+chain 1: addr 0x01 answered (reply addr 0x01)
+chain 1: addr 0x03 answered (reply addr 0x03)
+chain 1: addr 0x05 answered (reply addr 0x05)
+chain 1: addr 0x07 answered (reply addr 0x07)
+row 0  v6+3a15f42b  tiles 3/8  slot 1: v
+row 1  v6+3a15f42b  tiles 0/8  slot 0: n
+row 2  v6+3a15f42b  tiles 0/8  slot 0: n
+row 3  v6+3a15f42b  tiles 0/8  slot 0: n
+row 4  v6+3a15f42b  tiles 0/8  slot 0: n
+row 5  v6+3a15f42b  tiles 0/8  slot 0: n
+row 6  v6+3a15f42b  tiles 0/8  slot 0: n
+row 7  v6+3a15f42b  tiles 0/8  slot 0: n
+* mismatch, dirty build, missing version
+row 0: state=2 uptime=19s  11767mV 317mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 1: state=2 uptime=19s  11841mV 88mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 2: state=2 uptime=19s  11835mV 16mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 3: state=2 uptime=19s  11848mV 15mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 4: state=2 uptime=19s  11838mV 15mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 5: state=2 uptime=19s  11843mV 15mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 6: state=2 uptime=19s  11830mV 16mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+row 7: state=2 uptime=19s  11832mV 16mA  log[21]: row_boot(POR)@0s, sense_start(s19,0x00)@19s
+Found 8 row controller(s): 0x00(chain 0), 0x01(chain 1), 0x02(chain 0), 0x03(chain 1), 0x04(chain 0), 0x05(chain 1), 0x06(chain 0), 0x07(chain 1)
+  [FAIL] STATUS: 0 tile(s) discovered - expected tiles_found=0 and [0, 0, 0, 0, 0, 0, 0, 0], got 3 and [1, 1, 1, 0, 0, 0, 0, 0]
+  [FAIL] RE_DISCOVER completes - state=running, 3 tile(s) - expected 0
+  [FAIL] STATUS: 0 tile(s) discovered - expected tiles_found=0 and [0, 0, 0, 0, 0, 0, 0, 0], got 3 and [1, 1, 1, 0, 0, 0, 0, 0]
+  -- 17/20 checks passed
+  -- 20/20 checks passed
+  -- 20/20 checks passed
+  -- 20/20 checks passed
+  -- 20/20 checks passed
+  -- 20/20 checks passed
+  -- 20/20 checks passed
+  -- 20/20 checks passed
+  -- 10/10 checks passed
+SOME CHECKS FAILED

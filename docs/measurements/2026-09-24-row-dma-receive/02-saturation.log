@@ -1,0 +1,24 @@
+===== row 0 @ 30 fps, 60 s =====
+row 0x00 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 175 kB/s on the wire
+sent 1798 frame-periods in 60.0s = 30.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 97s (no restart)
+PASS: row kept up with a saturated chain at 30.0 fps
+===== row 0 @ 35 fps, 60 s =====
+row 0x00 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 204 kB/s on the wire
+sent 2097 frame-periods in 60.0s = 34.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 160s (no restart)
+PASS: row kept up with a saturated chain at 34.9 fps
+===== row 0 @ 45 fps, 60 s =====
+row 0x00 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 262 kB/s on the wire
+sent 2694 frame-periods in 60.0s = 44.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 224s (no restart)
+PASS: row kept up with a saturated chain at 44.9 fps
+===== row 0 @ 50 fps, 60 s =====
+row 0x00 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 291 kB/s on the wire
+sent 2992 frame-periods in 60.0s = 49.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 287s (no restart)
+PASS: row kept up with a saturated chain at 49.9 fps

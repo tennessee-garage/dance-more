@@ -1,0 +1,90 @@
+== scan, row 0 with --expect-tiles 3
+      state=running tiles_found=3 tile_status=['ok', 'ok', 'ok', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=45s
+  [PASS] STATUS: 3 tile(s) discovered - slots 0-2 ok
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        slot=13 tile_cmd=0x00 type=sense_start t=13s
+        slot=14 tile_cmd=0x00 type=sense_start t=14s
+        slot=15 tile_cmd=0x00 type=sense_start t=15s
+        slot=16 tile_cmd=0x00 type=sense_start t=16s
+        slot=17 tile_cmd=0x00 type=sense_start t=17s
+        slot=18 tile_cmd=0x00 type=sense_start t=18s
+        slot=19 tile_cmd=0x00 type=sense_start t=19s
+        slot=20 tile_cmd=0x00 type=sense_start t=20s
+        slot=0 tile_cmd=0x00 type=sense_start t=0s
+        slot=1 tile_cmd=0x00 type=sense_start t=1s
+        slot=2 tile_cmd=0x00 type=sense_start t=2s
+        slot=3 tile_cmd=0x00 type=sense_start t=3s
+        slot=4 tile_cmd=0x00 type=sense_start t=4s
+        slot=5 tile_cmd=0x00 type=sense_start t=5s
+        slot=6 tile_cmd=0x00 type=sense_start t=6s
+        slot=7 tile_cmd=0x00 type=sense_start t=7s
+        slot=8 tile_cmd=0x00 type=sense_start t=8s
+        slot=9 tile_cmd=0x00 type=sense_start t=9s
+        slot=10 tile_cmd=0x00 type=sense_start t=10s
+        slot=11 tile_cmd=0x00 type=sense_start t=11s
+        slot=12 tile_cmd=0x00 type=sense_start t=12s
+        slot=13 tile_cmd=0x00 type=sense_start t=13s
+        slot=14 tile_cmd=0x00 type=sense_start t=14s
+        slot=15 tile_cmd=0x00 type=sense_start t=15s
+        slot=16 tile_cmd=0x00 type=sense_start t=16s
+        slot=17 tile_cmd=0x00 type=sense_start t=17s
+        slot=18 tile_cmd=0x00 type=sense_start t=18s
+        slot=19 tile_cmd=0x00 type=sense_start t=19s
+        slot=20 tile_cmd=0x00 type=sense_start t=20s
+  [PASS] RE_DISCOVER completes - state=running, 3 tile(s)
+      state=running tiles_found=3 tile_status=['ok', 'ok', 'ok', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered', 'not_discovered'] uptime=46s
+  [PASS] STATUS: 3 tile(s) discovered - slots 0-2 ok
+  -- 20/20 checks passed
+===== row 6 @ 30 fps, 60 s =====
+sent 1798 frame-periods in 60.0s = 30.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 113s (no restart)
+PASS: row kept up with a saturated chain at 30.0 fps
+===== row 6 @ 45 fps, 60 s =====
+sent 2694 frame-periods in 60.0s = 44.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 176s (no restart)
+PASS: row kept up with a saturated chain at 44.9 fps
+===== row 7 @ 30 fps, 60 s =====
+sent 1798 frame-periods in 60.0s = 30.0 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 240s (no restart)
+PASS: row kept up with a saturated chain at 30.0 fps
+===== row 7 @ 45 fps, 60 s =====
+sent 2694 frame-periods in 60.0s = 44.9 fps (kept up)
+new log entries: 0 (0 rx_overflow, 0 latch_overrun)
+end uptime 303s (no restart)
+PASS: row kept up with a saturated chain at 44.9 fps
+===== before soak
+row 0: state=2 uptime=306s  11768mV 316mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, cr
+row 1: state=2 uptime=306s  11847mV 88mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+row 2: state=2 uptime=306s  11840mV 15mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, crc
+row 3: state=2 uptime=306s  11851mV 16mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+row 4: state=2 uptime=306s  11842mV 16mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, crc
+row 5: state=2 uptime=306s  11848mV 14mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+row 6: state=2 uptime=306s  11833mV 15mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, crc
+row 7: state=2 uptime=306s  11835mV 14mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+===== soak: plasma 30 fps, 18000 frames
+18000 frames, 0 dropped, jitter p95 0.13 ms
+===== after soak
+row 0: state=2 uptime=909s  11275mV 1090mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, c
+row 1: state=2 uptime=909s  11637mV 88mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+row 2: state=2 uptime=909s  11592mV 16mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, crc
+row 3: state=2 uptime=909s  11641mV 16mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+row 4: state=2 uptime=909s  11600mV 15mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, crc
+row 5: state=2 uptime=909s  11637mV 15mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+row 6: state=2 uptime=909s  11592mV 16mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@20s, crc_failure(count=3)@25s, crc_failure(count=1)@45s, crc
+row 7: state=2 uptime=909s  11626mV 14mA  log[27]: row_boot(POR)@0s, crc_failure(count=1)@21s, crc_failure(count=3)@26s, crc_failure(count=1)@46s, crc
+blacked-out

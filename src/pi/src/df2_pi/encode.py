@@ -27,8 +27,7 @@ near-uniform tiles too, trading a little accuracy for a lot of wire time:
     all tiles fully addressed          1,448 B     ~18.6 ms of the 33 ms budget
 
 That is the Row Bus phase only; the per-row Tile Bus tail adds ~15 ms after
-it and the measured ceiling is ~25 FPS, limited by the row's receive path
-(docs/row-bus-protocol.md section 1) - so fitting here is necessary, not
+it (docs/row-bus-protocol.md section 8) - so fitting here is necessary, not
 sufficient.
 
 Colour pipeline. Frame bytes are gamma-ENCODED (perceptual); the WS2815 is

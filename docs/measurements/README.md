@@ -48,6 +48,35 @@ close to the "~0.5 A measured" figure already in
 isolation as its own text suggests. Worth reconciling next time power.md is
 touched.
 
+## Row Bus ceilings, eight rows, no tiles (2026-09-15)
+
+**Tools:** [`test_chain_saturation.py`](../../src/pi/test/integration/test_chain_saturation.py),
+[`test_row_bus_scan.py`](../../src/pi/test/integration/test_row_bus_scan.py),
+`df2-pi play`.
+
+First run with all eight row controllers on the two-chain pi-hat. Confirms
+the row-side ingest ceiling (25 fps passes, 27 fps watchdog-resets, limit is
+bytes/s), shows the `ROW_BOOT` cause cannot see a watchdog reset, and times
+the host at ~48 ms per floor update against a 33 ms budget — 20 ms of
+pure-Python CRC and a pyserial `write()` that serialised the two chains,
+both fixed the same day (19.2 ms after). With the host fixed, 20 fps is the
+highest rate all eight rows sustain. Cabling is clean: zero CRC failures
+over a 10-minute soak. Write-up in
+[`2026-09-15-eight-row-bus-bringup.md`](2026-09-15-eight-row-bus-bringup.md),
+raw logs alongside.
+
+## Row DMA receive (2026-09-24)
+
+**Tools:** [`test_chain_saturation.py`](../../src/pi/test/integration/test_chain_saturation.py),
+`df2-pi play`.
+
+Row firmware v6 receives the Row Bus by DMA. Row 0 kept up with a
+worst-case chain at 30, 35, 45 and 50 fps (93 % of the wire) and ran a
+10-minute 30 fps soak with no restarts or CRC failures; v5 failed at
+27 fps. Then rolled out to all eight rows and re-verified floor-wide. Also
+records an open tile problem: after playback some tiles ignore `BLACKOUT`
+until a full-size frame unsticks them. Write-up in [`2026-09-24-row-dma-receive.md`](2026-09-24-row-dma-receive.md).
+
 ## Measuring a new strip or tile
 
 ```bash

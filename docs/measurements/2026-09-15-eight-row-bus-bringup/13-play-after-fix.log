@@ -1,0 +1,38 @@
+row 0: state=2 uptime=1455s  119
+row 1: state=2 uptime=1874s  119
+row 2: state=2 uptime=1455s  119
+row 3: state=2 uptime=1874s  119
+row 4: state=2 uptime=1455s  119
+row 5: state=2 uptime=1874s  119
+row 6: state=2 uptime=1455s  119
+row 7: state=2 uptime=14s  11941
+===== play 25 fps, 1500 frames (60 s) =====
+1500 frames, 0 dropped, jitter p95 0.12 ms
+row 0: state=2 uptime=1518s  119
+row 1: state=2 uptime=1936s  119
+row 2: state=2 uptime=1518s  119
+row 3: state=2 uptime=3s  11951m
+row 4: state=2 uptime=39s  11956
+row 5: state=2 uptime=1936s  119
+row 6: state=2 uptime=1517s  119
+row 7: state=2 uptime=77s  11945
+===== play 30 fps, 300 frames (10 s) =====
+300 frames, 0 dropped, jitter p95 0.12 ms
+row 0: state=2 uptime=2s  11955m
+row 1: state=2 uptime=2s  11956m
+row 2: state=2 uptime=2s  11951m
+row 3: state=2 uptime=2s  11950m
+row 4: state=2 uptime=2s  11952m
+row 5: state=2 uptime=2s  11947m
+row 6: state=2 uptime=2s  11950m
+row 7: state=2 uptime=2s  11943m
+===== play 20 fps, 2400 frames (120 s) =====
+2400 frames, 0 dropped, jitter p95 0.13 ms
+row 0: state=2 uptime=144s  11952mV 15mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s
+row 1: state=2 uptime=144s  11957mV 15mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s
+row 2: state=2 uptime=144s  11952mV 13mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s
+row 3: state=2 uptime=144s  11953mV 14mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s
+row 4: state=2 uptime=144s  11952mV 14mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s
+row 5: state=2 uptime=144s  11952mV 14mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s
+row 6: state=2 uptime=144s  11951mV 15mA  log[3]: row_boot(POR)@0s, latch_overrun(s7,0x12)@0s
+row 7: state=2 uptime=144s  11943mV 13mA  log[4]: row_boot(POR)@0s, rx_overflow(s0,0x00)@0s, crc_failure(count=11)@5s

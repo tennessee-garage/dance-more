@@ -96,6 +96,7 @@ bool RowBusFrameParser::feed(uint8_t byte, RowBusFrame *out) {
 
     case State::ADDR:
         current.addr = byte;
+        keep_        = !filter_ || byte == my_addr_ || byte == ROWBUS_ADDR_BROADCAST;
         running_crc  = row_bus_crc16_update(0xFFFF, byte);
         state        = State::CMD;
         break;
@@ -122,7 +123,7 @@ bool RowBusFrameParser::feed(uint8_t byte, RowBusFrame *out) {
         break;
 
     case State::PAYLOAD:
-        current.payload[pay_idx] = byte;
+        if (keep_) current.payload[pay_idx] = byte;
         running_crc               = row_bus_crc16_update(running_crc, byte);
         if (++pay_idx >= current.len) state = State::CRC_H;
         break;
@@ -136,7 +137,7 @@ bool RowBusFrameParser::feed(uint8_t byte, RowBusFrame *out) {
         uint16_t received = (uint16_t)(((uint16_t)crc_high << 8) | byte);
         state = State::SYNC1;
         if (received != running_crc) crc_failures_++;
-        if (received == running_crc) {
+        if (received == running_crc && keep_) {
             *out = current;
             return true;
         }
@@ -144,6 +145,37 @@ bool RowBusFrameParser::feed(uint8_t byte, RowBusFrame *out) {
     }
     }
     return false;
+}
+
+size_t RowBusFrameParser::feed(const uint8_t *data, size_t len, RowBusFrame *out, bool *complete) {
+    *complete = false;
+    size_t i = 0;
+    while (i < len) {
+        if (state == State::PAYLOAD) {
+            size_t n = current.len - pay_idx;
+            if (n > len - i) n = len - i;
+            uint16_t crc = running_crc;
+            if (keep_) {
+                uint8_t *dst = &current.payload[pay_idx];
+                for (size_t k = 0; k < n; k++) {
+                    dst[k] = data[i + k];
+                    crc    = row_bus_crc16_update(crc, data[i + k]);
+                }
+            } else {
+                for (size_t k = 0; k < n; k++) crc = row_bus_crc16_update(crc, data[i + k]);
+            }
+            running_crc = crc;
+            pay_idx     = (uint16_t)(pay_idx + n);
+            i          += n;
+            if (pay_idx >= current.len) state = State::CRC_H;
+            continue;
+        }
+        if (feed(data[i++], out)) {
+            *complete = true;
+            break;
+        }
+    }
+    return i;
 }
 
 void RowBusFrameParser::reset() {

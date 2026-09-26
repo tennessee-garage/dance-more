@@ -14,7 +14,9 @@ each against a 3.2 us/byte arrival rate at 3.125 Mbps, so it finished parsing
 a maximum-size frame roughly 4 ms after the last bit was already on the wire.
 At that rate a chain's worth of worst-case frames - 4 rows x 1,456 bytes -
 costs ~35 ms of core-0 time per 33.3 ms frame period, which would put 30 FPS
-out of reach for reasons §8 does not model.
+out of reach for reasons §8 does not model. Row firmware v6 replaced that
+receive path with a DMA ring and passed this test at 50 FPS (2026-09-24);
+it stays as the regression test for it.
 
 This test drives that case directly. It sends a full-size SEND_DATA to every
 row slot on a chain plus a LATCH, at a target frame rate, for a set duration,

@@ -1,0 +1,82 @@
+===== row 0 =====
+row 0x00 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 758s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+
+FAIL: row RESTARTED (uptime 758s -> 0s)
+exit=1
+===== row 1 =====
+row 0x01 on chain 1; 4 frames/frame-period (0x01, 0x03, 0x05, 0x07) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 818s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 3 (1 rx_overflow, 0 latch_overrun)
+
+FAIL: 1 ROW_BUS_RX_OVERFLOW - the receive path dropped bytes
+FAIL: row RESTARTED (uptime 818s -> 0s)
+exit=1
+===== row 2 =====
+row 0x02 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 60s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+
+FAIL: row RESTARTED (uptime 60s -> 0s)
+exit=1
+===== row 3 =====
+row 0x03 on chain 1; 4 frames/frame-period (0x01, 0x03, 0x05, 0x07) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 60s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+
+FAIL: row RESTARTED (uptime 60s -> 0s)
+exit=1
+===== row 4 =====
+row 0x04 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 60s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+
+FAIL: row RESTARTED (uptime 60s -> 0s)
+exit=1
+===== row 5 =====
+row 0x05 on chain 1; 4 frames/frame-period (0x01, 0x03, 0x05, 0x07) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 61s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+
+FAIL: row RESTARTED (uptime 61s -> 0s)
+exit=1
+===== row 6 =====
+row 0x06 on chain 0; 4 frames/frame-period (0x00, 0x02, 0x04, 0x06) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 61s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 2 (0 rx_overflow, 0 latch_overrun)
+
+FAIL: row RESTARTED (uptime 61s -> 0s)
+exit=1
+===== row 7 =====
+row 0x07 on chain 1; 4 frames/frame-period (0x01, 0x03, 0x05, 0x07) = 175 kB/s on the wire
+each frame 1456 bytes = 4.66 ms on the wire; 18.6 ms of wire per period at 30 fps (33.3 ms budget)
+start uptime 61s
+
+sent 1797 frame-periods in 60.0s = 29.9 fps (kept up)
+new log entries: 3 (1 rx_overflow, 0 latch_overrun)
+
+FAIL: 1 ROW_BUS_RX_OVERFLOW - the receive path dropped bytes
+FAIL: row RESTARTED (uptime 61s -> 0s)
+exit=1

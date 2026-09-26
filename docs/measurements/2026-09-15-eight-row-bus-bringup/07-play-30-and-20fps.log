@@ -1,0 +1,28 @@
+row 0: state=2 uptime=55s  11953mV 16mA 
+row 1: state=2 uptime=474s  11956mV 15mA
+row 2: state=2 uptime=55s  11951mV 14mA 
+row 3: state=2 uptime=474s  11951mV 14mA
+row 4: state=2 uptime=55s  11952mV 14mA 
+row 5: state=2 uptime=474s  11956mV 13mA
+row 6: state=2 uptime=55s  11948mV 14mA 
+row 7: state=2 uptime=474s  11942mV 14mA
+===== play plasma 30fps 900 frames =====
+900 frames, 866 dropped, jitter p95 0.15 ms
+row 0: state=2 uptime=117s  11955mV 16mA  log[2]: row_boot(POR)@0s, sense_start(s0,0x00)@0s
+row 1: state=2 uptime=536s  11955mV 15mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 2: state=2 uptime=118s  11948mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 3: state=2 uptime=536s  11953mV 15mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 4: state=2 uptime=118s  11955mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 5: state=2 uptime=536s  11953mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 6: state=2 uptime=117s  11951mV 15mA  log[21]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, sense_start(s1,0x00)@1s, s
+row 7: state=2 uptime=536s  11945mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+===== play plasma 20fps 600 frames =====
+600 frames, 45 dropped, jitter p95 23.90 ms
+row 0: state=2 uptime=153s  11955mV 16mA  log[2]: row_boot(POR)@0s, sense_start(s0,0x00)@0s
+row 1: state=2 uptime=572s  11960mV 15mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 2: state=2 uptime=154s  11950mV 16mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 3: state=2 uptime=572s  11951mV 15mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 4: state=2 uptime=154s  11952mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 5: state=2 uptime=572s  11951mV 14mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
+row 6: state=2 uptime=153s  11950mV 16mA  log[21]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, sense_start(s1,0x00)@1s, s
+row 7: state=2 uptime=572s  11942mV 13mA  log[4]: row_boot(POR)@0s, sense_start(s0,0x00)@0s, rx_overflow(s0,0x00)@0s, cr
