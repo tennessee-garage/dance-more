@@ -18,7 +18,7 @@ from df2_pi.animation.loader import (
 )
 from df2_pi.animation.meta import FORMATS, AnimationMeta, Param, animation
 from df2_pi.animation.registry import AnimationRegistry, default_animations_dir
-from df2_pi.effects import FADE, HUE_SPLIT, NONE, Effect
+from df2_pi.effects import CHASE, FADE, HUE_SPLIT, NONE, SHIMMER, Effect
 
 __all__ = [
     "AnimationDef",
@@ -27,6 +27,7 @@ __all__ = [
     "AnimationRegistry",
     "AnimationRun",
     "BeatInfo",
+    "CHASE",
     "Effect",
     "FADE",
     "FORMATS",
@@ -36,6 +37,7 @@ __all__ = [
     "NONE",
     "Param",
     "Rendered",
+    "SHIMMER",
     "animation",
     "default_animations_dir",
     "load_animation_file",

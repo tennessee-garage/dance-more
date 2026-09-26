@@ -17,11 +17,11 @@ The floor runs on **12 V**, supplied by two line-powered **Mean Well 12 V /
 - The scaled numbers were high because they assumed white costs the sum of
   three channels. It does not — see "LED current tracks the brightest
   channel" below, which is why the floor total drops from ~48 A to ~35 A.
-- LED current only: it excludes the ATtiny3224, the Xiao row controllers and
+- LED current only: it excludes the ATtiny3226, the Xiao row controllers and
   the transceivers. A row controller plus two idle tiles measured 0.30 A.
 - The underlying **0.5 A/tile at 40 LEDs** is a measured worst case (40 WS2815
   LEDs at full white). It is **LED current only** — it does not include the
-  ATtiny3224, the Xiao row controllers, or transceivers.
+  ATtiny3226, the Xiao row controllers, or transceivers.
 - A later, instrumented remeasurement — `tile_brightness_sweep.py`, see
   [docs/measurements/](measurements/) — puts LED-only current at full white
   closer to **~418 mA** for 40 LEDs (**~627 mA** scaled to 60), with the row
@@ -95,7 +95,7 @@ across the range tested, not as a datasheet claim.
   transceivers. ~200–250 mA worst case vs 0.5 A rating. See
   [hardware-row-controller.md](hardware-row-controller.md).
 - **Tile:** a **TI TLV76050DBZR** LDO (5 V / 100 mA, 30 V max input) derives
-  5 V from the 12 V tile feed for the ATtiny3224 and THVD1420DR (~15 mA
+  5 V from the 12 V tile feed for the ATtiny3226 and THVD1420DR (~15 mA
   typical). The WS2815 LEDs run directly from 12 V. See
   [hardware-tile.md](hardware-tile.md).
 

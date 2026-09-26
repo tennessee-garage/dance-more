@@ -20,10 +20,18 @@ A **tile** is one square section of the floor. The floor has 64 tiles in an
 
 ## Electronics
 
-- **MCU:** **Microchip ATtiny3224** (tile controller).
-  - **Why ATtiny3224 (decision):** The tile's job is simple: listen on RS-485,
+- **MCU:** **Microchip ATtiny3226**, SSOP-20 (tile controller).
+  - **Why the 3226, not the 3224:** the original board (`pcb/tile`) used the
+    14-pin ATtiny3224. The JLCPCB-assembled board (`pcb/tile-pcba`) uses the
+    20-pin ATtiny3226 because that is what JLCPCB stocks for assembly. Same
+    die family, same 32 KB flash / 3 KB SRAM, and the board wires the same
+    port pins (LED PA1, SENSE PA2/PA3, XDIR PB0, UART PB2/PB3), so the
+    firmware is unchanged apart from the build target — see
+    `src/tile/src/at/pins.h`. The remaining I/O (PA4–PA7, PB1, PB4–PB5,
+    PC0–PC3) is unconnected.
+  - **Why this family (decision):** The tile's job is simple: listen on RS-485,
     decode addressed frames, drive WS2815 LEDs, and reply on SENSE discovery.
-    The ATtiny3224 is cheap (~$2), small, low-power, and has sufficient I/O and
+    The ATtiny322x is cheap (~$2), small, low-power, and has sufficient I/O and
     memory. Early concern about **WS2815 timing conflicts with RS-485 RX** —
     driving 60 LEDs takes ~1.8 ms with interrupts disabled — is **solved by
     protocol design**, not by switching MCUs. Each tile only receives its own
@@ -39,7 +47,7 @@ A **tile** is one square section of the floor. The floor has 64 tiles in an
     WS2815 bit-banging is serial either way. Staying with the ATtiny keeps cost
     and complexity low.
 - **LED driver:** WS2815 (12 V addressable LEDs, with backup data line). The
-  ATtiny3224 drives the WS2815 data line **directly at 5 V** (no level shifter);
+  ATtiny3226 drives the WS2815 data line **directly at 5 V** (no level shifter);
   5 V is the data-high level the WS2815 expects.
 - **RS-485 transceiver:** THVD1420DR, default **RX** (always listening),
   switched to **TX** only when replying to specific commands.
@@ -56,7 +64,7 @@ A **tile** is one square section of the floor. The floor has 64 tiles in an
     hot-plugged. **Operating procedure:** power down before disconnecting any
     Tile Bus cables.
 - **12 V → 5 V regulation:** **TI TLV76050DBZR** LDO (fixed 5 V, 100 mA,
-  30 V max input, SOT-23-3). Powers the ATtiny3224 and the THVD1420DR only —
+  30 V max input, SOT-23-3). Powers the ATtiny3226 and the THVD1420DR only —
   the WS2815 LEDs run directly from the 12 V feed, **not** this rail.
   - **Budget:** ~15 mA typical, ~30 mA worst case (transceiver transmitting) —
     far under the 100 mA rating. Unaffected by the LED count: the WS2815s draw
@@ -98,7 +106,7 @@ Pin numbers below are as fabricated, read from J6's net in `pcb/tile/tile.kicad_
 
 ## Firmware
 
-- Lives in `src/tile/DF2-Tile/` (PlatformIO, ATtiny3224 target).
+- Lives in `src/tile/DF2-Tile/` (PlatformIO, ATtiny3226 target).
 - Responsibilities: listen on RS-485, decode addressed frames, drive WS2815
   pixels, participate in SENSE auto-mapping, and reply (TX) only when commanded.
 - **Timing model:** The row controller addresses tiles in sequence within each

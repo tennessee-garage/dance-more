@@ -10,8 +10,9 @@ setting an effect never stops a tile accepting pixels.
 The effects themselves - what each id does with its parameters - are
 specified and implemented in the tile firmware (#72, docs/tile-effects.md).
 This module only knows the wire shape, so the driver plumbing can carry
-effect writes before any tile can act on them. The ids below are the ones
-#72 names; treat them as provisional until it lands.
+effect writes before any tile can act on them. The ids below follow
+docs/tile-effects.md; only NONE and SHIMMER are implemented in tile
+firmware so far, and a tile drops an id it doesn't implement.
 
 An effect write rides inside SEND_DATA as a 6-byte tile entry and costs
 that tile its pixel update for the frame - see animation/context.py.
@@ -25,10 +26,14 @@ from typing import ClassVar
 EFFECT_ID_MAX = 0x1F  # 5-bit id; bits 7:5 of the byte are reserved
 EFFECT_PARAMS = 4
 
-# Effect ids per #72. NONE is the reset state; the rest are provisional.
+# Effect ids per docs/tile-effects.md §3. NONE is the reset state. Ids 1
+# and 2 are deliberately unassigned (formerly SOLID and BREATHE); 5 is
+# reserved for SPARKLE, not yet defined.
 NONE = 0x00
-FADE = 0x01
-HUE_SPLIT = 0x02
+SHIMMER = 0x03
+CHASE = 0x04
+HUE_SPLIT = 0x06
+FADE = 0x07
 
 
 @dataclass(frozen=True)

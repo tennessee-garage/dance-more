@@ -6,13 +6,13 @@
 #include "led_driver.h"
 #include "sense.h"
 #include "command_handler.h"
-#include "pattern.h"
+#include "effect.h"
 #include "protocol.h"
 #include "native/transport_native.h"
 #include "native/led_driver_native.h"
 #include "native/sense_native.h"
 
-// Monotonic milliseconds, matching Arduino millis() semantics for PatternEngine.
+// Monotonic milliseconds, matching Arduino millis() semantics for EffectEngine.
 static uint32_t now_ms() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
     LedDriverNative led_driver(my_addr);
     PixelBuffer     pixel_buf{};
     FrameParser     parser;
-    PatternEngine   pattern;
+    EffectEngine    effect;
 
     transport.init();
     sense.set_fd(transport.get_fd());
@@ -60,18 +60,18 @@ int main(int argc, char *argv[]) {
         while (transport.poll(parser, &f)) {
             if (f.addr != my_addr && f.addr != ADDR_BROADCAST) continue;
 
-            const Frame *resp = handle_command(f, pixel_buf, sense, my_addr, &pattern);
+            const Frame *resp = handle_command(f, pixel_buf, sense, my_addr, &effect);
             if (resp) transport.send(*resp);
         }
 
         const uint32_t now = now_ms();
 
         if (pixel_buf.latch_pending) {
-            pattern.on_latch(pixel_buf, now);
-            led_driver.push(pixel_buf);
+            effect.on_latch(pixel_buf, now);
+            led_driver.push(effect.output());
             pixel_buf.latch_pending = false;
-        } else if (pattern.poll(pixel_buf, now)) {
-            led_driver.push(pixel_buf);
+        } else if (effect.poll(pixel_buf, now)) {
+            led_driver.push(effect.output());
         }
 
         usleep(100); // 100 µs yield between poll bursts
