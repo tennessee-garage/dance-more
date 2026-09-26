@@ -36,6 +36,22 @@ static constexpr uint8_t MAX_FRAME_SIZE = FRAME_OVERHEAD + MAX_PAYLOAD;    // 18
 static_assert(FRAME_OVERHEAD + 4 * LEDS_PER_SIDE * BYTES_PER_LED <= 255,
               "Tile Bus frame no longer fits a uint8_t length");
 
+// ---- The deaf window after LATCH ----
+// A tile cannot receive while it pushes its LEDs. The WS2815 line is
+// bit-banged at 800 kHz with interrupts off - 24 bits x 1.25 us per LED - so
+// the USART's 2-byte hardware FIFO overflows within ~20 us at 1 Mbps and
+// anything sent in that window is lost. The push starts as soon as the tile
+// acts on a LATCH. A frame that arrives part-way through it is truncated,
+// and the tile's parser is then left mid-frame, taking the following frames
+// as payload.
+//
+// Measured on the bench (2026-09-25): a BLACKOUT sent straight after a LATCH
+// left tiles stuck 10/10 times, and 0/10 with a 5 ms gap; small pipelined
+// frames arriving just after each LATCH did the same 9/10 times. So the row
+// holds off the Tile Bus for this long after every LATCH it sends
+// (RowCommandHandler, TILE_LATCH_QUIET_MS). See docs/tile-bus-protocol.md §5.
+static constexpr uint16_t TILE_LED_PUSH_US = (uint16_t)(LEDS_PER_TILE * 24u * 5u / 4u);  // 1800 at 60 LEDs
+
 enum class Cmd : uint8_t {
     // Commands: row controller → tile
     ACTIVATE_SENSE = 0x01,
