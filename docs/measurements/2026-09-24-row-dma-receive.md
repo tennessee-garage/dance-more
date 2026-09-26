@@ -142,12 +142,28 @@ idle-gap reset for exactly this (`RX_IDLE_RESET_US` in
 `pi_transport_rp2350.h`); the tile's `TransportAT::poll()` has none, so a
 tile that loses bytes mid-frame stays deaf until enough bytes have passed.
 
-What makes a tile lose bytes in the first place is not established. A tile
-disables interrupts for ~1.8 ms while it pushes 60 LEDs, during which its
-USART cannot be serviced, but the playback timing does not obviously put
-Tile Bus traffic inside that window. Whether frames are also lost *during*
-playback, which would be a skipped frame rather than a stuck one, is not
-known either.
+**Cause (found 2026-09-25):** `df2-pi play` sends `BLACKOUT` and a `LATCH`
+immediately after its final frame's `LATCH`. The row relays the first
+`LATCH`, every tile starts pushing its LEDs with interrupts off (~1.8 ms),
+and the row forwards the `BLACKOUT` frames straight into that deaf window.
+Isolated on row 0 with four tiles:
+
+| Test | Tiles left stuck |
+| --- | --- |
+| `LATCH` then `BLACKOUT` with no gap | 10/10 |
+| `LATCH`, 5 ms, then `BLACKOUT` | 0/10 |
+| 60 pipelined 32-byte `SET_COLOR` frames, each sent straight after the previous `LATCH`, then a delayed `BLACKOUT` | 9/10 |
+
+The last row shows it is not only an exit problem: any frame whose data
+reaches the tiles within ~2 ms of the previous `LATCH` is lost, which small
+frames always do. Things ruled out on the way, each 0/10 stuck: brightness
+(1.3 A of LEDs), `play`'s `SEND_DATA`/`LATCH` ordering with other content,
+and replaying `play`'s exact captured payloads — through `send_data`, through
+`send_rows` to all eight rows, and with rows 2, 4 and 6's frames on the chain.
+
+Fixed in #104's PR: the row keeps the Tile Bus quiet for 4 ms after each
+`LATCH` it sends, and the tile abandons a part-received frame after 5 ms of
+silence ([tile-bus-protocol.md](../tile-bus-protocol.md), `LATCH`).
 
 ## Pitfall hit on the first flash
 

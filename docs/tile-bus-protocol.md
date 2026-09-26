@@ -346,10 +346,26 @@ Signals all tiles to simultaneously push their buffered display data to their
 WS2815 LED chain. This is the mechanism for tear-free frame updates across all
 tiles in a row.
 
-After LATCH the tile has approximately 33 ms (one frame period) to complete its
-WS2815 push (~1.2 ms, interrupts disabled) before the next frame's display
-commands will arrive. No RS-485 traffic is expected during this window, so
-the interrupt-disabled push does not risk missing a frame.
+**A tile is deaf while it pushes.** The WS2815 line is bit-banged with
+interrupts disabled — 24 bits × 1.25 µs per LED, `TILE_LED_PUSH_US` in
+`protocol.h`, ~1.8 ms at 60 LEDs — and the USART's 2-byte FIFO overflows
+within ~20 µs at 1 Mbps, so anything sent on the Tile Bus in that window is
+lost. A frame cut short leaves the tile's parser mid-frame, taking the
+frames after it as payload.
+
+So **the row controller keeps the Tile Bus silent for `TILE_LATCH_QUIET_MS`
+(4 ms at 60 LEDs) after every LATCH it sends.** Forwarding pauses, and a
+`BLACKOUT` or further `LATCH` that arrives in the window is queued and sent,
+in order, when it ends. It is not safe to assume the next frame arrives late
+enough on its own: a small frame (8 × `SET_COLOR` is 32 bytes on the Row Bus)
+reaches the row within a fraction of a millisecond of the previous `LATCH`,
+and before this rule lost the frame 9 times in 10 on the bench. A `BLACKOUT`
+sent straight after a `LATCH` — as `df2-pi play` does on exit — left tiles
+lit every time.
+
+As a backstop, a tile abandons a part-received frame after 5 ms of silence
+(`RX_IDLE_RESET_MS` in `transport_at.h`), so any other loss costs one frame
+rather than leaving the tile deaf until a full-size frame happens along.
 
 If a tile has no buffered data (e.g. at boot, or if no display command has
 been received since the last LATCH), LATCH is a no-op.
