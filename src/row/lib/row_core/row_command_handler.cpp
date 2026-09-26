@@ -21,6 +21,11 @@ void RowCommandHandler::broadcast_tile_latch() {
     f.cmd  = (uint8_t)Cmd::LATCH;
     f.len  = 0;
     tile_transport_.send(f);
+    quiet_pending_ = true;   // every tile is about to go deaf - see TILE_LATCH_QUIET_MS
+}
+
+bool RowCommandHandler::in_quiet() const {
+    return quiet_pending_ || (int32_t)(last_now_ms_ - quiet_until_ms_) < 0;
 }
 
 // Stub: real self-test (Row Bus UART loopback, Tile Bus transceiver, SRAM)
@@ -246,6 +251,13 @@ void RowCommandHandler::finish_forwarding() {
 
 void RowCommandHandler::handle_latch() {
     if (!forwarding_) {
+        // Inside the quiet window, or behind a BLACKOUT that is itself
+        // waiting for it: this LATCH would reach tiles still pushing their
+        // LEDs, so it goes out after them instead.
+        if (in_quiet() || blackout_pending_) {
+            latch_pending_ = true;
+            return;
+        }
         broadcast_tile_latch();
         return;
     }
@@ -260,6 +272,14 @@ void RowCommandHandler::handle_latch() {
 }
 
 void RowCommandHandler::handle_blackout() {
+    if (in_quiet()) {
+        blackout_pending_ = true;   // sent when the window ends - see poll()
+        return;
+    }
+    do_blackout();
+}
+
+void RowCommandHandler::do_blackout() {
     const TileMap &map = sense_.result();
     const uint8_t black[3]     = {0, 0, 0};
     const uint8_t no_effect[5] = {0, 0, 0, 0, 0};   // effect_id 0 = NONE
@@ -279,6 +299,29 @@ void RowCommandHandler::handle_blackout() {
 
 void RowCommandHandler::poll(uint32_t now_ms) {
     last_now_ms_ = now_ms;
+
+    // Start timing the quiet window a LATCH opened. Timing it here rather
+    // than when the LATCH was sent keeps the window from ever being short:
+    // this poll() is no earlier than the LATCH.
+    if (quiet_pending_) {
+        quiet_pending_  = false;
+        quiet_until_ms_ = now_ms + TILE_LATCH_QUIET_MS;
+    }
+    if (in_quiet()) return;
+
+    // One Tile Bus action per call, in the order the Pi asked for them: a
+    // BLACKOUT and a LATCH that waited out the window, then forwarding.
+    // Each of the first two sends a LATCH and so opens a new window.
+    if (blackout_pending_) {
+        blackout_pending_ = false;
+        do_blackout();
+        return;
+    }
+    if (latch_pending_) {
+        latch_pending_ = false;
+        broadcast_tile_latch();
+        return;
+    }
     if (forwarding_) advance_forwarding();
 }
 

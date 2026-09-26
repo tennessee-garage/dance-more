@@ -58,6 +58,14 @@ static constexpr uint8_t ERROR_TYPE_ROW_BUS_RX_OVERFLOW = 0x05;
 // a restart ~3.6 s into every power-up was traced to the bench supply's
 // current limit rather than the firmware.
 static constexpr uint8_t ERROR_TYPE_ROW_BOOT = 0x06;
+
+// How long the row keeps the Tile Bus silent after sending a LATCH: the
+// tile's LED push rounded up to whole ms, plus 2 - one for millis()
+// granularity, since the window is timed from a floored millisecond, and one
+// of margin for the LATCH frame itself and the tile reaching its push. 4 ms
+// at 60 LEDs, which costs a frame nothing unless its data arrives within 4 ms
+// of the previous LATCH.
+static constexpr uint32_t TILE_LATCH_QUIET_MS = (TILE_LED_PUSH_US + 999u) / 1000u + 2u;
 static constexpr uint16_t ROW_BOOT_POWMAN_MASK    = 0x1FFF;
 static constexpr uint16_t ROW_BOOT_WATCHDOG_TIMER = 1u << 13;
 static constexpr uint16_t ROW_BOOT_WATCHDOG_FORCE = 1u << 14;
@@ -141,6 +149,8 @@ private:
     void handle_send_data(const RowBusFrame &in);
     void handle_latch();
     void handle_blackout();
+    void do_blackout();
+    bool in_quiet() const;
 
     void send_tile_frame(uint8_t addr, Cmd cmd, const uint8_t *payload, uint8_t len);
     void broadcast_tile_latch();
@@ -165,7 +175,19 @@ private:
     RowBusFrame forwarding_frame_ = {};
     uint16_t    forward_offset_   = 0;
     uint8_t     forward_slot_     = 0;
-    bool        latch_deferred_   = false;
+    bool        latch_deferred_   = false;   // LATCH held until forwarding finishes (#46)
+
+    // The Tile Bus is silent for TILE_LATCH_QUIET_MS after every tile LATCH,
+    // while the tiles push their LEDs deaf (TILE_LED_PUSH_US in protocol.h).
+    // Anything that would transmit in that window waits for it: forwarding
+    // pauses, and a BLACKOUT or LATCH is queued and sent, in that order,
+    // once it ends. The window is timed from the first poll() after the
+    // LATCH, which is never earlier than the LATCH itself - so it can only
+    // err long.
+    bool        quiet_pending_    = false;   // LATCH sent, window not yet timed
+    uint32_t    quiet_until_ms_   = 0;
+    bool        blackout_pending_ = false;
+    bool        latch_pending_    = false;   // LATCH that arrived during the window
     uint8_t     overrun_slot_     = 0;
     uint8_t     overrun_tile_cmd_ = 0;
     uint32_t    last_now_ms_      = 0;

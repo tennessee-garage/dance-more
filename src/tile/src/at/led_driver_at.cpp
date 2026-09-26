@@ -14,7 +14,7 @@ void LedDriverAT::init() {
 void LedDriverAT::push(const PixelBuffer &buf) {
     for (uint8_t i = 0; i < PixelBuffer::NUM_LEDS; i++)
         strip.setPixelColor(i, buf.leds[i].r, buf.leds[i].g, buf.leds[i].b);
-    strip.show();            // blocking ~1.2 ms, interrupts disabled during push
+    strip.show();            // blocking TILE_LED_PUSH_US (~1.8 ms), interrupts disabled - the tile is deaf meanwhile
 }
 
 void LedDriverAT::test_pattern() {
