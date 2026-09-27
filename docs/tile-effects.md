@@ -325,17 +325,27 @@ everything else.
 
 ## 4. Implementation notes
 
-**Render rate is 50 Hz** (`EffectEngine::FRAME_MS = 20`). The ceiling is the
-WS2815 push itself, which runs with interrupts disabled for ~1.8 ms and leaves
-the tile deaf to Tile Bus for that window. At 20 ms that is ~9% of the period,
-so a tile running an effect stays comfortably responsive to a `SET_LEDS` or a
-broadcast that takes it back. The rate is a constant, not a parameter — a tile
-that rendered faster would trade bus responsiveness for smoothness nobody asked
-for.
+**Render rate is 50 Hz** (`EffectEngine::FRAME_MS = 20`). The rate is a
+constant, not a parameter. Each render is a WS2815 push with interrupts disabled
+for ~1.8 ms, during which the tile cannot receive, and anything sent to it then
+is lost ([tile-bus-protocol.md](tile-bus-protocol.md), `LATCH`). A tile that
+rendered faster would lose more.
+
+**A tile doesn't push on its own clock while the host is streaming.** The row
+keeps the Tile Bus quiet after each `LATCH` it sends, but it cannot know when a
+tile's own render falls, and on the bench those renders lost 5% of small frames,
+20% of full `SET_LEDS` frames and ~9% of `BLACKOUT`s sent to tiles running
+`CHASE` (#106). So once two `LATCH`es have arrived within `STREAM_HOLD_MS`
+(100 ms, i.e. 10 fps or faster), the tile pushes only on `LATCH`. The effect's
+clock keeps running in between, so each `LATCH` shows the effect exactly where a
+free-running tile would have it; it just updates at the host's frame rate. Once
+the host has gone quiet for 100 ms, the tile renders on its own clock again. A
+single `SET_EFFECT` + `LATCH` followed by silence — the usual way to start an
+effect — is not streaming, so the effect free-runs from the start.
 
 **When the tile renders.** On every `LATCH` (new buffer contents must go out
-through the effect immediately), and every `FRAME_MS` while a time-varying
-effect is set. With `NONE`, `HUE_SPLIT`, or `SHIMMER` at `speed = 0`, the tile
+through the effect immediately), and — unless the host is streaming — every
+`FRAME_MS` while a time-varying effect is set. With `NONE`, `HUE_SPLIT`, or `SHIMMER` at `speed = 0`, the tile
 renders only on `LATCH`. `FADE` renders every frame while any pixel is still
 decaying, and only on `LATCH` once they have all reached black.
 

@@ -369,6 +369,12 @@ and before this rule lost the frame 9 times in 10 on the bench. A `BLACKOUT`
 sent straight after a `LATCH` — as `df2-pi play` does on exit — left tiles
 lit every time.
 
+A tile running an effect also pushes on its own clock, which the row cannot
+see. It stops doing so while the host is streaming `LATCH`es
+([tile-effects.md](tile-effects.md) §4), and the row sends `BLACKOUT`'s sweep
+three times so a tile that was deaf for one still gets it
+([row-bus-protocol.md](row-bus-protocol.md), `BLACKOUT`).
+
 As a backstop, a tile abandons a part-received frame after 5 ms of silence
 (`RX_IDLE_RESET_MS` in `transport_at.h`), so any other loss costs one frame
 rather than leaving the tile deaf until a full-size frame happens along.
