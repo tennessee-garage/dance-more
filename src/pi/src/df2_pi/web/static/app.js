@@ -1,10 +1,11 @@
 // The page shell: transport bar (top), preview (left), tabs (right).
-// Later issues fill the preview and the tabs.
+// Later issues fill the remaining tabs.
 
 import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { AnimationsPanel } from "./animations.js";
+import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { command, commandError, connection, runnerState, startPolling } from "./state.js";
 
@@ -157,24 +158,68 @@ function TransportBar() {
 
 // ---- preview and tabs ----------------------------------------------------
 
+const GEOMETRY_RETRY_MS = 2000;
+
 function PreviewStatus() {
   const { connection, format, fps, missed } = previewStatus.value;
-  const detail = connection === "live" ? ` \u00b7 ${format} \u00b7 ${fps} fps${missed ? ` \u00b7 ${missed} missed` : ""}` : "";
+  const detail = connection === "live" ? ` · ${format} · ${fps} fps${missed ? ` · ${missed} missed` : ""}` : "";
   return html`<div class="preview-status num">${connection}${detail}</div>`;
 }
 
+/** The floor, drawn by preview.js. Re-renders only when the geometry
+ *  arrives: the stream hands each record to the renderer's draw() directly,
+ *  so a frame never goes through Preact. */
 function Preview() {
-  // The stream hands records to `draw` directly; a frame never goes
-  // through Preact. The renderer (#92) replaces this no-op.
+  const canvas = useRef(null);
   const draw = useRef(() => {});
+  const [geometry, setGeometry] = useState(null);
+  const [failure, setFailure] = useState(null);
+
   useEffect(() => {
+    let timer = null;
+    let cancelled = false;
+    async function load() {
+      try {
+        const response = await fetch("api/preview/geometry");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        if (!cancelled) setGeometry(body);
+      } catch {
+        if (!cancelled) timer = setTimeout(load, GEOMETRY_RETRY_MS);
+      }
+    }
+    load();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
+
+  useEffect(() => {
+    if (!geometry) return undefined;
+    let preview;
+    try {
+      preview = createPreview(canvas.current, geometry);
+    } catch (exc) {
+      setFailure(`The floor preview needs WebGL: ${exc.message}.`);
+      return undefined;
+    }
+    draw.current = (record) => preview.draw(record);
+    const observer = new ResizeObserver(() => preview.resize());
+    observer.observe(canvas.current);
+    return () => {
+      observer.disconnect();
+      draw.current = () => {};
+    };
+  }, [geometry]);
+
+  useEffect(() => {
+    if (failure) return undefined; // nothing to draw into: do not load the Pi
     const stream = connectPreview((record) => draw.current(record));
     return () => stream.close();
-  }, []);
+  }, [failure]);
+
   return html`
     <section class="preview" aria-label="Floor preview">
-      <div class="floor"></div>
-      <${PreviewStatus} />
+      <canvas class="floor" ref=${canvas} hidden=${!!failure}></canvas>
+      ${failure ? html`<p class="preview-failure">${failure}</p>` : html`<${PreviewStatus} />`}
     </section>`;
 }
 
