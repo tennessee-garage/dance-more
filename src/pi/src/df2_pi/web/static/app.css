@@ -1,0 +1,179 @@
+/* Dark by default: the page is used beside a lit floor in a dark room. */
+:root {
+  color-scheme: dark;
+  --bg: #0e0f12;
+  --surface: #17191e;
+  --surface-2: #1f2229;
+  --border: #2b2f38;
+  --text: #e6e8ec;
+  --muted: #8a909c;
+  --accent: #6aa8ff;
+  --ok: #3ecf8e;
+  --warn: #f0b429;
+  --bad: #ef5b5b;
+  --radius: 8px;
+  --gap: 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #eceef2;
+    --border: #d6d9e0;
+    --text: #1b1d22;
+    --muted: #5f6573;
+    --accent: #2f6fdb;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: var(--gap);
+  gap: var(--gap);
+}
+
+/* ---- transport bar ---- */
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  flex: 1;
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 4.5em;
+}
+
+.field.wide {
+  min-width: 10em;
+  max-width: 22em;
+}
+
+.field .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.field .value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.num { font-variant-numeric: tabular-nums; }
+
+.badge {
+  flex: none;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.badge-connecting { color: var(--muted); }
+.badge-ok { color: var(--ok); }
+.badge-lost { color: var(--bad); }
+
+/* ---- preview and tabs ---- */
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: var(--gap);
+  flex: 1;
+  min-height: 0;
+}
+
+.preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  min-height: 0;
+}
+
+/* The floor is square and black whatever the theme: it is where the lit
+   LEDs are drawn. */
+.preview .floor {
+  width: min(100%, 80vh);
+  aspect-ratio: 1;
+  background: #000;
+  border-radius: 4px;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 0;
+}
+
+.tablist {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tablist button {
+  flex: 1;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.tablist button:hover { color: var(--text); }
+.tablist button[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.tablist button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.panel {
+  flex: 1;
+  padding: var(--gap);
+  overflow: auto;
+}
+
+@media (max-width: 800px) {
+  main { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .preview .floor { width: 100%; }
+}

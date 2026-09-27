@@ -8,6 +8,9 @@
     df2-pi play --animation bolt --window     # a real window (pip install -e ".[preview]")
     df2-pi play --animation chase --no-hardware --record out.gif --frames 90
 
+    df2-pi serve                              # the floor plus the admin UI on :8000 (pip install -e ".[web]")
+    df2-pi serve --no-hardware --terminal     # the whole UI on a laptop, no floor
+
     df2-pi animations                         # what the registry found, and what failed
     df2-pi playlists [list|show|create|add|move|remove|set-startup|delete]
     df2-pi ledwalk --row 0 --slot 0           # one LED at a time: verify LED 0 and the winding
@@ -289,6 +292,38 @@ def _cmd_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_app(args: argparse.Namespace):
+    """`df2-pi serve`'s app, constructed but not bound to a port: nothing
+    runs until uvicorn starts its lifespan, so this is what tests build."""
+    try:
+        from .web import AppContext, create_app
+    except ImportError as exc:
+        raise SystemExit(f'df2-pi serve needs the web extra: pip install -e ".[web]" ({exc})') from exc
+    from .engine import FrameClock, Runner
+    from .output import PreviewSink
+
+    registry = _registry(args)
+    store = _store(args, registry)
+    for animation_id, error in registry.errors.items():
+        print(f"warning: {animation_id}: {error.message}", file=sys.stderr)
+
+    clock = FrameClock(fps=args.fps)
+    fanout, _, _ = build_sinks(args, clock)
+    preview = PreviewSink()  # always: the page's preview subscribes to it
+    fanout.attach(preview)
+    runner = Runner(registry, fanout, store=store, clock=clock, brightness=args.brightness)
+    return create_app(AppContext(registry, store, fanout, runner, preview))
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    app = build_app(args)
+    import uvicorn
+
+    # uvicorn owns SIGINT/SIGTERM; the app's shutdown hook stops the runner.
+    uvicorn.run(app, host=args.host, port=args.port, log_level="debug" if args.verbose else "info")
+    return 0
+
+
 def _playlist_key(text: str) -> int | str:
     return int(text) if text.isdigit() else text
 
@@ -538,6 +573,22 @@ def build_parser() -> argparse.ArgumentParser:
     play.add_argument("--seed", type=int, help="seed the runner's rng for a reproducible run")
     _add_output_flags(play, frames_help="exit after N frames")
     play.set_defaults(func=_cmd_play)
+
+    serve = sub.add_parser("serve", help="run the floor with the admin web UI (needs the web extra)")
+    serve.add_argument("--host", default="0.0.0.0", help="interface to listen on (default 0.0.0.0)")
+    serve.add_argument("--port", type=int, default=8000, help="port (default 8000)")
+    serve.add_argument("--fps", type=float, default=30.0, help="frame rate (default 30)")
+    serve.add_argument("--no-hardware", action="store_true", help="never touch the floor (no serial, no GPIO)")
+    serve.add_argument(
+        "--terminal",
+        nargs="?",
+        const="grid",
+        choices=("grid", "tiles"),
+        help="also render in the terminal: the full grid (default) or the 8x8 tile view",
+    )
+    serve.add_argument("--brightness", type=int, default=255, metavar="0-255", help="global brightness (default 255)")
+    # build_sinks() reads these; a window needs the main thread, which uvicorn owns.
+    serve.set_defaults(func=_cmd_serve, window=False, record=None, frames=None)
 
     animations = sub.add_parser("animations", help="list discovered animations and load errors")
     animations.add_argument("-v", "--verbose", action="store_true", default=argparse.SUPPRESS, help="show parameters and descriptions")
