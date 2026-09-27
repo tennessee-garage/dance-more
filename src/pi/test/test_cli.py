@@ -1,3 +1,4 @@
+import functools
 import io
 import subprocess
 import sys
@@ -139,7 +140,26 @@ def test_param_coercion_against_the_specs(anim_dir):
 # ---- headless runs ------------------------------------------------------------------------------
 
 
-def test_no_hardware_frames_10_runs_end_to_end(env, capsys):
+@pytest.fixture
+def fake_clock(monkeypatch):
+    """`play` on a clock that moves only when it sleeps, so the loop body
+    takes no time: "dropped" then counts the scheduler's decisions, not how
+    busy the host happened to be. Real-time behaviour is test_clock.py's."""
+    import df2_pi.engine as engine
+
+    t = [1000.0]
+
+    def now() -> float:
+        t[0] += 1e-6
+        return t[0]
+
+    def sleep(seconds: float) -> None:
+        t[0] += seconds
+
+    monkeypatch.setattr(engine, "FrameClock", functools.partial(engine.FrameClock, now=now, sleep=sleep))
+
+
+def test_no_hardware_frames_10_runs_end_to_end(env, capsys, fake_clock):
     assert cli.main([*env, "play", "--no-hardware", "--frames", "10", "--fps", "120"]) == 0
     err = capsys.readouterr().err
     assert "seeded a Default playlist" in err
@@ -206,6 +226,40 @@ def test_headless_import_path_with_gpiozero_lgpio_and_serial_unimportable(env):
     result = subprocess.run([sys.executable, "-c", script, *env], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
     assert "clean" in result.stdout
+
+
+def test_render_loop_imports_nothing(env):
+    """A module imported lazily inside the loop is paid for inside a frame:
+    np.percentile's first call pulled in numpy.ma during frame 0's telemetry
+    snapshot, 11-13 ms on a Pi 5 against 12.5 ms of budget at 120 fps.
+    Timing-free, so it fails on any host, not just a slow one. A fresh
+    interpreter, because this one has imported everything already."""
+    script = textwrap.dedent(
+        """
+        import sys
+        import df2_pi.engine as engine
+        from df2_pi import cli
+
+        imported, armed = [], [False]
+        sys.addaudithook(lambda event, args: armed[0] and event == "import" and imported.append(args[0]))
+
+        class Armed(engine.FrameClock):
+            def run(self, latch=None):
+                armed[0] = True
+                try:
+                    yield from super().run(latch)
+                finally:
+                    armed[0] = False
+
+        engine.FrameClock = Armed
+        rc = cli.main(sys.argv[1:] + ["play", "--no-hardware", "--frames", "10", "--fps", "120"])
+        assert rc == 0, rc
+        print("imported in the loop:", sorted(set(imported)))
+        """
+    )
+    result = subprocess.run([sys.executable, "-c", script, *env], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    assert "imported in the loop: []" in result.stdout, result.stdout
 
 
 # ---- animations and playlists ---------------------------------------------------------------------
