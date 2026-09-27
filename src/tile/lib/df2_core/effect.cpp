@@ -102,6 +102,13 @@ void EffectEngine::reset() {
     id_      = NONE;
     memset(params_, 0, sizeof(params_));
     running_ = false;
+    latches_seen_ = 0;
+}
+
+bool EffectEngine::host_streaming(uint32_t now_ms) const {
+    return latches_seen_ >= 2 &&
+           (uint32_t)(now_ms - last_latch_ms_) < STREAM_HOLD_MS &&
+           (uint32_t)(last_latch_ms_ - prev_latch_ms_) < STREAM_HOLD_MS;
 }
 
 void EffectEngine::commit(uint32_t now_ms) {
@@ -134,6 +141,10 @@ void EffectEngine::commit(uint32_t now_ms) {
 }
 
 void EffectEngine::on_latch(const PixelBuffer &buf, uint32_t now_ms) {
+    prev_latch_ms_ = last_latch_ms_;
+    last_latch_ms_ = now_ms;
+    if (latches_seen_ < 2) latches_seen_++;
+
     if (staged_) commit(now_ms);
 
     if (id_ == FADE) {
