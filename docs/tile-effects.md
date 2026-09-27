@@ -378,6 +378,10 @@ its own, since only one effect is ever active.
 
 ## 5. Open questions
 
+- **`BLACKOUT` over a free-running `SHIMMER`** still leaves a tile lit about 1%
+  of the time, and the mechanism is not yet known (#107). `CHASE` was 0/100 in
+  the same test. Avoid `SHIMMER` where a reliable blackout matters until #107
+  is resolved.
 - **`SPARKLE` (5).** `SHIMMER` is continuous and periodic: every
   LED is always somewhere in its cycle, and it only darkens. A distinct
   `SPARKLE` would be the opposite on both counts — *sparse* and *random*

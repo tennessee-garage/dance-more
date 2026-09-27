@@ -1,0 +1,20 @@
+no effect: refs 495/835 mA
+  data 2.0 ms after LATCH: frames lost 0/20
+  data 3.0 ms after LATCH: frames lost 0/20
+  data 3.5 ms after LATCH: frames lost 0/20
+  data 4.0 ms after LATCH: frames lost 0/20
+  data 4.5 ms after LATCH: frames lost 0/20
+  data 5.0 ms after LATCH: frames lost 0/20
+  data 5.5 ms after LATCH: frames lost 0/20
+  data 6.0 ms after LATCH: frames lost 0/20
+  data 7.0 ms after LATCH: frames lost 0/20
+HUE_SPLIT: refs 495/833 mA
+  data 2.0 ms after LATCH: frames lost 0/20
+  data 3.0 ms after LATCH: frames lost 0/20
+  data 3.5 ms after LATCH: frames lost 0/20
+  data 4.0 ms after LATCH: frames lost 0/20
+  data 4.5 ms after LATCH: frames lost 0/20
+  data 5.0 ms after LATCH: frames lost 0/20
+  data 5.5 ms after LATCH: frames lost 0/20
+  data 6.0 ms after LATCH: frames lost 0/20
+  data 7.0 ms after LATCH: frames lost 0/20

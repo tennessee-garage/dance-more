@@ -1,0 +1,10 @@
+idle 325 mA
+1a. BLACKOUT over CHASE, random phase: tiles left lit 0/100
+1b. BLACKOUT over SHIMMER, random phase: tiles left lit 1/100, SHIMMER still running 1/100
+2. 30 fps SET_COLOR stream, CHASE running: refs 648/929 mA, wrong final frame 0/100
+2. 30 fps SET_LEDS stream, CHASE running: refs 647/928 mA, wrong final frame 0/100
+3. slow SET_COLOR frames, CHASE running: frames not shown 6/60
+3. slow SET_LEDS frames, CHASE running: frames not shown 11/60
+4. control, no effect, 30 fps SET_COLOR: wrong final frame 0/30
+4. control, no effect, 30 fps SET_LEDS: wrong final frame 0/30
+final 324 mA (idle 325)

@@ -1,0 +1,12 @@
+SHIMMER speed 255 depth 0: refs 495/834 mA
+  data 1.0 ms after LATCH (row holds it to the quiet window's end, 3-4 ms): final frame lost 0/30
+  data 4.5 ms after LATCH: final frame lost 0/30
+  data 5.0 ms after LATCH: final frame lost 0/30
+  data 5.5 ms after LATCH: final frame lost 0/30
+  data 6.5 ms after LATCH: final frame lost 0/30
+SHIMMER speed 255 depth 0 spread 255: refs 495/834 mA
+  data 1.0 ms after LATCH (row holds it to the quiet window's end, 3-4 ms): final frame lost 0/30
+  data 4.5 ms after LATCH: final frame lost 0/30
+  data 5.0 ms after LATCH: final frame lost 0/30
+  data 5.5 ms after LATCH: final frame lost 0/30
+  data 6.5 ms after LATCH: final frame lost 0/30
