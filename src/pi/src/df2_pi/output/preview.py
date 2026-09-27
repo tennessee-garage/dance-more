@@ -220,6 +220,12 @@ class PreviewSink(ThreadedSink):
         with self._lock:
             return tuple(self._subscribers)
 
+    @property
+    def subscriber_count(self) -> int:
+        """Viewers attached now; reported in the fan-out's sink health."""
+        with self._lock:
+            return len(self._subscribers)
+
     def handle(self, frame: Frame, info: FrameInfo) -> None:
         subs = self.subscribers
         if not subs:

@@ -258,6 +258,17 @@ def test_a_subscriber_whose_send_keeps_failing_is_dropped_with_a_reason(fanout):
     assert [s.name for s in pv.subscribers] == ["good"]
 
 
+def test_subscriber_count_is_reported_in_sink_health(fanout):
+    pv = PreviewSink()
+    fanout.attach(pv)
+    assert fanout.state()["sinks"]["preview"]["subscriber_count"] == 0
+    a = pv.subscribe(lambda r: None)
+    pv.subscribe(lambda r: None)
+    assert fanout.state()["sinks"]["preview"]["subscriber_count"] == 2
+    pv.unsubscribe(a)
+    assert fanout.state()["sinks"]["preview"]["subscriber_count"] == 1
+
+
 def test_unsubscribe_and_bad_arguments(fanout):
     pv = PreviewSink()
     fanout.attach(pv)
