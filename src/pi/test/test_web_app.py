@@ -328,7 +328,7 @@ def test_request_burst_does_not_disturb_the_render_clock(registry, store):
         wait_until(lambda: server.started, timeout=10.0)
         port = server.servers[0].sockets[0].getsockname()[1]
         base = f"http://127.0.0.1:{port}"
-        paths = ["/", "/healthz"] + [_url(r) for r in _importmap(httpx2.get(base + "/").text).values()]
+        paths = ["/", "/healthz", "/api/state"] + [_url(r) for r in _importmap(httpx2.get(base + "/").text).values()]
 
         time.sleep(GIL_WINDOW_S)  # a full telemetry window at idle
         idle = ctx.runner.clock.telemetry()

@@ -32,6 +32,8 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from df2_pi.web.transport import mark_percentiles_nullable, transport_router
+
 if TYPE_CHECKING:
     from df2_pi.animation import AnimationRegistry
     from df2_pi.engine import Runner
@@ -92,8 +94,26 @@ def create_app(ctx: AppContext) -> FastAPI:
             if ctx.runner.alive:
                 log.error("render thread still running %.0f s after stop()", SHUTDOWN_TIMEOUT_S)
 
-    app = FastAPI(title="Dance Floor", lifespan=lifespan)
+    app = FastAPI(
+        title="Dance Floor",
+        description=(
+            "Control API for the Dance Floor v2 runner. Transport commands are queued and "
+            "applied at the next frame boundary, so the `state` a POST returns may not "
+            "reflect the command yet: re-poll `GET /api/state`."
+        ),
+        lifespan=lifespan,
+    )
     app.state.ctx = ctx
+    app.include_router(transport_router(ctx))
+
+    default_openapi = app.openapi
+
+    def openapi() -> dict:
+        if app.openapi_schema is None:
+            mark_percentiles_nullable(default_openapi())  # builds and caches app.openapi_schema
+        return app.openapi_schema
+
+    app.openapi = openapi
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
