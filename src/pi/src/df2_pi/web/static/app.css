@@ -233,6 +233,7 @@ main {
 /* The floor is square and black whatever the theme: it is where the lit
    LEDs are drawn. */
 .preview .floor {
+  display: block;
   width: min(100%, 80vh);
   aspect-ratio: 1;
   background: #000;
@@ -407,3 +408,10 @@ button.play { flex: none; padding: 6px 14px; }
   border-color: var(--accent);
   color: #fff;
 }
+
+.preview-failure {
+  max-width: 28em;
+  text-align: center;
+  color: var(--muted);
+}
+.preview .floor[hidden] { display: none; }

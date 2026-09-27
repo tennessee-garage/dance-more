@@ -48,8 +48,11 @@ src/df2_pi/
                 against the animation registry; schema.py migrations
   output/dev.py TerminalSink, WindowSink (pygame), FrameCollector with
                 GIF / mp4 / .df2rec export; all draw origin bottom-left
-  cli.py        Command-line entry point (`df2-pi`): play, animations,
+  cli.py        Command-line entry point (`df2-pi`): play, serve, animations,
                 playlists, ledwalk, tilewalk, and the Row Bus admin commands
+  web/          The admin UI (`df2-pi serve`): FastAPI over the runner -
+                transport and state, animations, the preview WebSocket - and
+                static/, the page (Preact + htm + signals, vendored, no build)
 animations/     The animations themselves, one .py per animation; the
                 filename stem is the id playlists reference
 test/           Automated unit tests (pytest) - no hardware required
@@ -103,6 +106,9 @@ source venv/bin/activate
 pip install -e ".[dev]"            # + ".[preview]" for --window and --record to gif/mp4
 ```
 
+`dev` includes `web` (FastAPI, uvicorn), which `df2-pi serve` needs; the
+driver itself never imports it.
+
 ## Usage
 
 Playing:
@@ -124,6 +130,29 @@ df2-pi playlists                             # list; also show/create/add/move/r
 `--no-hardware` never imports the serial or GPIO stack, so all of that
 runs on a laptop. Every dev renderer draws the floor with row 0 along the
 bottom, as you see it standing at the rack.
+
+### The admin UI
+
+```bash
+df2-pi serve                          # the floor, plus the page on :8000
+df2-pi serve --no-hardware --terminal # the whole UI on a laptop, no floor
+```
+
+Open `http://<pi>:8000/`: the transport bar, the floor as it is right now,
+and tabs for animations (and, to come, playlists and diagnostics). The
+preview is WebGL; every LED a point with one fixed bloom, row 0 along the
+bottom, as `render_bloom` in [output/dev.py](src/df2_pi/output/dev.py)
+draws it.
+
+![The page with seams playing](../../docs/images/preview/page-seams.png)
+
+The same `seams` frame through `render_bloom` (left, the reference that
+`test/test_preview_reference.py` keeps pinned) and through the browser's
+renderer (right):
+
+| `render_bloom` | Browser (WebGL) |
+| --- | --- |
+| ![render_bloom](../../docs/images/preview/seams-render_bloom.png) | ![browser](../../docs/images/preview/seams-browser.png) |
 
 To write an animation, copy [animations/solid.py](animations/solid.py) and
 read [docs/animations.md](../../docs/animations.md); the rest of the
