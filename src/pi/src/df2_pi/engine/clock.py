@@ -95,6 +95,11 @@ from typing import Callable, Iterator
 
 import numpy as np
 
+# np.percentile's first call imports numpy.ma (np.unique checks is_masked),
+# ~11 ms on a Pi 5. The runner snapshots telemetry every frame, so left
+# lazy it lands in frame 0's budget - a whole period at 120 fps. Pay it here.
+np.percentile(np.zeros(2), [50, 95])
+
 
 @dataclass(frozen=True)
 class FrameInfo:
