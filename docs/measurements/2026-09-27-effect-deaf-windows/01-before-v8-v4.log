@@ -1,0 +1,12 @@
+idle 326 mA
+1. SHIMMER 1 Hz breathe over grey 100: current 330..748 mA over 2 s
+2. BLACKOUT over CHASE, buffer 0: tiles left lit 0/20
+2. BLACKOUT over CHASE, buffer 60: tiles left lit 0/20
+3. SET_COLOR frames, no effect  : refs 495/833 mA, frames not shown 0/40
+3. SET_COLOR frames, CHASE running: refs 646/929 mA, frames not shown 2/40
+3. SET_LEDS frames, no effect  : refs 493/832 mA, frames not shown 0/40
+3. SET_LEDS frames, CHASE running: refs 647/929 mA, frames not shown 8/40
+final 325 mA (idle 326)
+BLACKOUT over CHASE at a random phase, buffer 0: tiles left lit 3/40
+BLACKOUT over CHASE at a random phase, buffer 60: tiles left lit 4/40
+final 323 mA (idle 322)

@@ -561,11 +561,20 @@ painting over the black buffer.
 A subsequent Pi `LATCH` with no new `SEND_DATA` results in a no-op Tile Bus LATCH
 relay (tiles have no pending data).
 
-All 64 tiles go dark within ~2 ms of the row controllers completing their Tile Bus
-sweeps (8 × (12-byte SET_EFFECT + 10-byte SET_COLOR) frames ≈ 1.8 ms + Tile Bus
-LATCH). A `BLACKOUT` arriving within 4 ms of a `LATCH` waits for the tiles to
-finish pushing that frame first (tile-bus-protocol.md, `LATCH`), so it can take
-up to 4 ms longer.
+The row sends that sweep **three times** (`BLACKOUT_SWEEPS`), each after the
+previous one's 4 ms quiet window. A tile running an effect renders on its own
+clock and is deaf for ~1.8 ms of every render; the row cannot see when, and on
+the bench one sweep missed a tile ~4.5% of the time (#106). The sweep is
+idempotent and a tile that got it has stopped its effect, so three sweeps take a
+miss to ~0.01% per tile. Anything that arrives after the `BLACKOUT` — a `LATCH`,
+new `SEND_DATA` — waits for all three, so a late sweep never blacks out new
+content.
+
+All 64 tiles go dark within ~2 ms of the row controllers completing their first
+sweep (8 × (12-byte SET_EFFECT + 10-byte SET_COLOR) frames ≈ 1.8 ms + Tile Bus
+LATCH); the repeats finish about 12 ms later. A `BLACKOUT` arriving within 4 ms of
+a `LATCH` waits for the tiles to finish pushing that frame first
+(tile-bus-protocol.md, `LATCH`), so it can take up to 4 ms longer.
 
 | Field   | Value |
 | ------- | ----- |

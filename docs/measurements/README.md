@@ -77,6 +77,16 @@ worst-case chain at 30, 35, 45 and 50 fps (93 % of the wire) and ran a
 records an open tile problem: after playback some tiles ignore `BLACKOUT`
 until a full-size frame unsticks them. Write-up in [`2026-09-24-row-dma-receive.md`](2026-09-24-row-dma-receive.md).
 
+## Effect deaf windows (2026-09-27, #106)
+
+**Tools:** bench scripts in [`2026-09-27-effect-deaf-windows/`](2026-09-27-effect-deaf-windows/).
+
+Tiles running an effect were deaf for ~1.8 ms of every own-clock render: with
+`CHASE`, 5% of small frames, 20% of full frames and ~9% of `BLACKOUT`s were
+lost. Row v9 / tile v5 bring streamed frames and `BLACKOUT` over `CHASE` to 0;
+`BLACKOUT` over a free-running `SHIMMER` still fails ~1% (#107). Write-up in
+[`2026-09-27-effect-deaf-windows.md`](2026-09-27-effect-deaf-windows.md).
+
 ## Measuring a new strip or tile
 
 ```bash

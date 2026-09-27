@@ -583,8 +583,79 @@ void test_fade_starts_from_what_was_showing() {
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Host streaming (#106): no self-driven pushes while LATCHes keep coming
+// ---------------------------------------------------------------------------
+
+void test_a_single_latch_is_not_streaming() {
+    // SET_EFFECT + LATCH, then silence: the effect must free-run at once.
+    TEST_ASSERT_TRUE(stage(fx, EffectEngine::CHASE, 0, 255, 0, 5));
+    fx.on_latch(buf, 1000);
+    TEST_ASSERT_FALSE(fx.host_streaming(1001));
+    TEST_ASSERT_FALSE(fx.host_streaming(1050));
+}
+
+void test_latches_close_together_are_streaming_until_the_host_stops() {
+    fx.on_latch(buf, 1000);
+    fx.on_latch(buf, 1033);                     // 30 fps
+    TEST_ASSERT_TRUE(fx.host_streaming(1034));
+    TEST_ASSERT_TRUE(fx.host_streaming(1033 + EffectEngine::STREAM_HOLD_MS - 1));
+    TEST_ASSERT_FALSE(fx.host_streaming(1033 + EffectEngine::STREAM_HOLD_MS));
+}
+
+void test_latches_further_apart_than_the_hold_are_not_streaming() {
+    fx.on_latch(buf, 1000);
+    fx.on_latch(buf, 1000 + EffectEngine::STREAM_HOLD_MS);   // under 10 fps
+    TEST_ASSERT_FALSE(fx.host_streaming(1000 + EffectEngine::STREAM_HOLD_MS + 1));
+}
+
+void test_reset_forgets_the_stream() {
+    fx.on_latch(buf, 1000);
+    fx.on_latch(buf, 1033);
+    fx.reset();
+    TEST_ASSERT_FALSE(fx.host_streaming(1034));
+    fx.on_latch(buf, 1040);                     // one LATCH after reset: not yet
+    TEST_ASSERT_FALSE(fx.host_streaming(1041));
+}
+
+// Suppressing pushes must not cost the animation its timing: at every LATCH
+// of a 30 fps stream, the effect shows exactly what a free-running tile shows
+// at that moment.
+static void check_streamed_matches_free_running(uint8_t id, uint8_t p0, uint8_t p1,
+                                                uint8_t p2, uint8_t p3) {
+    EffectEngine streamed, free_running;
+    fill(buf, 200, 120, 40);
+    TEST_ASSERT_TRUE(stage(streamed, id, p0, p1, p2, p3));
+    TEST_ASSERT_TRUE(stage(free_running, id, p0, p1, p2, p3));
+    streamed.on_latch(buf, 0);
+    free_running.on_latch(buf, 0);
+
+    uint32_t next_latch = 33;
+    for (uint32_t t = 1; t <= 2000; t++) {
+        streamed.poll(buf, t);
+        free_running.poll(buf, t);
+        if (t == next_latch) {
+            streamed.on_latch(buf, t);
+            TEST_ASSERT_TRUE(streamed.host_streaming(t));
+            TEST_ASSERT_EQUAL_MEMORY(free_running.output().leds, streamed.output().leds,
+                                     sizeof(PixelBuffer::leds));
+            next_latch += (next_latch % 3 == 0) ? 34 : 33;   // ~30 fps, uneven
+        }
+    }
+}
+
+void test_streamed_shimmer_keeps_time() { check_streamed_matches_free_running(EffectEngine::SHIMMER, 200, 255, 128, 7); }
+void test_streamed_chase_keeps_time()   { check_streamed_matches_free_running(EffectEngine::CHASE, 85, 255, 0, 5); }
+
 int main() {
     UNITY_BEGIN();
+
+    RUN_TEST(test_a_single_latch_is_not_streaming);
+    RUN_TEST(test_latches_close_together_are_streaming_until_the_host_stops);
+    RUN_TEST(test_latches_further_apart_than_the_hold_are_not_streaming);
+    RUN_TEST(test_reset_forgets_the_stream);
+    RUN_TEST(test_streamed_shimmer_keeps_time);
+    RUN_TEST(test_streamed_chase_keeps_time);
     RUN_TEST(test_stage_rejects_short_payload);
     RUN_TEST(test_stage_rejects_reserved_bits);
     RUN_TEST(test_stage_rejects_unassigned_ids);

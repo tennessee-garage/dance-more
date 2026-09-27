@@ -106,8 +106,14 @@ void loop() {
     } else if (effect.poll(pixel_buf, now)) {
         // A time-varying effect drives the strip on its own clock - no Tile
         // Bus traffic per frame, and no LATCH needed. See docs/tile-effects.md.
+        //
+        // Except while the host is streaming frames: then the push waits for
+        // the next LATCH (above), because a push here leaves the tile deaf at
+        // a moment the row cannot know about and drops whatever it is sending
+        // (#106). poll() has still advanced the effect, so nothing is lost
+        // but render rate.
         startup_done = true;
-        led_driver.push(effect.output());
+        if (!effect.host_streaming(now)) led_driver.push(effect.output());
     } else {
         startup_pattern_poll(now);
     }

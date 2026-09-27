@@ -1,0 +1,12 @@
+idle 323 mA
+  ...50 trials, 0 failed
+  FAIL trial 97: wait 0.353s, after BLACKOUT 393 mA (swing 136 mA, median 375.0), after 2nd BLACKOUT 324 mA
+  ...100 trials, 1 failed
+  ...150 trials, 1 failed
+  FAIL trial 156: wait 0.313s, after BLACKOUT 445 mA (swing 144 mA, median 393.5), after 2nd BLACKOUT 324 mA
+  FAIL trial 181: wait 0.520s, after BLACKOUT 439 mA (swing 126 mA, median 405.0), after 2nd BLACKOUT 324 mA
+  ...200 trials, 3 failed
+  ...250 trials, 3 failed
+  ...300 trials, 3 failed
+BLACKOUT over SHIMMER, random phase: tiles left lit 3/300
+final 324 mA

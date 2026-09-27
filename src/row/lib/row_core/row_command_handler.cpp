@@ -254,7 +254,7 @@ void RowCommandHandler::handle_latch() {
         // Inside the quiet window, or behind a BLACKOUT that is itself
         // waiting for it: this LATCH would reach tiles still pushing their
         // LEDs, so it goes out after them instead.
-        if (in_quiet() || blackout_pending_) {
+        if (in_quiet() || blackout_sweeps_left_) {
             latch_pending_ = true;
             return;
         }
@@ -272,10 +272,10 @@ void RowCommandHandler::handle_latch() {
 }
 
 void RowCommandHandler::handle_blackout() {
-    if (in_quiet()) {
-        blackout_pending_ = true;   // sent when the window ends - see poll()
-        return;
-    }
+    // A BLACKOUT while sweeps are still pending restarts the count.
+    blackout_sweeps_left_ = BLACKOUT_SWEEPS;
+    if (in_quiet()) return;   // poll() sends each sweep as a window ends
+    blackout_sweeps_left_--;
     do_blackout();
 }
 
@@ -309,11 +309,12 @@ void RowCommandHandler::poll(uint32_t now_ms) {
     }
     if (in_quiet()) return;
 
-    // One Tile Bus action per call, in the order the Pi asked for them: a
-    // BLACKOUT and a LATCH that waited out the window, then forwarding.
-    // Each of the first two sends a LATCH and so opens a new window.
-    if (blackout_pending_) {
-        blackout_pending_ = false;
+    // One Tile Bus action per call, in the order the Pi asked for them: any
+    // BLACKOUT sweeps still due (BLACKOUT_SWEEPS), a LATCH that waited out the
+    // window, then forwarding. Each of the first two sends a LATCH and so
+    // opens a new window.
+    if (blackout_sweeps_left_) {
+        blackout_sweeps_left_--;
         do_blackout();
         return;
     }
