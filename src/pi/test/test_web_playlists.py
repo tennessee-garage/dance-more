@@ -247,13 +247,20 @@ def test_editing_the_loaded_playlist_says_so(client, runner):
 
 def test_settings_round_trip(client):
     assert client.get("/api/settings").json() == {
-        "brightness": 255, "fps": 30.0, "default_entry_duration": 60.0, "startup_playlist": None,
+        "brightness": 255, "default_entry_duration": 60.0, "startup_playlist": None,
     }
     pid = make(client)["id"]
-    changed = client.patch("/api/settings", json={"brightness": 128, "fps": 25, "startup_playlist": pid}).json()
-    assert changed == {"brightness": 128, "fps": 25.0, "default_entry_duration": 60.0, "startup_playlist": pid}
+    changed = client.patch("/api/settings", json={"brightness": 128, "default_entry_duration": 90, "startup_playlist": pid}).json()
+    assert changed == {"brightness": 128, "default_entry_duration": 90.0, "startup_playlist": pid}
     assert client.get("/api/settings").json() == changed
     assert client.patch("/api/settings", json={"startup_playlist": None}).json()["startup_playlist"] is None
+
+
+def test_a_new_brightness_setting_is_applied_to_the_floor_now(client, runner):
+    client.patch("/api/settings", json={"brightness": 90})
+    runner.set_brightness.assert_called_once_with(90)
+    client.patch("/api/settings", json={"default_entry_duration": 30})
+    runner.set_brightness.assert_called_once()  # untouched when brightness is not sent
 
 
 @pytest.mark.parametrize(
@@ -261,14 +268,17 @@ def test_settings_round_trip(client):
     [
         {"brightness": 256},
         {"brightness": "loud"},
-        {"fps": 0},
         {"default_entry_duration": -5},
         {"startup_playlist": 999},
-        {"brightness": 100, "fps": -1},  # one bad value: nothing written
+        {"brightness": 100, "default_entry_duration": -1},  # one bad value: nothing written
+        {"brightness": None},
+        {"default_entry_duration": None},
+        {"fps": 25},  # not a setting here: refused, not ignored
     ],
 )
-def test_malformed_settings_never_reach_the_store(client, store, body):
+def test_malformed_settings_never_reach_the_store(client, store, runner, body):
     before = store.settings()
     response = client.patch("/api/settings", json=body)
     assert response.status_code == 422, response.text
     assert store.settings() == before
+    runner.set_brightness.assert_not_called()

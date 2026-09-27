@@ -148,8 +148,12 @@ def transport_router(ctx: AppContext) -> APIRouter:
 
     @router.post("/transport/brightness", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
     def brightness(body: Brightness) -> Queued:
-        """Global brightness, 0-255."""
-        return queued(lambda: runner.set_brightness(body.value))
+        """Global brightness, 0-255. Also stored as the brightness setting,
+        so the floor comes back at it after a restart."""
+        response = queued(lambda: runner.set_brightness(body.value))
+        if ctx.store is not None:
+            ctx.store.set_setting("brightness", body.value)
+        return response
 
     @router.post(
         "/transport/params",

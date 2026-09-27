@@ -306,6 +306,9 @@ def build_app(args: argparse.Namespace):
     store = _store(args, registry)
     for animation_id, error in registry.errors.items():
         print(f"warning: {animation_id}: {error.message}", file=sys.stderr)
+    if args.brightness is None:
+        # The last brightness set from the page (or the API) survives a restart.
+        args.brightness = store.get_int("brightness")
 
     clock = FrameClock(fps=args.fps)
     fanout, _, _ = build_sinks(args, clock)
@@ -586,7 +589,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("grid", "tiles"),
         help="also render in the terminal: the full grid (default) or the 8x8 tile view",
     )
-    serve.add_argument("--brightness", type=int, default=255, metavar="0-255", help="global brightness (default 255)")
+    serve.add_argument(
+        "--brightness",
+        type=int,
+        metavar="0-255",
+        help="global brightness; default: the stored brightness setting (255 until one is set)",
+    )
     # build_sinks() reads these; a window needs the main thread, which uvicorn owns.
     serve.set_defaults(func=_cmd_serve, window=False, record=None, frames=None)
 
