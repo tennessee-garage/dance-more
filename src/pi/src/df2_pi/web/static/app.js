@@ -4,6 +4,7 @@
 import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
+import { AnimationsPanel } from "./animations.js";
 import { command, commandError, connection, runnerState, startPolling } from "./state.js";
 
 const DASH = "—";
@@ -159,10 +160,11 @@ function Preview() {
   return html`<section class="preview" aria-label="Floor preview"><div class="floor"></div></section>`;
 }
 
+// [id, label, panel component or null while the tab is still empty]
 const TABS = [
-  ["playlists", "Playlists"],
-  ["animations", "Animations"],
-  ["diagnostics", "Diagnostics"],
+  ["playlists", "Playlists", null],
+  ["animations", "Animations", AnimationsPanel],
+  ["diagnostics", "Diagnostics", null],
 ];
 const activeTab = signal(TABS[0][0]);
 
@@ -180,14 +182,14 @@ function Tabs() {
             onClick=${() => { activeTab.value = id; }}
           >${label}</button>`)}
       </div>
-      ${TABS.map(([id]) => html`
+      ${TABS.map(([id, , Panel]) => html`
         <div
           class="panel"
           role="tabpanel"
           id=${`panel-${id}`}
           aria-labelledby=${`tab-${id}`}
           hidden=${id !== active}
-        ></div>`)}
+        >${Panel && html`<${Panel} />`}</div>`)}
     </section>`;
 }
 
