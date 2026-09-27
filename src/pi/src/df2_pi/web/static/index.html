@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dance Floor</title>
+  <link rel="stylesheet" href="static/app.css">
+  <!-- Bare specifiers -> the vendored builds (see static/vendor/README.md).
+       Relative URLs, so the page still works behind a path prefix. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "preact": "./static/vendor/preact-10.29.8.module.js",
+        "preact/hooks": "./static/vendor/preact-hooks-10.29.8.module.js",
+        "htm": "./static/vendor/htm-3.1.1.module.js",
+        "htm/preact": "./static/vendor/htm-preact-3.1.1.module.js",
+        "@preact/signals-core": "./static/vendor/signals-core-1.14.4.module.js",
+        "@preact/signals": "./static/vendor/signals-2.11.2.module.js"
+      }
+    }
+  </script>
+  <script type="module" src="static/app.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>
