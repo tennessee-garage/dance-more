@@ -305,14 +305,29 @@ with httpx2.Client(base_url=base) as client:
         count += 1
 print(count)
 """
+# Alongside them, preview streams at full rate acking as the page does: the
+# steady load a browser beside the floor actually puts on the server.
+GIL_STREAMS = 2
+GIL_STREAM = """
+import json, sys, time
+from websockets.sync.client import connect
+url, seconds = sys.argv[1], float(sys.argv[2])
+deadline, count = time.monotonic() + seconds, 0
+with connect(url, max_size=None) as ws:
+    while time.monotonic() < deadline:
+        record = ws.recv(timeout=seconds)
+        ws.send(json.dumps({"ack": int.from_bytes(record[3:7], "big")}))
+        count += 1
+print(count)
+"""
 
 
 @pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("DF2_SLOW_TESTS"), reason="set DF2_SLOW_TESTS=1 to run")
 def test_request_burst_does_not_disturb_the_render_clock(registry, store):
     """The runner shares an interpreter with uvicorn's event loop. Under
-    `GIL_CLIENTS` clients requesting as fast as they can, the clock must
-    drop no frames and its jitter p95 must stay within a millisecond of the
+    `GIL_CLIENTS` clients requesting as fast as they can, plus `GIL_STREAMS`
+    full-rate preview streams, the clock must drop no frames and its jitter p95 must stay within a millisecond of the
     idle baseline. Real time, a real server on a real socket: run before
     every web PR, and on the Pi for a verdict that means anything."""
     import httpx2
@@ -341,12 +356,20 @@ def test_request_burst_does_not_disturb_the_render_clock(registry, store):
                 text=True,
             )
             for i in range(GIL_CLIENTS)
+        ] + [
+            subprocess.Popen(
+                [sys.executable, "-c", GIL_STREAM, f"ws://127.0.0.1:{port}/ws/preview", str(run_s)],
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(GIL_STREAMS)
         ]
         # The telemetry window is a frame count, so once a full window has
         # passed under load it holds loaded frames only.
         time.sleep(GIL_CLIENT_START_S + GIL_WINDOW_S)
         loaded = ctx.runner.clock.telemetry()
-        requests = sum(int(c.communicate(timeout=10.0)[0]) for c in clients)
+        counts = [int(c.communicate(timeout=10.0)[0]) for c in clients]
+        requests, streamed = sum(counts[:GIL_CLIENTS]), sum(counts[GIL_CLIENTS:])
     finally:
         for c in clients:
             if c.poll() is None:
@@ -355,10 +378,11 @@ def test_request_burst_does_not_disturb_the_render_clock(registry, store):
         thread.join(10.0)
 
     print(
-        f"\n{requests} requests from {GIL_CLIENTS} clients; jitter p95 idle {idle.jitter_ms.p95:.3f} ms, "
+        f"\n{requests} requests from {GIL_CLIENTS} clients, {streamed} frames to {GIL_STREAMS} streams; jitter p95 idle {idle.jitter_ms.p95:.3f} ms, "
         f"loaded {loaded.jitter_ms.p95:.3f} ms (max {loaded.jitter_ms.max:.3f}); "
         f"dropped {idle.dropped} -> {loaded.dropped}"
     )
     assert requests > 100, "the burst never got going"
+    assert streamed >= GIL_STREAMS * 30 * GIL_WINDOW_S * 0.9, "the streams did not keep up"
     assert loaded.dropped == idle.dropped
     assert loaded.jitter_ms.p95 <= idle.jitter_ms.p95 + GIL_JITTER_TOLERANCE_MS

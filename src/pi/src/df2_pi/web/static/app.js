@@ -5,6 +5,7 @@ import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { AnimationsPanel } from "./animations.js";
+import { connectPreview, previewStatus } from "./preview-stream.js";
 import { command, commandError, connection, runnerState, startPolling } from "./state.js";
 
 const DASH = "—";
@@ -156,8 +157,25 @@ function TransportBar() {
 
 // ---- preview and tabs ----------------------------------------------------
 
+function PreviewStatus() {
+  const { connection, format, fps, missed } = previewStatus.value;
+  const detail = connection === "live" ? ` \u00b7 ${format} \u00b7 ${fps} fps${missed ? ` \u00b7 ${missed} missed` : ""}` : "";
+  return html`<div class="preview-status num">${connection}${detail}</div>`;
+}
+
 function Preview() {
-  return html`<section class="preview" aria-label="Floor preview"><div class="floor"></div></section>`;
+  // The stream hands records to `draw` directly; a frame never goes
+  // through Preact. The renderer (#92) replaces this no-op.
+  const draw = useRef(() => {});
+  useEffect(() => {
+    const stream = connectPreview((record) => draw.current(record));
+    return () => stream.close();
+  }, []);
+  return html`
+    <section class="preview" aria-label="Floor preview">
+      <div class="floor"></div>
+      <${PreviewStatus} />
+    </section>`;
 }
 
 // [id, label, panel component or null while the tab is still empty]
