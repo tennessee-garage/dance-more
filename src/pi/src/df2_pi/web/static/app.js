@@ -8,6 +8,7 @@ import { AnimationsPanel } from "./animations.js";
 import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls } from "./params.js";
+import { PlaylistsPanel } from "./playlists.js";
 import {
   animationList,
   command,
@@ -257,7 +258,7 @@ function Preview() {
 
 // [id, label, panel component or null while the tab is still empty]
 const TABS = [
-  ["playlists", "Playlists", null],
+  ["playlists", "Playlists", PlaylistsPanel],
   ["animations", "Animations", AnimationsPanel],
   ["diagnostics", "Diagnostics", null],
 ];

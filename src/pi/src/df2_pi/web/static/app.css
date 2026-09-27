@@ -212,7 +212,8 @@ button.blackout.active {
 
 main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  /* The tabs widen with the window; the floor is capped by height anyway. */
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 36vw, 680px);
   gap: var(--gap);
   flex: 1;
   min-height: 0;
@@ -528,3 +529,104 @@ button.reset:disabled { visibility: hidden; }
 .param.has-error input,
 .param.has-error select { border-color: var(--bad); }
 .param-error { font-size: 12px; color: var(--bad); max-width: 240px; }
+
+/* ---- playlists tab ---- */
+
+.panel { container-type: inline-size; }
+
+.playlists {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+}
+/* Side by side when the panel is wide enough; stacked otherwise. */
+@container (min-width: 620px) {
+  .playlists { grid-template-columns: 200px minmax(0, 1fr); }
+  .playlists > .command-error { grid-column: 1 / -1; }
+}
+
+.muted { color: var(--muted); font-size: 13px; }
+
+.playlist-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.new-playlist { display: flex; gap: 6px; margin-bottom: 8px; }
+.new-playlist input { flex: 1; min-width: 0; }
+.playlist-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px;
+  text-align: left;
+}
+.playlist-item.selected { border-color: var(--accent); }
+.playlist-name { font-weight: 600; }
+.playlist-meta { font-size: 12px; color: var(--muted); }
+.marker { margin-left: 4px; font-size: 12px; color: var(--warn); }
+.marker.playing { color: var(--ok); }
+.marker.warn { color: var(--warn); font-weight: 700; }
+
+.playlists input[type="text"],
+.playlists input[type="number"],
+.playlists select {
+  padding: 4px 6px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.playlists button { padding: 5px 10px; }
+button.danger { color: var(--bad); }
+button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.playlist-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: var(--gap); }
+.playlist-title { font-size: 17px; font-weight: 600; width: 100%; }
+.playlist-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; }
+.playlist-settings .setting { display: inline-flex; align-items: center; gap: 6px; }
+.playlist-settings input[type="number"] { width: 4.5em; }
+.playlist-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.reload-offer {
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+}
+
+.entries { list-style: none; margin: 0 0 var(--gap); padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.entry {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.entry.disabled { opacity: 0.55; }
+.entry.dragging { opacity: 0.35; }
+.entry.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.entry.drop-after { box-shadow: 0 3px 0 var(--accent); }
+.entry-line { display: flex; align-items: center; gap: 8px; }
+.handle { cursor: grab; color: var(--muted); padding: 0 2px; user-select: none; }
+.entry-position { width: 1.6em; text-align: right; color: var(--muted); font-size: 13px; }
+.entry-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unresolved { color: var(--bad); text-decoration: underline dotted; cursor: help; }
+.duration { display: inline-flex; align-items: center; gap: 2px; }
+.duration input { width: 5em; }
+.duration .unit { font-size: 12px; color: var(--muted); }
+button.icon-small { padding: 0 8px; font-size: 16px; line-height: 24px; }
+.params-summary { margin: 4px 0 0 3.2em; font-size: 12px; text-align: left; }
+.entry-params { margin: 8px 0 2px 3.2em; }
+
+.add-entry {
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+.add-entry select { flex: 1; min-width: 0; }
