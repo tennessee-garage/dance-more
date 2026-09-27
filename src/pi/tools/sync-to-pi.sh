@@ -21,6 +21,7 @@ PI_DEST="${PI_DEST:-/home/garth/dance-floor}"
 
 RSYNC_EXCLUDES=(
   --exclude=venv/
+  --exclude=.venv/  # a local dev venv: macOS binaries, useless on the Pi
   --exclude=__pycache__/
   --exclude=.pytest_cache/
   --exclude=*.egg-info/
