@@ -9,10 +9,10 @@ setting an effect never stops a tile accepting pixels.
 
 The effects themselves - what each id does with its parameters - are
 specified and implemented in the tile firmware (#72, docs/tile-effects.md).
-This module only knows the wire shape, so the driver plumbing can carry
-effect writes before any tile can act on them. The ids below follow
-docs/tile-effects.md; only NONE and SHIMMER are implemented in tile
-firmware so far, and a tile drops an id it doesn't implement.
+This module only knows the wire shape. The ids below follow
+docs/tile-effects.md, which marks which ones tile firmware implements
+(NONE, SHIMMER, CHASE, HUE_SPLIT and FADE as of TILE_FW_VERSION 4); a tile
+drops an id it doesn't implement.
 
 An effect write rides inside SEND_DATA as a 6-byte tile entry and costs
 that tile its pixel update for the frame - see animation/context.py.
