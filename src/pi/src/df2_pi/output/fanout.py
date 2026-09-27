@@ -137,7 +137,17 @@ class FanOut:
         sinks = {}
         for sink in self.sinks:
             entry: dict[str, Any] = {"attached": True}
-            for attr in ("frames", "frames_handled", "dropped", "failures", "consecutive_failures", "healthy", "degraded", "muted"):
+            for attr in (
+                "frames",
+                "frames_handled",
+                "dropped",
+                "failures",
+                "consecutive_failures",
+                "healthy",
+                "degraded",
+                "muted",
+                "subscriber_count",
+            ):
                 value = getattr(sink, attr, None)
                 if value is not None:
                     entry[attr] = value
