@@ -379,16 +379,55 @@ void test_queued_blackout_and_latch_go_out_in_order() {
     uint32_t t = 0;
     for (int i = 0; i < 40; i++, t++) handler.poll(t);
 
-    TEST_ASSERT_EQUAL(5, transport.sent.size());
-    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,      transport.sent[0].cmd);
-    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_EFFECT, transport.sent[1].cmd);
-    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR,  transport.sent[2].cmd);
-    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,      transport.sent[3].cmd);
-    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,      transport.sent[4].cmd);
+    // LATCH, then BLACKOUT_SWEEPS x (SET_EFFECT, SET_COLOR, LATCH), then the
+    // queued LATCH - which waits for every sweep, not just the first.
+    TEST_ASSERT_EQUAL(1 + 3 * BLACKOUT_SWEEPS + 1, transport.sent.size());
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH, transport.sent[0].cmd);
+    for (uint8_t k = 0; k < BLACKOUT_SWEEPS; k++) {
+        TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_EFFECT, transport.sent[1 + 3 * k].cmd);
+        TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR,  transport.sent[2 + 3 * k].cmd);
+        TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH,      transport.sent[3 + 3 * k].cmd);
+    }
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH, transport.sent[1 + 3 * BLACKOUT_SWEEPS].cmd);
 }
 
 // A small frame arriving just after a LATCH - the case that lost 9/10 frames
 // on the bench - is forwarded only once the window has passed.
+// BLACKOUT goes out BLACKOUT_SWEEPS times, each sweep after the previous
+// one's quiet window (#106), and data sent after the BLACKOUT is forwarded
+// only once every sweep is out - so a late sweep cannot black it out.
+void test_blackout_repeats_its_sweep_after_each_quiet_window() {
+    FakeTileTransport transport;
+    FakeRowSense      row_sense;
+    TileMap           map;
+    SenseMapper       sense(transport, row_sense, map);
+    FakePowerMonitor  power;
+    map.set_discovered(0, 0x01);
+
+    uint8_t payload[4] = {(uint8_t)Cmd::SET_COLOR, 10, 20, 30};
+
+    RowCommandHandler handler(transport, sense, power, 0x00);
+    handler.poll(100);
+    handler.handle(make_frame(ROWBUS_ADDR_BROADCAST, RowBusCmd::BLACKOUT, nullptr, 0));
+    TEST_ASSERT_EQUAL(3, transport.sent.size());             // first sweep, immediately
+    handler.handle(make_frame(0x00, RowBusCmd::SEND_DATA, payload, sizeof(payload)));
+
+    uint32_t t = 100;
+    size_t   sweeps_done = 1;
+    for (int i = 0; i < 40; i++) {
+        handler.poll(++t);
+        if (transport.sent.size() == 3 * (sweeps_done + 1)) sweeps_done++;
+    }
+    TEST_ASSERT_EQUAL(BLACKOUT_SWEEPS, sweeps_done);
+
+    // Every sweep ends in a LATCH; the new data comes after the last one.
+    for (uint8_t k = 0; k < BLACKOUT_SWEEPS; k++)
+        TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::LATCH, transport.sent[2 + 3 * k].cmd);
+    TEST_ASSERT_EQUAL(3 * BLACKOUT_SWEEPS + 1, transport.sent.size());
+    TEST_ASSERT_EQUAL_HEX8((uint8_t)Cmd::SET_COLOR, transport.sent.back().cmd);
+    TEST_ASSERT_EQUAL_HEX8(10, transport.sent.back().payload[0]);
+}
+
 void test_forwarding_waits_for_quiet_window() {
     FakeTileTransport transport;
     FakeRowSense      row_sense;
@@ -782,6 +821,7 @@ int main(int, char **) {
     RUN_TEST(test_blackout_straight_after_latch_waits_for_quiet_window);
     RUN_TEST(test_queued_blackout_and_latch_go_out_in_order);
     RUN_TEST(test_forwarding_waits_for_quiet_window);
+    RUN_TEST(test_blackout_repeats_its_sweep_after_each_quiet_window);
     RUN_TEST(test_status_reports_uptime_from_poll_clock);
     RUN_TEST(test_status_uptime_survives_past_16_bit_seconds);
     RUN_TEST(test_boot_entry_survives_a_full_ring_and_reports_first);

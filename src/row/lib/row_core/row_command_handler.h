@@ -66,6 +66,16 @@ static constexpr uint8_t ERROR_TYPE_ROW_BOOT = 0x06;
 // at 60 LEDs, which costs a frame nothing unless its data arrives within 4 ms
 // of the previous LATCH.
 static constexpr uint32_t TILE_LATCH_QUIET_MS = (TILE_LED_PUSH_US + 999u) / 1000u + 2u;
+
+// How many times BLACKOUT's sweep - SET_EFFECT(NONE) + SET_COLOR(0,0,0) to
+// each tile, then LATCH - goes out, each after the previous one's quiet
+// window. A tile running an effect is deaf for ~1.8 ms of every render on its
+// own clock, which the row cannot see, and missed a single sweep ~4.5% of the
+// time on the bench (#106) - so a floor-wide BLACKOUT would almost never have
+// caught all 64 tiles. The sweep is idempotent, and a tile that got it has
+// stopped its effect and is listening; three take a miss to ~0.01% per tile.
+// Costs two extra quiet windows, ~9 ms at most.
+static constexpr uint8_t BLACKOUT_SWEEPS = 3;
 static constexpr uint16_t ROW_BOOT_POWMAN_MASK    = 0x1FFF;
 static constexpr uint16_t ROW_BOOT_WATCHDOG_TIMER = 1u << 13;
 static constexpr uint16_t ROW_BOOT_WATCHDOG_FORCE = 1u << 14;
@@ -186,7 +196,7 @@ private:
     // err long.
     bool        quiet_pending_    = false;   // LATCH sent, window not yet timed
     uint32_t    quiet_until_ms_   = 0;
-    bool        blackout_pending_ = false;
+    uint8_t     blackout_sweeps_left_ = 0;   // BLACKOUT sweeps still to send
     bool        latch_pending_    = false;   // LATCH that arrived during the window
     uint8_t     overrun_slot_     = 0;
     uint8_t     overrun_tile_cmd_ = 0;
