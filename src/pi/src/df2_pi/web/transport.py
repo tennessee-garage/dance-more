@@ -151,6 +151,37 @@ def transport_router(ctx: AppContext) -> APIRouter:
         """Global brightness, 0-255."""
         return queued(lambda: runner.set_brightness(body.value))
 
+    @router.post(
+        "/transport/params",
+        response_model=Queued,
+        tags=["transport"],
+        description=ASYNC_NOTE,
+        responses={
+            409: {"description": "What is playing has no parameters to set (the built-in idle animation)"},
+            422: {"description": 'A param is unknown or out of range: `detail` is `{"param": name, "message": why}`'},
+        },
+    )
+    def set_params(body: dict[str, Any]) -> Queued:
+        """Live-tune the running animation: `{"speed": 2.0}`. Coerced through
+        its Param specs; keys not given keep their current value."""
+        playing = runner.state.animation
+        definition = ctx.registry.get(playing[0]) if playing else None
+        if definition is None:
+            raise HTTPException(409, "the running animation has no parameters to set")
+        specs = definition.meta.params
+        coerced: dict[str, Any] = {}
+        for name, value in body.items():
+            spec = specs.get(name)
+            if spec is None:
+                raise HTTPException(
+                    422, {"param": name, "message": f"{definition.id} has no parameter {name!r}; it declares {sorted(specs)}"}
+                )
+            try:
+                coerced[name] = spec.coerce(value)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(422, {"param": name, "message": str(exc)}) from exc
+        return queued(lambda: runner.set_params(**coerced))
+
     @router.post("/transport/blackout", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
     def blackout(body: Blackout) -> Queued:
         """Black out the floor (playback continues underneath), or lift it."""

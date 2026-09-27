@@ -7,7 +7,18 @@ import { signal } from "@preact/signals";
 import { AnimationsPanel } from "./animations.js";
 import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
-import { command, commandError, connection, runnerState, startPolling } from "./state.js";
+import { ParamControls } from "./params.js";
+import {
+  animationList,
+  command,
+  commandError,
+  connection,
+  currentAnimationId,
+  paramErrors,
+  runnerState,
+  setLiveParam,
+  startPolling,
+} from "./state.js";
 
 const DASH = "—";
 const BRIGHTNESS_SETTLE_MS = 2000; // how long a released slider waits for the server to agree
@@ -115,6 +126,26 @@ function BlackoutButton({ state, live }) {
 
 // ---- transport bar -------------------------------------------------------
 
+/** Controls for whatever is playing, generated from its Param specs, each
+ *  edit streamed to the runner. Keyed by animation, so the controls (and any
+ *  half-finished edit) swap cleanly when the runner moves on. */
+function LiveParams() {
+  const id = currentAnimationId.value;
+  const specs = animationList.value?.animations.find((a) => a.id === id)?.params;
+  useEffect(() => { paramErrors.value = {}; }, [id]);
+  if (!specs || Object.keys(specs).length === 0) return null;
+  return html`
+    <div class="live-params" aria-label="Animation parameters">
+      <${ParamControls}
+        key=${id}
+        specs=${specs}
+        values=${runnerState.value?.params ?? {}}
+        errors=${paramErrors.value}
+        onChange=${setLiveParam}
+      />
+    </div>`;
+}
+
 function Progress({ state }) {
   const elapsed = state?.elapsed_s;
   const remaining = state?.remaining_s;
@@ -151,6 +182,7 @@ function TransportBar() {
         <${BlackoutButton} state=${state} live=${live} />
         <${ConnectionBadge} />
       </div>
+      <${LiveParams} />
       <${Progress} state=${state} />
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
     </header>`;

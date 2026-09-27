@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import math
 import textwrap
@@ -275,6 +276,74 @@ def test_a_queued_command_shows_in_the_state_on_the_next_tick(registry, store):
     assert paused[:4] == [False] * 4 and all(paused[4:])
 
 
+# ---- live params ----------------------------------------------------------------------------
+
+
+def playing_solid(runner) -> None:
+    """Make the mocked runner report `solid` as what is playing."""
+    runner.state = dataclasses.replace(runner.state, animation=("solid", "Solid"))
+
+
+def test_params_reach_set_params_coerced(mocked):
+    client, runner = mocked
+    playing_solid(runner)
+    response = client.post("/api/transport/params", json={"level": 7.0, "mode": "down"})
+    assert response.status_code == 200, response.text
+    runner.set_params.assert_called_once_with(level=7, mode="down")
+    assert type(runner.set_params.call_args.kwargs["level"]) is int
+
+
+@pytest.mark.parametrize(
+    "body, param, fragment",
+    [
+        ({"speed": 2}, "speed", "solid has no parameter 'speed'"),
+        ({"level": 300}, "level", "300 is above the maximum 255"),
+        ({"level": -1}, "level", "-1 is below the minimum 0"),
+        ({"mode": "sideways"}, "mode", "is not one of ['up', 'down']"),
+        ({"level": "loud"}, "level", "is not a valid int"),
+        ({"level": 5, "mode": "sideways"}, "mode", "is not one of"),  # one bad value rejects the lot
+    ],
+)
+def test_a_bad_param_is_422_naming_it_and_never_reaches_the_runner(mocked, body, param, fragment):
+    client, runner = mocked
+    playing_solid(runner)
+    response = client.post("/api/transport/params", json=body)
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["param"] == param and fragment in detail["message"]
+    runner.set_params.assert_not_called()
+
+
+def test_params_while_idle_is_409(mocked):
+    client, runner = mocked
+    runner.state = dataclasses.replace(runner.state, animation=("_idle", "Idle"))
+    assert client.post("/api/transport/params", json={"level": 7}).status_code == 409
+    runner.set_params.assert_not_called()
+
+
+def test_a_live_edit_shows_in_state_params_on_the_next_tick(registry, store):
+    ref: list = []
+    responses: dict[int, dict] = {}
+    client: list[TestClient] = []
+
+    def on_frame(n: int) -> None:
+        if n == 3:
+            responses[n] = client[0].post("/api/transport/params", json={"level": 99}).json()
+
+    probe = Probe(ref, stop_after=6, on_frame=on_frame)
+    preview = PreviewSink()
+    fanout = FanOut([probe, preview])
+    runner = Runner(registry, fanout, store=store, clock=fake_clock())
+    ref.append(runner)
+    client.append(TestClient(create_app(AppContext(registry, store, fanout, runner, preview))))
+    runner.load_playlist("Party")
+    runner.run()
+
+    assert responses[3]["state"]["params"]["level"] == 10  # queued, not yet applied
+    levels = [s.params["level"] for s in probe.states]
+    assert levels[:4] == [10] * 4 and levels[4:] == [99] * (len(levels) - 4)
+
+
 # ---- OpenAPI ------------------------------------------------------------------------------
 
 
@@ -283,7 +352,7 @@ def test_openapi_documents_that_commands_are_asynchronous(mocked):
     schema = client.get("/openapi.json").json()
     assert "next frame boundary" in schema["info"]["description"]
     commands = {path: ops["post"] for path, ops in schema["paths"].items() if path.startswith("/api/transport/")}
-    assert len(commands) == 11
+    assert len(commands) == 12
     for path, op in commands.items():
         assert "next frame boundary" in op["description"], path
     assert {"RunnerState", "TelemetrySnapshot", "Percentiles"} <= set(schema["components"]["schemas"])
