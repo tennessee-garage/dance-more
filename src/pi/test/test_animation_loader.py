@@ -331,6 +331,24 @@ def test_failed_reload_keeps_the_last_good_version_live(anim_dir):
     assert "solid" not in registry.errors  # fixed: error cleared
 
 
+def test_reload_publishes_new_dicts_and_never_mutates_the_old(anim_dir):
+    """The render thread iterates `errors` every frame while a web request
+    may reload: a dict it holds must never change size under it."""
+    registry = AnimationRegistry.discover(anim_dir)
+    animations, errors = registry.animations, registry.errors
+    before = (dict(animations), dict(errors))
+
+    write(anim_dir, "broken.py", SOLID, mtime=2e9)  # fixed: leaves errors, joins animations
+    write(anim_dir, "fresh.py", BROKEN_SYNTAX)  # new and failing
+    (anim_dir / "decay.py").unlink()  # removed
+    assert sorted(registry.reload()) == ["broken", "decay", "fresh"]
+
+    assert (animations, errors) == before  # the old generation is untouched
+    assert registry.animations is not animations and registry.errors is not errors
+    assert set(registry.animations) == {"solid", "broken"}
+    assert "fresh" in registry.errors and "broken" not in registry.errors
+
+
 def test_a_broken_file_that_gets_fixed_starts_loading(anim_dir):
     registry = AnimationRegistry.discover(anim_dir)
     assert "broken" not in registry

@@ -282,3 +282,118 @@ main {
   main { grid-template-columns: minmax(0, 1fr); align-content: start; }
   .preview .floor { width: 100%; }
 }
+
+/* ---- animations tab ---- */
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.panel-header .count { font-weight: 600; }
+.panel-header .reload-status {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-header button.reload { margin-left: auto; padding: 6px 12px; }
+
+.animation-list, .failed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.failed { margin-bottom: 8px; }
+
+.animation, .failed-file {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.animation.playing { border-color: var(--accent); }
+.failed-file {
+  flex-direction: column;
+  gap: 4px;
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 10%, var(--surface));
+}
+
+.animation-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.animation-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.animation-name { font-weight: 600; overflow-wrap: anywhere; }
+
+.format {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+}
+.format-tile { color: var(--accent); }
+.format-pixel { color: var(--ok); }
+.period { font-size: 12px; color: var(--muted); }
+
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.description { font-size: 13px; color: var(--muted); }
+
+.stale { font-size: 12px; color: var(--warn); }
+.load-error {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--bad);
+}
+.load-error .stage {
+  flex: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.load-error .message {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+button.play { flex: none; padding: 6px 14px; }
+.animation.playing button.play {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

@@ -27,6 +27,12 @@ the Pi while the floor is running and a syntax error costs nothing. It is
 polled, not pushed: call it from a dev loop or a UI button. A file-watcher
 can drive it later without this module changing.
 
+Thread safety. The render thread reads `errors` every frame while a web
+request may call `reload()`, so a reload never mutates the live dicts: it
+builds new ones and publishes them with a single assignment each. A reader
+iterating the old dict finishes undisturbed and needs no lock. Concurrent
+`reload()` calls are serialised by a lock of their own.
+
 Several directories may be given (a starter pack plus a user's own); an id
 present in more than one is a duplicate, and the later one is recorded as
 an error rather than silently shadowing the first.
@@ -35,6 +41,7 @@ an error rather than silently shadowing the first.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Iterable
 
@@ -55,6 +62,7 @@ class AnimationRegistry:
         self.animations: dict[str, AnimationDef] = {}
         self.errors: dict[str, LoadError] = {}
         self._mtimes: dict[Path, float] = {}
+        self._reload_lock = threading.Lock()
 
     @classmethod
     def discover(cls, paths: Path | str | Iterable[Path | str]) -> AnimationRegistry:
@@ -80,6 +88,17 @@ class AnimationRegistry:
         """Bring the registry up to date with the directories. Returns the
         ids whose entry changed: loaded, reloaded, newly failing, or
         removed."""
+        with self._reload_lock:
+            animations, errors, changed = self._reloaded()
+            # Publish: readers holding the old dicts are never disturbed.
+            self.animations = animations
+            self.errors = errors
+            return changed
+
+    def _reloaded(self) -> tuple[dict[str, AnimationDef], dict[str, LoadError], list[str]]:
+        """The next generation of `animations` and `errors`, built on copies."""
+        animations = dict(self.animations)
+        errors = dict(self.errors)
         changed: list[str] = []
         present = self.files()
         seen_ids: dict[str, Path] = {}
@@ -87,7 +106,7 @@ class AnimationRegistry:
         for path in present:
             stem = path.stem
             if stem in seen_ids and seen_ids[stem] != path:
-                self.errors[stem] = LoadError(
+                errors[stem] = LoadError(
                     path,
                     "validate",
                     f"duplicate animation id {stem!r} - already loaded from {seen_ids[stem]}",
@@ -103,15 +122,15 @@ class AnimationRegistry:
                 definition = load_animation_file(path)
             except LoadError as exc:
                 # A previously loaded version, if any, stays live.
-                self.errors[stem] = exc
+                errors[stem] = exc
                 continue
-            self.errors.pop(stem, None)
+            errors.pop(stem, None)
             if definition is None:
                 # Not an animation (no decorator): a helper module. If it
                 # used to be one, it no longer is.
-                self.animations.pop(stem, None)
+                animations.pop(stem, None)
                 continue
-            self.animations[stem] = definition
+            animations[stem] = definition
 
         # Removed files: drop their entries (and forget their mtimes).
         present_paths = set(present)
@@ -120,10 +139,10 @@ class AnimationRegistry:
                 del self._mtimes[path]
                 stem = path.stem
                 if stem not in seen_ids:
-                    self.animations.pop(stem, None)
-                    self.errors.pop(stem, None)
+                    animations.pop(stem, None)
+                    errors.pop(stem, None)
                     changed.append(stem)
-        return changed
+        return animations, errors, changed
 
     def get(self, animation_id: str) -> AnimationDef | None:
         return self.animations.get(animation_id)
