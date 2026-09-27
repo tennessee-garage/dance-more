@@ -3,6 +3,7 @@
 from df2_pi.playlists.schema import SCHEMA_VERSION, migrate
 from df2_pi.playlists.store import (
     DEFAULT_SETTINGS,
+    DuplicatePlaylistName,
     Entry,
     PlayLogEntry,
     Playlist,
@@ -14,6 +15,7 @@ from df2_pi.playlists.store import (
 
 __all__ = [
     "DEFAULT_SETTINGS",
+    "DuplicatePlaylistName",
     "Entry",
     "PlayLogEntry",
     "Playlist",
