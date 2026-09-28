@@ -195,6 +195,21 @@ def floor_router(ctx: AppContext) -> APIRouter:
             )
         return out
 
+    @router.get("/leds", response_model=None)
+    def leds(format: str = Query(default="json", pattern="^(json|csv)$")):
+        """Every LED's position and raw-mode address, in chain order: what
+        a media server samples its image at to drive `raw` mode. See
+        interfacing/leds.py for the fields."""
+        from fastapi.responses import PlainTextResponse
+
+        from df2_pi.interfacing.leds import led_csv, led_table
+        from df2_pi.pixels import default_geometry
+
+        geometry = default_geometry()
+        if format == "csv":
+            return PlainTextResponse(led_csv(geometry), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="leds.csv"'})
+        return led_table(geometry)
+
     @router.get("/version", response_model=FloorVersions)
     async def version() -> FloorVersions:
         """VERSION from every row, and what is out of step against the

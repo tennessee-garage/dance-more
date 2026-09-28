@@ -25,7 +25,7 @@ export const layerAnimationId = computed(() => runnerState.value?.layer?.animati
 /** "connecting" until the first answer, then "ok" or "lost". */
 export const connection = signal("connecting");
 
-/** The tab on show: "playlists", "animations" or "diagnostics". Here, not
+/** The tab on show: "playlists", "animations", "external" or "diagnostics". Here, not
  *  in app.js, so a panel can tell whether it is on screen. */
 export const activeTab = signal("playlists");
 

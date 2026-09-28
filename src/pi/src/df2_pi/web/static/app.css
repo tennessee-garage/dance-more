@@ -474,8 +474,9 @@ button.layer.active {
   padding-top: 8px;
 }
 /* Which row is which: an animation's own params and the show controls can
-   share names (speed, saturation). */
-.row-label {
+   share names (speed, saturation). Scoped: the Diagnostics tab has its own
+   .row-label. */
+.live-params > .row-label {
   flex: none;
   width: 5.5em;
   padding-top: 2px;
@@ -789,6 +790,25 @@ button.icon-small { padding: 0 8px; font-size: 16px; line-height: 24px; }
 
 .floor-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .floor-buttons button { padding: 6px 12px; }
+.floor-buttons button.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+/* ---- external tab ---- */
+.health.idle { color: var(--muted); border: 1px solid var(--border); }
+.ext-field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 13px; }
+.ext-field input[type="number"], .ext-field select {
+  width: 12em;
+  padding: 4px 6px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.ext-field select { width: auto; max-width: 100%; }
+.ext-mix .slider input { width: 180px; accent-color: var(--accent); }
+.ext-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; }
+.ext-check { display: flex; align-items: center; gap: 6px; min-width: 6em; margin-top: 10px; padding-bottom: 6px; font-size: 13px; }
+.ext-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
 .floor-admin .diag-table { margin-top: 6px; }
 .versions-against { margin: 0 0 4px; }
 .versions td { vertical-align: top; }

@@ -306,6 +306,6 @@ def transport_router(ctx: AppContext) -> APIRouter:
         """Change how the layer combines, without restarting it."""
         return queued(lambda: runner.set_layer_blend(body.mode, body.amount))
 
-    simple("clear_layer", runner.clear_layer, "Remove the layer")
+    simple("clear_layer", lambda: runner.clear_layer(), "Remove the layer")
 
     return router

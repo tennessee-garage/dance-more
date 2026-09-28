@@ -59,6 +59,17 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "startup_playlist": None,  # a playlist id
     "brightness": 255,
     "rotation": 0,  # degrees clockwise: 0, 90, 180 or 270
+    # External input (interfacing/service.py): Art-Net / sACN from a media server
+    "artnet_enabled": True,
+    "sacn_enabled": True,
+    "external_mode": "tile",  # tile | grid | raw
+    "external_grid_width": 34,
+    "external_grid_height": 34,
+    "artnet_universe": 0,  # the first Art-Net port-address listened to
+    "sacn_universe": 1,  # the first sACN universe
+    "external_source": "external",  # internal | external | mix
+    "external_mix": 0.5,
+    "external_timeout_s": 2.0,
     "strobe_max_hz": 10.0,  # the strobe show control's cap
     "enabled": True,
     "fps": 30.0,
@@ -587,7 +598,7 @@ class PlaylistStore:
         registry = registry if registry is not None else self.registry
         if self.playlists():
             return None
-        ids = sorted(registry.animations) if registry is not None else []
+        ids = sorted(i for i in registry.animations if not registry.is_builtin(i)) if registry is not None else []
         pl = self.create_playlist(name, description="Every animation, in order.")
         for animation_id in ids:
             self.add_entry(pl, animation_id)

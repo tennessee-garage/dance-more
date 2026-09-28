@@ -4,6 +4,7 @@ import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { AnimationsPanel } from "./animations.js";
 import { DiagnosticsPanel } from "./diagnostics.js";
+import { ExternalPanel } from "./external.js";
 import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls, useDraft } from "./params.js";
@@ -309,6 +310,7 @@ function Preview() {
 const TABS = [
   ["playlists", "Playlists", PlaylistsPanel],
   ["animations", "Animations", AnimationsPanel],
+  ["external", "External", ExternalPanel],
   ["diagnostics", "Diagnostics", DiagnosticsPanel],
 ];
 

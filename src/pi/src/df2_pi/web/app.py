@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from df2_pi.web.animations import animations_router
+from df2_pi.web.external import external_router
 from df2_pi.web.floor import floor_router
 from df2_pi.web.playlists import playlists_router
 from df2_pi.web.preview import preview_router
@@ -41,6 +42,7 @@ from df2_pi.web.transport import mark_percentiles_nullable, transport_router
 if TYPE_CHECKING:
     from df2_pi.animation import AnimationRegistry
     from df2_pi.engine import Runner
+    from df2_pi.interfacing.service import ExternalInput
     from df2_pi.output import FanOut, PreviewSink
     from df2_pi.playlists import PlaylistStore
 
@@ -60,6 +62,7 @@ class AppContext:
     fanout: FanOut
     runner: Runner
     preview: PreviewSink
+    external: ExternalInput | None = None  # Art-Net / sACN input; None when not running
 
 
 class _RevalidatedStaticFiles(StaticFiles):
@@ -90,9 +93,13 @@ def create_app(ctx: AppContext) -> FastAPI:
     async def lifespan(app: FastAPI):
         load_startup_playlist(ctx)
         ctx.runner.start()
+        if ctx.external is not None:
+            ctx.external.start()
         try:
             yield
         finally:
+            if ctx.external is not None:
+                ctx.external.stop()
             ctx.runner.stop()
             ctx.runner.join(SHUTDOWN_TIMEOUT_S)
             if ctx.runner.alive:
@@ -112,6 +119,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     app.include_router(animations_router(ctx))
     app.include_router(playlists_router(ctx))
     app.include_router(floor_router(ctx))
+    app.include_router(external_router(ctx))
     app.include_router(preview_router(ctx))
 
     default_openapi = app.openapi
