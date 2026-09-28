@@ -169,6 +169,28 @@ def playlist(store, *entries, **kw):
 # ---- advancing ----------------------------------------------------------------------------
 
 
+def test_the_state_names_the_playing_entry_by_id(registry, store):
+    """entry_index is a position in the runner's loaded copy; entry_id is
+    the entry itself, so a page can find it after the playlist is
+    reordered in the database."""
+    runner, probe, _ = make_runner(registry, store, stop_after=6)
+    resolved = playlist(store, ("a", 3 * PERIOD), ("b", 5 * PERIOD), loop=False)
+    first, second = (e.entry.id for e in resolved.entries)
+    store.move_entry(second, 0)  # reordered after the runner resolved it: it plays its own copy
+    runner.load_playlist(resolved)
+    runner.run()
+    states = probe.states
+    assert (states[0].entry_id, states[0].entry_index) == (first, 0)
+    assert (states[3].entry_id, states[3].entry_index) == (second, 1)
+
+
+def test_the_idle_animation_and_a_one_off_have_no_entry(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=3)
+    runner.play_animation("a")
+    runner.run()
+    assert all(s.entry_id is None and s.one_off for s in probe.states)
+
+
 def test_advances_after_exactly_duration_worth_of_ticks(registry, store):
     runner, probe, _ = make_runner(registry, store, stop_after=12)
     runner.load_playlist(playlist(store, ("a", 3 * PERIOD), ("b", 5 * PERIOD), loop=False))

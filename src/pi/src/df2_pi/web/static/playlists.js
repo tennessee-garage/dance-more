@@ -24,6 +24,10 @@ const settings = signal(null);
 const problem = signal(null); // why the last request failed
 const reloadOffered = signal(false); // an edit landed on the loaded playlist
 const loadedId = computed(() => runnerState.value?.playlist?.[0] ?? null);
+// The entry the runner is on, by id: its position in the runner's loaded copy
+// stops matching this list once the playlist is reordered here.
+const playingEntryId = computed(() => runnerState.value?.entry_id ?? null);
+const oneOff = computed(() => !!runnerState.value?.one_off);
 
 // ---- requests ----------------------------------------------------------------
 
@@ -239,12 +243,26 @@ function EntryParams({ playlistId, entry }) {
   return html`<${ParamControls} specs=${specs} values=${values} onChange=${change} />`;
 }
 
-function EntryRow({ playlistId, entry, index, drag }) {
+/** Elapsed and remaining on the playing row: the one thing here that
+ *  changes at every poll, so the only thing re-rendered by it. */
+function EntryProgress() {
+  const state = runnerState.value;
+  if (!state) return null;
+  const remaining = state.remaining_s == null ? "" : ` \u00b7 ${clock(state.remaining_s)} left`;
+  return html`<span class="entry-progress num">${clock(state.elapsed_s)}${remaining}</span>`;
+}
+
+function EntryRow({ playlistId, entry, index, drag, loaded }) {
   const [open, setOpen] = useState(false);
+  const current = loaded && entry.id === playingEntryId.value;
+  const playing = current && !oneOff.value;
+  const resumes = current && oneOff.value;
   const patch = async (fields) => landed(await api("PATCH", `api/playlists/${playlistId}/entries/${entry.id}`, fields));
   const remove = async () => landed(await api("DELETE", `api/playlists/${playlistId}/entries/${entry.id}`));
   const row = useRef(null);
   const classes = ["entry"];
+  if (playing) classes.push("playing");
+  if (resumes) classes.push("resumes");
   if (!entry.enabled) classes.push("disabled");
   if (drag.dropIndex === index) classes.push("drop-before");
   if (drag.dropIndex === index + 1 && drag.isLast(index)) classes.push("drop-after");
@@ -261,6 +279,8 @@ function EntryRow({ playlistId, entry, index, drag }) {
           onDragStart=${(e) => drag.start(e, entry.id, row.current)} onDragEnd=${drag.end}
         >⠇</span>
         <span class="entry-position num">${index + 1}</span>
+        ${playing && html`<span class="now-playing" title="Playing now" aria-label="Playing now">\u25b6</span>`}
+        ${resumes && html`<span class="now-playing resumes" title="A one-off is playing; the playlist resumes here" aria-label="Resumes here">\u21a9</span>`}
         <span class="entry-name">
           ${entry.unresolved
             ? html`<span class="unresolved" title=${entry.error}>${entry.animation_id}</span>`
@@ -274,6 +294,7 @@ function EntryRow({ playlistId, entry, index, drag }) {
         <${Switch} checked=${entry.enabled} label="Enabled" onChange=${(v) => patch({ enabled: v })} />
         <button class="icon-small danger" onClick=${remove} title="Remove entry" aria-label=${`Remove entry ${index + 1}`}>×</button>
       </div>
+      ${playing && html`<div class="entry-sub"><${EntryProgress} /></div>`}
       ${!entry.unresolved && html`
         <button class="link params-summary" onClick=${() => setOpen(!open)} aria-expanded=${open}>
           ${paramSummary(entry.params)}
@@ -373,7 +394,10 @@ function PlaylistView({ playlist }) {
         : html`
           <ol class="entries" onDragLeave=${(e) => { if (!e.currentTarget.contains(e.relatedTarget)) drag.end(); }}>
             ${playlist.entries.map((entry, index) => html`
-              <${EntryRow} key=${entry.id} playlistId=${playlist.id} entry=${entry} index=${index} drag=${drag} />`)}
+              <${EntryRow}
+                key=${entry.id} playlistId=${playlist.id} entry=${entry} index=${index} drag=${drag}
+                loaded=${playlist.id === loadedId.value}
+              />`)}
           </ol>`}
       <${AddEntry} playlist=${playlist} />
     </div>`;
@@ -390,7 +414,9 @@ export function PlaylistsPanel() {
   const loaded = loadedId.value;
   useEffect(() => {
     if (summaries.value) refreshList();
-    if (selectedId.value != null) select(selectedId.value);
+    // Nothing chosen yet: show what is playing, which is usually why the tab was opened.
+    if (selectedId.value == null && loaded != null) select(loaded);
+    else if (selectedId.value != null) select(selectedId.value);
   }, [loaded]);
 
   const playlist = selected.value;

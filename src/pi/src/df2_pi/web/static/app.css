@@ -689,3 +689,11 @@ button.icon-small { padding: 0 8px; font-size: 16px; line-height: 24px; }
 .versions-against { margin: 0 0 4px; }
 .versions td { vertical-align: top; }
 .versions td .bad { color: var(--bad); }
+
+/* the entry the runner is on */
+.entry.playing { border-color: var(--ok); box-shadow: inset 3px 0 0 var(--ok); }
+.entry.resumes { border-style: dashed; border-color: var(--ok); }
+.now-playing { color: var(--ok); font-size: 12px; }
+.now-playing.resumes { font-size: 14px; }
+.entry-sub { margin: 2px 0 0 3.2em; }
+.entry-progress { font-size: 12px; color: var(--ok); }

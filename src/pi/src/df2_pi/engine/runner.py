@@ -126,6 +126,9 @@ class RunnerState:
     disabled_entries: tuple[int, ...] = ()
     warnings: tuple[str, ...] = ()
     one_off: bool = False
+    # The playing entry's id: stable when the entries are reordered, which
+    # its index (a position in the runner's loaded copy) is not.
+    entry_id: int | None = None
 
 
 @dataclass
@@ -699,9 +702,10 @@ class Runner:
         t = tick.t if tick is not None else self._last_t
         playing = self._one_off or self._current or self._idle
         playlist = self._playlist.playlist if self._playlist else None
-        entry_index = None
+        entry_index = entry_id = None
         if self._current is not None and self._current.entry is not None and self._playlist is not None:
             entry_index = self._playlist.entries.index(self._current.entry)
+            entry_id = self._current.entry.entry.id
         remaining = playing.remaining(t) if playing else None
         warnings: list[str] = []
         if tick is not None:
@@ -736,4 +740,5 @@ class Runner:
             disabled_entries=tuple(sorted(self._disabled)),
             warnings=tuple(warnings),
             one_off=self._one_off is not None,
+            entry_id=entry_id,
         )
