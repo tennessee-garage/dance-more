@@ -19,6 +19,9 @@ export const runnerState = signal(null);
  *  so a component reading this is not re-rendered by every poll. */
 export const currentAnimationId = computed(() => runnerState.value?.animation?.[0] ?? null);
 
+/** The id of the animation running as a layer, or null. */
+export const layerAnimationId = computed(() => runnerState.value?.layer?.animation?.[0] ?? null);
+
 /** "connecting" until the first answer, then "ok" or "lost". */
 export const connection = signal("connecting");
 

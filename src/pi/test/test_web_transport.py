@@ -145,6 +145,11 @@ def mocked(registry, store):
         ("hue_shift", {"value": 0.25}, "set_hue_shift", (0.25,)),
         ("saturation", {"value": 1.5}, "set_saturation", (1.5,)),
         ("reset_show", None, "reset_show", ()),
+        ("layer", {"id": "solid", "mode": "max", "amount": 0.5}, "set_layer", ("solid", {"level": 10, "mode": "up"}, "max", 0.5)),
+        ("layer", {"id": "solid"}, "set_layer", ("solid", {"level": 10, "mode": "up"}, "add", 1.0)),
+        ("layer_blend", {"amount": 0.3}, "set_layer_blend", (None, 0.3)),
+        ("layer_blend", {"mode": "mix"}, "set_layer_blend", ("mix", None)),
+        ("clear_layer", None, "clear_layer", ()),
     ],
 )
 def test_route_maps_to_runner_call(mocked, route, body, method, args):
@@ -168,6 +173,10 @@ def test_route_maps_to_runner_call(mocked, route, body, method, args):
         ("tint", {"r": 0, "g": 0, "b": 0, "amount": 1.5}),
         ("hue_shift", {"value": "a lot"}),
         ("saturation", {"value": 2.5}),
+        ("layer", {"id": "solid", "mode": "screen"}),
+        ("layer", {"id": "solid", "amount": 2}),
+        ("layer", {"id": "solid", "params": {"level": 999}}),
+        ("layer_blend", {"amount": -1}),
     ],
 )
 def test_bad_show_values_are_refused_before_the_runner(mocked, route, body):
@@ -398,10 +407,10 @@ def test_openapi_documents_that_commands_are_asynchronous(mocked):
     schema = client.get("/openapi.json").json()
     assert "next frame boundary" in schema["info"]["description"]
     commands = {path: ops["post"] for path, ops in schema["paths"].items() if path.startswith("/api/transport/")}
-    assert len(commands) == 20  # 12 transport + 8 show controls
+    assert len(commands) == 23  # 12 transport + 8 show controls + 3 layer
     for path, op in commands.items():
         assert "next frame boundary" in op["description"], path
-    assert {"RunnerState", "TelemetrySnapshot", "Percentiles", "ShowState"} <= set(schema["components"]["schemas"])
+    assert {"RunnerState", "TelemetrySnapshot", "Percentiles", "ShowState", "LayerState"} <= set(schema["components"]["schemas"])
 
 
 def test_openapi_says_percentiles_can_be_null(mocked):
@@ -412,3 +421,9 @@ def test_openapi_says_percentiles_can_be_null(mocked):
     for name in ("p50", "p95", "max"):
         assert {"type": "null"} in percentiles[name]["anyOf"], name
     assert percentiles["count"]["type"] == "integer"
+
+
+def test_layering_an_unknown_animation_is_404(mocked):
+    client, runner = mocked
+    assert client.post("/api/transport/layer", json={"id": "nope"}).status_code == 404
+    runner.set_layer.assert_not_called()

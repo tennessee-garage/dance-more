@@ -16,7 +16,7 @@ POST's response.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -103,6 +103,21 @@ class Tint(BaseModel):
 
 class HueShift(BaseModel):
     value: float = Field(description="Turns; 1.0 is all the way round, wrapped.", allow_inf_nan=False)
+
+
+BlendMode = Literal["add", "max", "multiply", "mix"]  # pixels.BLEND_MODES
+
+
+class Layer(BaseModel):
+    id: str
+    params: dict[str, Any] = Field(default_factory=dict, description="Overrides, coerced through the animation's Param specs.")
+    mode: BlendMode = Field(default="add", description="add: light on light; max: the brighter; multiply: a mask; mix: replace.")
+    amount: float = Field(default=1.0, ge=0, le=1, description="0 is the base untouched; 1 is the full blend.")
+
+
+class LayerBlend(BaseModel):
+    mode: BlendMode | None = None
+    amount: float | None = Field(default=None, ge=0, le=1)
 
 
 class Saturation(BaseModel):
@@ -265,5 +280,32 @@ def transport_router(ctx: AppContext) -> APIRouter:
         return queued(lambda: runner.set_saturation(body.value))
 
     simple("reset_show", runner.reset_show, "Every show control back to where it does nothing")
+
+    # ---- the layer: one animation over whatever plays ----
+
+    @router.post(
+        "/transport/layer",
+        response_model=Queued,
+        tags=["layer"],
+        description=ASYNC_NOTE,
+        responses={404: {"description": "No such animation"}, 422: {"description": "A param is unknown or out of range"}},
+    )
+    def set_layer(body: Layer) -> Queued:
+        """Run an animation as a layer over whatever plays, replacing any layer."""
+        definition = ctx.registry.get(body.id)
+        if definition is None:
+            raise HTTPException(404, f"no animation {body.id!r}")
+        try:
+            params = definition.meta.resolve_params(body.params)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return queued(lambda: runner.set_layer(body.id, params, body.mode, body.amount))
+
+    @router.post("/transport/layer_blend", response_model=Queued, tags=["layer"], description=ASYNC_NOTE)
+    def layer_blend(body: LayerBlend) -> Queued:
+        """Change how the layer combines, without restarting it."""
+        return queued(lambda: runner.set_layer_blend(body.mode, body.amount))
+
+    simple("clear_layer", runner.clear_layer, "Remove the layer")
 
     return router
