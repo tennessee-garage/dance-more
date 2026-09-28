@@ -2,7 +2,6 @@
 
 import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { signal } from "@preact/signals";
 import { AnimationsPanel } from "./animations.js";
 import { DiagnosticsPanel } from "./diagnostics.js";
 import { createPreview } from "./preview.js";
@@ -10,6 +9,7 @@ import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls } from "./params.js";
 import { PlaylistsPanel } from "./playlists.js";
 import {
+  activeTab,
   animationList,
   command,
   commandError,
@@ -262,7 +262,6 @@ const TABS = [
   ["animations", "Animations", AnimationsPanel],
   ["diagnostics", "Diagnostics", DiagnosticsPanel],
 ];
-const activeTab = signal(TABS[0][0]);
 
 function Tabs() {
   const active = activeTab.value;

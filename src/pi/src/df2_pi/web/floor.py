@@ -1,6 +1,7 @@
 """The floor's own view of itself: Row Bus admin requests, for diagnostics.
 
-    GET  /api/floor/status     STATUS from every row: state, tiles found, uptime
+    GET  /api/floor/status     STATUS and POWER from every row: state, tiles found, uptime, 12 V rail
+    GET  /api/floor/power      POWER alone, from the rows asked for
     GET  /api/floor/version    VERSION (and STATUS) from every row, with what is out of step
     POST /api/floor/blackout   the BLACKOUT broadcast itself
 
@@ -9,7 +10,9 @@ a row's reply, so none may overlap a frame on the wire: every request runs
 on the render thread at a frame boundary (`Runner.call`), ONE ROW PER
 BOUNDARY, so a row that answers costs a frame a millisecond or two of its
 slack and a row that does not (three 20 ms timeouts) costs at most one
-frame. They are for a button, never a poll.
+frame. They are for a button, never a poll - with one exception: while the
+row status table is on screen the page re-reads POWER every 5 s, asking
+only the rows that answered its STATUS, so a dead row is not asked again.
 
 Without a floor (`--no-hardware`) they are 503.
 """
@@ -19,12 +22,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, Callable
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from df2_pi.protocol.constants import Cmd
 from df2_pi.protocol.firmware_version import FirmwareVersion, format_version
-from df2_pi.row_status import RowStatus
+from df2_pi.row_status import RowPower, RowStatus
 from df2_pi.version_report import RowVersionReport, assess_versions
 
 if TYPE_CHECKING:
@@ -43,11 +46,22 @@ class RowStatusInfo(BaseModel):
     tiles_found: int | None = None
     tile_status: list[int] | None = Field(default=None, description="One status byte per tile slot.")
     uptime_s: int | None = Field(default=None, description="Null for firmware that predates the field.")
+    voltage_mV: int | None = Field(default=None, description="The row's 12 V rail, from its power monitor. Null if POWER went unanswered.")
+    current_mA: int | None = Field(default=None, description="The row's draw from that rail.")
+    power_mW: int | None = None
     error: str | None = None
 
 
 class FloorStatus(BaseModel):
     rows: list[RowStatusInfo]
+
+
+class RowPowerInfo(BaseModel):
+    row: int
+    responding: bool = Field(description="Answered POWER.")
+    voltage_mV: int | None = None
+    current_mA: int | None = None
+    power_mW: int | None = None
 
 
 class VersionInfo(BaseModel):
@@ -119,9 +133,19 @@ def floor_router(ctx: AppContext) -> APIRouter:
 
         return between_frames(request)
 
+    async def read_power(floor, row: int) -> RowPower | None:
+        reply = await ask(floor, row, Cmd.POWER)
+        if isinstance(reply, Exception):
+            return None
+        try:
+            return RowPower.decode(reply.payload)
+        except ValueError:
+            return None  # shown as unknown, like an unanswered POWER
+
     @router.get("/status", response_model=FloorStatus)
     async def status() -> FloorStatus:
-        """STATUS from every row, one row per frame boundary."""
+        """STATUS and POWER from every row that answers, one request per
+        frame boundary."""
         floor = the_floor()
         rows = []
         for row, chain in floor.chain_map.items():
@@ -134,6 +158,7 @@ def floor_router(ctx: AppContext) -> APIRouter:
             except ValueError as exc:
                 rows.append(RowStatusInfo(row=row, chain=chain, responding=True, error=str(exc)))
                 continue
+            power = await read_power(floor, row)
             rows.append(
                 RowStatusInfo(
                     row=row,
@@ -143,9 +168,32 @@ def floor_router(ctx: AppContext) -> APIRouter:
                     tiles_found=s.tiles_found,
                     tile_status=list(s.tile_status),
                     uptime_s=s.uptime_s,
+                    voltage_mV=power.voltage_mV if power else None,
+                    current_mA=power.current_mA if power else None,
+                    power_mW=power.power_mW if power else None,
                 )
             )
         return FloorStatus(rows=rows)
+
+    @router.get("/power", response_model=list[RowPowerInfo])
+    async def power(rows: list[int] | None = Query(default=None, description="Rows to ask; omitted: every row.")) -> list[RowPowerInfo]:
+        """POWER alone: each row's 12 V rail, one request per frame boundary.
+        What the page re-reads while its row status table is showing."""
+        floor = the_floor()
+        known = [row for row, _chain in floor.chain_map.items()]
+        wanted = known if rows is None else rows
+        unknown = sorted(set(wanted) - set(known))
+        if unknown:
+            raise HTTPException(422, f"no such rows: {unknown}")
+        out = []
+        for row in sorted(set(wanted)):
+            p = await read_power(floor, row)
+            out.append(
+                RowPowerInfo(row=row, responding=p is not None)
+                if p is None
+                else RowPowerInfo(row=row, responding=True, voltage_mV=p.voltage_mV, current_mA=p.current_mA, power_mW=p.power_mW)
+            )
+        return out
 
     @router.get("/version", response_model=FloorVersions)
     async def version() -> FloorVersions:

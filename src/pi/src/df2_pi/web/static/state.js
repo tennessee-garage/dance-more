@@ -22,6 +22,10 @@ export const currentAnimationId = computed(() => runnerState.value?.animation?.[
 /** "connecting" until the first answer, then "ok" or "lost". */
 export const connection = signal("connecting");
 
+/** The tab on show: "playlists", "animations" or "diagnostics". Here, not
+ *  in app.js, so a panel can tell whether it is on screen. */
+export const activeTab = signal("playlists");
+
 /** Why the last transport command was refused, or null. */
 export const commandError = signal(null);
 

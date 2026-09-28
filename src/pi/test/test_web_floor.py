@@ -49,12 +49,13 @@ def version_payload(row: FirmwareVersion, tiles: list[FirmwareVersion | None]) -
 class FakeFloor:
     """Records what reaches the Row Bus, in order, and on which thread."""
 
-    def __init__(self, dead_rows=(), dirty_row=None, slots=None) -> None:
+    def __init__(self, dead_rows=(), dirty_row=None, slots=None, powerless_rows=()) -> None:
         self.chain_map = RowChainMap.alternating(2)
         self.events: list[tuple[str, str]] = []
         self.dead_rows = set(dead_rows)
         self.dirty_row = dirty_row
         self.slots = slots or {}  # row -> STATUS tile_status; default: 7 tiles, slot 7 empty
+        self.powerless_rows = set(powerless_rows)  # answer STATUS but not POWER
         self._lock = threading.Lock()
 
     def _log(self, what: str) -> None:
@@ -76,6 +77,12 @@ class FakeFloor:
             raise RowNotResponding(f"row 0x{row:02X} did not answer cmd 0x{cmd:02X} after 3 attempts")
         if cmd == Cmd.STATUS:
             return Frame(row, Resp.STATUS_RESP, status_payload(slots=self.slots.get(row, (OK,) * 7 + (EMPTY,))))
+        if cmd == Cmd.POWER:
+            if row in self.powerless_rows:
+                raise RowNotResponding(f"row 0x{row:02X} did not answer cmd 0x03 after 3 attempts")
+            # 12.1 V, 1.25 A + 100 mA per row, so each row's reading is its own
+            mA = 1250 + 100 * row
+            return Frame(row, Resp.POWER_RESP, (12100).to_bytes(2, "big") + mA.to_bytes(2, "big") + (12100 * mA // 1000).to_bytes(2, "big"))
         if cmd == Cmd.VERSION:
             head = DIRTY if row == self.dirty_row else GOOD
             return Frame(row, Resp.VERSION_RESP, version_payload(head, [GOOD] * 7 + [None]))
@@ -118,7 +125,7 @@ def requests_are_between_frames(events) -> None:
 
 
 def test_status_asks_every_row_between_frames(registry):
-    floor = FakeFloor(dead_rows={5})
+    floor = FakeFloor(dead_rows={5}, powerless_rows={6})
     app, runner = floor_app(registry, floor)
     with TestClient(app) as client:
         body = client.get("/api/floor/status").json()
@@ -129,8 +136,39 @@ def test_status_asks_every_row_between_frames(registry):
     assert (alive["responding"], alive["state"], alive["tiles_found"], alive["uptime_s"]) == (True, "running", 7, 3725)
     assert alive["tile_status"] == [OK] * 7 + [EMPTY]
     assert rows[5]["responding"] is False and "did not answer" in rows[5]["error"]
+    assert (alive["voltage_mV"], alive["current_mA"], alive["power_mW"]) == (12100, 1250, 15125)
+    assert rows[3]["current_mA"] == 1550
+    assert rows[5]["voltage_mV"] is None  # a dead row is not asked for POWER
+    assert rows[6]["responding"] is True and rows[6]["state"] == "running" and rows[6]["voltage_mV"] is None
+    asked_power = [e for e, _ in floor.events if e.startswith("request")]
+    assert "request 5" in asked_power and asked_power.count("request 5") == 1  # STATUS only
     requests_are_between_frames(floor.events)
     assert runner.clock.dropped == 0
+
+
+def test_power_asks_only_the_rows_given_between_frames(registry):
+    floor = FakeFloor(powerless_rows={4})
+    app, runner = floor_app(registry, floor)
+    with TestClient(app) as client:
+        body = client.get("/api/floor/power", params=[("rows", 1), ("rows", 4), ("rows", 1)]).json()
+        everyone = client.get("/api/floor/power").json()
+    assert [r["row"] for r in body] == [1, 4]  # each row once
+    assert (body[0]["responding"], body[0]["voltage_mV"], body[0]["current_mA"]) == (True, 12100, 1350)
+    assert body[1] == {"row": 4, "responding": False, "voltage_mV": None, "current_mA": None, "power_mW": None}
+    assert [r["row"] for r in everyone] == list(range(8))
+    asked = [e for e, _ in floor.events if e.startswith("request")]
+    assert asked[:2] == ["request 1", "request 4"]
+    requests_are_between_frames(floor.events)
+    assert runner.clock.dropped == 0
+
+
+def test_power_refuses_a_row_that_is_not_on_the_floor(registry):
+    floor = FakeFloor()
+    app, _ = floor_app(registry, floor)
+    with TestClient(app) as client:
+        response = client.get("/api/floor/power", params={"rows": 9})
+    assert response.status_code == 422 and "9" in response.json()["detail"]
+    assert not [e for e in floor.events if e[0].startswith("request")]
 
 
 def test_version_reports_what_is_out_of_step(registry):
@@ -219,7 +257,7 @@ def test_without_hardware_every_floor_route_is_503(registry):
     fanout = FanOut([NullSink(), preview])
     runner = Runner(registry, fanout, clock=FrameClock(fps=30.0, spin_margin=0.0, now=PacedFakeTime().now, sleep=PacedFakeTime().sleep))
     client = TestClient(create_app(AppContext(registry, None, fanout, runner, preview)))
-    for method, path in [("GET", "/api/floor/status"), ("GET", "/api/floor/version"), ("POST", "/api/floor/blackout")]:
+    for method, path in [("GET", "/api/floor/status"), ("GET", "/api/floor/power"), ("GET", "/api/floor/version"), ("POST", "/api/floor/blackout")]:
         response = client.request(method, path)
         assert response.status_code == 503, path
         assert "--no-hardware" in response.json()["detail"]
