@@ -1,6 +1,7 @@
-// Show controls: speed, strobe, colour, freeze and bump, acting on whatever
-// is playing (engine/overlays.py). Sliders stream while dragged; nothing here
-// is stored - a restart comes back with every control at rest.
+// Show controls - speed, strobe, colour, freeze and bump, acting on whatever
+// is playing (engine/overlays.py) - and the layer row. Sliders stream while
+// dragged; nothing here is stored - a restart comes back with every control
+// at rest and no layer.
 
 import { html } from "htm/preact";
 import { useDraft } from "./params.js";
@@ -107,5 +108,50 @@ export function ShowControls({ state, live }) {
           <button disabled=${!live} onClick=${() => command("reset_show")} title="Every show control back to rest">Reset</button>
         </div>
       </div>
+    </div>`;
+}
+
+const BLEND_MODES = [
+  ["add", "Add", "Light on light"],
+  ["max", "Max", "The brighter of the two"],
+  ["multiply", "Multiply", "A mask: black hides, white shows"],
+  ["mix", "Mix", "Replace, faded in by the amount"],
+];
+
+/** The layer, when there is one: how it blends, and removing it. */
+export function LayerControls({ state, live }) {
+  const layer = state?.layer;
+  if (!layer) return null;
+  return html`
+    <div class="live-params layer-controls" aria-label="Layer">
+      <span class="row-label" title="An animation running over whatever plays">Layer</span>
+      <div class="param-controls">
+        <div class="param">
+          <div class="param-head"><span class="label">Animation</span></div>
+          <span class="layer-name">${layer.animation[1]}</span>
+        </div>
+        <${LayerMode} mode=${layer.mode} live=${live} />
+        <${ShowSlider}
+          label="Amount" value=${layer.amount} min="0" max="1" step="0.01" live=${live}
+          format=${(v) => `${Math.round(v * 100)}%`} send=${(v) => streamCommand("layer_blend", { amount: v })}
+        />
+        <div class="show-buttons">
+          <button disabled=${!live} onClick=${() => command("clear_layer")}>Remove</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function LayerMode({ mode, live }) {
+  const [shown, edit, release] = useDraft(mode);
+  return html`
+    <div class="param">
+      <div class="param-head"><span class="label">Blend</span></div>
+      <select
+        value=${shown} disabled=${!live} aria-label="Blend mode"
+        onChange=${(e) => { const m = e.currentTarget.value; edit(m); release(); command("layer_blend", { mode: m }); }}
+      >
+        ${BLEND_MODES.map(([value, label, help]) => html`<option value=${value} title=${help}>${label}</option>`)}
+      </select>
     </div>`;
 }

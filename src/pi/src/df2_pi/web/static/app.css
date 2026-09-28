@@ -444,7 +444,13 @@ main {
   white-space: pre-wrap;
 }
 
-button.play { flex: none; padding: 6px 14px; }
+button.play, button.layer { flex: none; padding: 6px 14px; }
+button.layer { margin-left: 6px; }
+button.layer.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .animation.playing button.play {
   background: var(--accent);
   border-color: var(--accent);
@@ -492,6 +498,16 @@ button.play { flex: none; padding: 6px 14px; }
   background: var(--accent);
   border-color: var(--accent);
 }
+.layer-name { font-size: 13px; line-height: 22px; }
+.layer-controls select {
+  padding: 4px 6px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 .tint-colour {
   width: 28px;
   height: 22px;

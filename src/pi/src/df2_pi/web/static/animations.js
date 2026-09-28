@@ -1,5 +1,5 @@
 // The Animations tab: what the registry loaded, what failed and why, a
-// one-off Play per animation and a Reload button.
+// one-off Play and a Layer toggle per animation, and a Reload button.
 
 import { html } from "htm/preact";
 import { useEffect, useState } from "preact/hooks";
@@ -9,6 +9,7 @@ import {
   command,
   currentAnimationId,
   lastReload,
+  layerAnimationId,
   loadAnimations,
   reloadAnimations,
 } from "./state.js";
@@ -24,7 +25,7 @@ function LoadError({ error }) {
     </div>`;
 }
 
-function AnimationRow({ animation, playing }) {
+function AnimationRow({ animation, playing, layered }) {
   const period = animation.period != null ? `${animation.period} s` : null;
   return html`
     <li class=${playing ? "animation playing" : "animation"}>
@@ -46,6 +47,12 @@ function AnimationRow({ animation, playing }) {
         onClick=${() => command("animation", { id: animation.id, hold: PREVIEW_HOLD_S })}
         title=${`Play ${animation.name} for ${PREVIEW_HOLD_S} s, then back to the playlist`}
       >${playing ? "Playing" : "Play"}</button>
+      <button
+        class=${layered ? "layer active" : "layer"}
+        aria-pressed=${layered}
+        onClick=${() => (layered ? command("clear_layer") : command("layer", { id: animation.id }))}
+        title=${layered ? "Remove this layer" : `Run ${animation.name} as a layer over whatever plays`}
+      >${layered ? "Layered" : "Layer"}</button>
     </li>`;
 }
 
@@ -62,6 +69,7 @@ export function AnimationsPanel() {
 
   const list = animationList.value;
   const current = currentAnimationId.value;
+  const layered = layerAnimationId.value;
   const error = animationsError.value;
   // Files that failed and have no last good version to fall back on.
   const failedOnly = list ? Object.entries(list.errors).filter(([id]) => !list.animations.some((a) => a.id === id)) : [];
@@ -90,7 +98,7 @@ export function AnimationsPanel() {
         </ul>`}
       ${list && html`
         <ul class="animation-list">
-          ${list.animations.map((a) => html`<${AnimationRow} key=${a.id} animation=${a} playing=${a.id === current} />`)}
+          ${list.animations.map((a) => html`<${AnimationRow} key=${a.id} animation=${a} playing=${a.id === current} layered=${a.id === layered} />`)}
         </ul>`}
     </div>`;
 }

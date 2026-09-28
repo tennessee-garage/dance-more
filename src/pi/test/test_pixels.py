@@ -8,6 +8,7 @@ from df2_pi.pixels import (
     TileFrame,
     blend,
     check_ownership,
+    composite,
     default_geometry,
 )
 
@@ -323,3 +324,59 @@ def test_rotated_is_pure_and_never_aliases(geo):
         assert not turned.frozen
     assert np.array_equal(frame.data, before)
     assert frame.rotated(0) == frame
+
+
+# ---- composite -------------------------------------------------------------------------------
+
+
+def tile_of(geo, rgb) -> TileFrame:
+    frame = TileFrame.black(geo)
+    frame.data[:] = rgb
+    return frame
+
+
+@pytest.mark.parametrize(
+    "mode, expected",
+    [
+        ("add", (255, 255, 0)),  # red + green light
+        ("max", (255, 255, 0)),
+        ("multiply", (0, 0, 0)),  # red masked by green: nothing in common
+        ("mix", (0, 255, 0)),
+    ],
+)
+def test_composite_modes_at_full_amount(geo, mode, expected):
+    out = composite(tile_of(geo, (255, 0, 0)), tile_of(geo, (0, 255, 0)), mode)
+    assert type(out) is TileFrame
+    assert tuple(out.data[0, 0]) == expected
+
+
+def test_multiply_by_white_shows_the_base_and_add_saturates(geo):
+    base = tile_of(geo, (200, 100, 50))
+    assert composite(base, tile_of(geo, (255, 255, 255)), "multiply") == base
+    assert tuple(composite(tile_of(geo, (255, 255, 255)), base, "add").data[0, 0]) == (255, 255, 255)
+
+
+@pytest.mark.parametrize("mode", ["add", "max", "multiply", "mix"])
+def test_amount_zero_is_the_base_and_amounts_fade_between(geo, mode):
+    base, top = tile_of(geo, (40, 40, 40)), tile_of(geo, (250, 250, 250))
+    assert composite(base, top, mode, 0.0) == base
+    if mode != "multiply":
+        half = int(composite(base, top, mode, 0.5).data[0, 0, 0])
+        full = int(composite(base, top, mode, 1.0).data[0, 0, 0])
+        assert 40 < half < full
+
+
+def test_a_tile_frame_over_a_pixel_frame_is_expanded(geo):
+    pixels = PixelFrame.black(geo)
+    pixels.data[0, 0] = (255, 0, 0)
+    out = composite(pixels, tile_of(geo, (0, 0, 255)), "add")
+    assert type(out) is PixelFrame
+    assert tuple(out.data[0, 0]) == (255, 0, 255) and tuple(out.data[0, 1]) == (0, 0, 255)
+
+
+def test_composite_refuses_bad_modes_and_amounts(geo):
+    base = tile_of(geo, (1, 2, 3))
+    with pytest.raises(ValueError):
+        composite(base, base, "screen")
+    with pytest.raises(ValueError):
+        composite(base, base, "add", 1.5)

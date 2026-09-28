@@ -153,6 +153,11 @@ every tile on frame 0; `ctx.send_effect()` writes one at any time. A write costs
 that tile its pixel update for one frame. The effects themselves are still
 being defined in the tile firmware, so treat this as plumbing for now.
 
+**Layers.** Any animation can also run as a *layer* over whatever is playing
+(the Layer button in the Animations tab), composited with add, max, multiply
+or mix. Nothing changes for the author, with one exception: tile effects
+belong to the base animation, so a layer's `send_effect` writes are dropped.
+
 ## 5. Structural access — the floor is 256 line segments
 
 The floor is not an image with the middles missing. It is 64 tiles × 4 sides =

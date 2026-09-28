@@ -847,3 +847,97 @@ def test_a_bad_control_target_or_value_is_refused_on_the_callers_thread(registry
     for target, value in (("tempo", 0.5), ("macro9", 0.5), ("speed", float("nan"))):
         with pytest.raises(ValueError):
             runner.set_control(target, value)
+
+
+# ---- layers -------------------------------------------------------------------------------------
+
+
+def reds(probe) -> list[int]:
+    return [int(f.data[0, 0, 0]) for _, f in probe.frames]
+
+
+def test_a_layer_is_composited_over_what_plays_and_reported(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=3)
+    runner.play_animation("a")  # red 10
+    runner.set_layer("b", mode="mix")  # red 20
+    runner.run()
+    assert reds(probe) == [20, 20, 20]
+    layer = probe.states[-1].layer
+    assert (layer.animation, layer.mode, layer.amount, layer.params) == (("b", "B"), "mix", 1.0, {"level": 20})
+
+
+def test_an_add_layer_does_not_pile_up_frame_after_frame(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=5)
+    runner.play_animation("a")
+    runner.set_layer("a", mode="add")
+    runner.run()
+    assert len(set(reds(probe))) == 1 and reds(probe)[0] > 10
+
+
+def test_a_layer_keeps_its_own_clock_through_a_base_transition(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=6)
+    runner.load_playlist(playlist(store, ("a", 3 * PERIOD), ("b", 3 * PERIOD)))
+    runner.set_layer("clocked", mode="mix")
+    runner.run()
+    assert [t for t, _ in clock_readings(probe)] == [0, 1, 2, 3, 4, 5]  # never restarted
+
+
+def test_blend_changes_do_not_restart_the_layer_and_clear_removes_it(registry, store):
+    def script(runner, n):
+        if n == 2:
+            runner.set_layer_blend(amount=0.0)
+        if n == 4:
+            runner.clear_layer()
+        return n >= 5
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.play_animation("a")
+    runner.set_layer("b", mode="mix")
+    runner.run()
+    assert reds(probe) == [20, 20, 10, 10, 10]
+    assert probe.states[3].layer.amount == 0.0 and probe.states[4].layer is None
+
+
+def test_a_layers_effects_are_dropped_and_logged_once(registry, store, caplog):
+    runner, probe, _ = make_runner(registry, store, stop_after=3)
+    runner.play_animation("a")
+    runner.set_layer("trail")
+    with caplog.at_level("WARNING"):
+        runner.run()
+    assert probe.effects == [{}, {}, {}]
+    assert sum("writes tile effects" in r.message for r in caplog.records) == 1
+
+
+def test_a_failing_layer_is_removed_and_the_base_plays_on(registry, store, caplog):
+    runner, probe, _ = make_runner(registry, store, stop_after=3)
+    runner.play_animation("a")
+    runner.set_layer("crashes")
+    with caplog.at_level("ERROR"):
+        runner.run()
+    assert reds(probe) == [10, 10, 10]
+    assert probe.states[-1].layer is None
+    assert any("layer crashes failed" in r.message for r in caplog.records)
+
+
+def test_a_pause_holds_the_layered_picture(registry, store):
+    def script(runner, n):
+        if n == 1:
+            runner.pause()
+        return n >= 4
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.play_animation("a")
+    runner.set_layer("b", mode="mix")
+    runner.run()
+    assert reds(probe) == [20, 20, 20, 20]
+
+
+def test_bad_layers_are_refused_on_the_callers_thread(registry, store):
+    runner, _, _ = make_runner(registry, store)
+    with pytest.raises(KeyError):
+        runner.set_layer("nope")
+    for kwargs in (dict(mode="screen"), dict(amount=2.0), dict(params={"level": 999})):
+        with pytest.raises(ValueError):
+            runner.set_layer("a", **kwargs)
+    with pytest.raises(ValueError):
+        runner.set_layer_blend(amount=-0.5)

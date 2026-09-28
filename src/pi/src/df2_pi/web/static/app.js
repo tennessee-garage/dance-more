@@ -8,7 +8,7 @@ import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls, useDraft } from "./params.js";
 import { PlaylistsPanel } from "./playlists.js";
-import { ShowControls } from "./show.js";
+import { LayerControls, ShowControls } from "./show.js";
 import {
   activeTab,
   animationList,
@@ -187,6 +187,7 @@ function TransportBar() {
         <${ConnectionBadge} />
       </div>
       <${LiveParams} />
+      <${LayerControls} state=${state} live=${live} />
       <${ShowControls} state=${state} live=${live} />
       <${Progress} state=${state} />
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
