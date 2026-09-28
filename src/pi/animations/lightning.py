@@ -31,10 +31,10 @@ from df2_pi.pixels import PixelFrame
     format="pixel",
     tags=["edges", "dramatic"],
     params={
-        "rate": Param(float, default=1.0, min=0.1, max=5.0, label="Strikes per second"),
+        "rate": Param(float, default=1.0, min=0.1, max=5.0, label="Strikes per second", role="density", curve="log"),
         "length": Param(int, default=14, min=2, max=60, label="Bolt length (edges)"),
-        "turn_bias": Param(float, default=0.35, min=0.0, max=1.0, label="Turn bias", help="0 straight, 1 jagged"),
-        "forks": Param(int, default=2, min=0, max=6, label="Forks"),
+        "turn_bias": Param(float, default=0.35, min=0.0, max=1.0, label="Turn bias", help="0 straight, 1 jagged", role="variation"),
+        "forks": Param(int, default=2, min=0, max=6, label="Forks", macro=1),
         "decay": Param(float, default=0.72, min=0.3, max=0.95, label="Afterglow"),
     },
 )

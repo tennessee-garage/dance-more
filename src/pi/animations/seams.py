@@ -34,7 +34,7 @@ from df2_pi.pixels import PixelFrame
     tags=["edges", "diagnostic"],
     params={
         "speed": Param(float, default=10.0, min=1.0, max=60.0, label="LEDs per second"),
-        "base": Param(int, default=30, min=0, max=120, label="Grid brightness"),
+        "base": Param(int, default=30, min=0, max=120, label="Grid brightness", role="intensity", macro=1),
     },
 )
 def render(previous: PixelFrame, ctx) -> PixelFrame:
