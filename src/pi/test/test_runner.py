@@ -941,3 +941,23 @@ def test_bad_layers_are_refused_on_the_callers_thread(registry, store):
             runner.set_layer("a", **kwargs)
     with pytest.raises(ValueError):
         runner.set_layer_blend(amount=-0.5)
+
+
+def test_end_one_off_and_clear_layer_only_undo_the_named_animation(registry, store):
+    def script(runner, n):
+        if n == 1:
+            runner.end_one_off("b")  # the one-off is a: untouched
+            runner.clear_layer("a")  # the layer is c: untouched
+        if n == 2:
+            runner.end_one_off("a")
+            runner.clear_layer("c")
+        return n >= 3
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.load_playlist(playlist(store, ("b", 100)))
+    runner.play_animation("a")
+    runner.set_layer("c", mode="max")
+    runner.run()
+    states = probe.states
+    assert (states[1].animation[0], states[1].layer.animation[0]) == ("a", "c")
+    assert (states[2].animation[0], states[2].layer) == ("b", None)

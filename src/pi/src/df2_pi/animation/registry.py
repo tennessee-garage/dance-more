@@ -36,6 +36,12 @@ iterating the old dict finishes undisturbed and needs no lock. Concurrent
 Several directories may be given (a starter pack plus a user's own); an id
 present in more than one is a duplicate, and the later one is recorded as
 an error rather than silently shadowing the first.
+
+Built-ins. `add_builtin()` registers an animation that has no file - the
+External animation showing Art-Net input - so playlists, one-offs and
+layers reach it by id like any other. A built-in survives every reload,
+and a file claiming its id is an error. Seeding a fresh database skips
+built-ins (`is_builtin()`).
 """
 
 from __future__ import annotations
@@ -62,6 +68,7 @@ class AnimationRegistry:
         self.animations: dict[str, AnimationDef] = {}
         self.errors: dict[str, LoadError] = {}
         self._mtimes: dict[Path, float] = {}
+        self._builtins: dict[str, AnimationDef] = {}
         self._reload_lock = threading.Lock()
 
     @classmethod
@@ -70,6 +77,17 @@ class AnimationRegistry:
         registry = cls(paths)
         registry.reload()
         return registry
+
+    def add_builtin(self, definition: AnimationDef) -> None:
+        """Register an animation with no file, under `definition.id`."""
+        with self._reload_lock:
+            self._builtins[definition.id] = definition
+            self.animations = {**self.animations, definition.id: definition}
+            if definition.id in self.errors:
+                self.errors = {k: v for k, v in self.errors.items() if k != definition.id}
+
+    def is_builtin(self, animation_id: str) -> bool:
+        return animation_id in self._builtins
 
     def files(self) -> list[Path]:
         """The animation files under `paths`, in load order: directory
@@ -105,6 +123,9 @@ class AnimationRegistry:
 
         for path in present:
             stem = path.stem
+            if stem in self._builtins:
+                errors[stem] = LoadError(path, "validate", f"animation id {stem!r} is reserved for a built-in")
+                continue
             if stem in seen_ids and seen_ids[stem] != path:
                 errors[stem] = LoadError(
                     path,

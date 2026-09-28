@@ -353,8 +353,15 @@ class Runner:
         amount = None if amount is None else float(amount)
         self._enqueue(lambda: self._do_set_layer_blend(mode, amount))
 
-    def clear_layer(self) -> None:
-        self._enqueue(self._do_clear_layer)
+    def clear_layer(self, animation_id: str | None = None) -> None:
+        """Remove the layer - only if it is `animation_id`, when given, so a
+        caller can undo its own layer without removing someone else's."""
+        self._enqueue(lambda: self._do_clear_layer(animation_id))
+
+    def end_one_off(self, animation_id: str) -> None:
+        """End the one-off if it is `animation_id`, returning to the
+        playlist; anything else playing is left alone."""
+        self._enqueue(lambda: self._do_end_one_off(animation_id))
 
     def set_params(self, **params: Any) -> None:
         """Live-tune the running animation by param name."""
@@ -905,6 +912,10 @@ class Runner:
         current.restart_clock(self._last_t)
         current.effects_written.clear()
 
+    def _do_end_one_off(self, animation_id: str) -> None:
+        if self._one_off is not None and self._one_off.definition.id == animation_id:
+            self._end_one_off(outcome="completed")
+
     def _do_set_params(self, params: dict[str, Any]) -> None:
         playing = self._one_off or self._current
         if playing is None:
@@ -938,8 +949,9 @@ class Runner:
         if amount is not None:
             self._layer.amount = amount
 
-    def _do_clear_layer(self) -> None:
-        self._layer = None
+    def _do_clear_layer(self, animation_id: str | None) -> None:
+        if self._layer is not None and animation_id in (None, self._layer.playing.definition.id):
+            self._layer = None
 
     def _do_brightness(self, value: int) -> None:
         self._brightness = value
