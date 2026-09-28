@@ -606,3 +606,74 @@ def test_persistent_dropping_raises_a_warning(registry, store):
     assert runner.clock.dropped >= 3
     assert any("dropping frames" in w for w in probe.states[-1].warnings)
     assert not any("dropping" in w for w in probe.states[0].warnings)
+
+
+# ---- rotation ---------------------------------------------------------------------------------
+
+
+def test_every_sink_gets_the_rotated_frame_and_the_state_reports_it(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=2, rotation=90)
+    runner.play_animation("pixels")
+    runner.run()
+    geo = runner.geometry
+    rendered = PixelFrame.black(geo)
+    rendered.data[:] = (0, 0, 200)
+    frame = probe.frames[0][1]
+    assert frame == rendered.rotated(1)
+    assert probe.states[0].rotation == 90
+
+
+def test_a_tile_frame_stays_a_tile_frame_when_rotated(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=2, rotation=270)
+    runner.play_animation("a")
+    runner.run()
+    assert all(type(f) is TileFrame for _, f in probe.frames)
+
+
+def test_effect_writes_land_on_the_rotated_tile(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=3, rotation=90)
+    runner.play_animation("trail")
+    runner.run()
+    dest = runner.geometry.rotation(1).tile_dest
+    assert set(probe.effects[0]) == set(range(64))
+    assert probe.effects[1] == {int(dest[5]): Effect(FADE, (100, 0, 0, 0))}
+
+
+def test_changing_the_rotation_moves_the_effect_registers_already_set(registry, store):
+    def turn_after_two(runner, n):
+        if n == 2:
+            runner.set_rotation(90)
+        return n >= 4
+
+    runner, probe, _ = make_runner(registry, store, until=turn_after_two)
+    runner.play_animation("trail")  # frame 0: FADE 230 everywhere; frame 1: FADE 100 on tile 5
+    runner.run()
+    dest = int(runner.geometry.rotation(1).tile_dest[5])
+    assert probe.effects[1] == {5: Effect(FADE, (100, 0, 0, 0))}
+    # Every tile still has an effect, so none is cleared: tile 5's old spot
+    # takes the uniform value back, and its new spot takes tile 5's.
+    assert probe.effects[2] == {5: Effect(FADE, (230, 0, 0, 0)), dest: Effect(FADE, (100, 0, 0, 0))}
+    assert probe.effects[3] == {}
+    assert [s.rotation for s in probe.states] == [0, 0, 90, 90]
+
+
+def test_changing_the_rotation_clears_the_tiles_an_effect_leaves(registry, store):
+    def turn_after_one(runner, n):
+        if n == 1:
+            runner.set_rotation(180)
+        return n >= 3
+
+    runner, probe, _ = make_runner(registry, store, until=turn_after_one)
+    runner.play_animation("a")
+    runner._registers = {5: Effect(FADE, (100, 0, 0, 0))}  # as if written earlier
+    runner.run()
+    dest = int(runner.geometry.rotation(2).tile_dest[5])
+    assert probe.effects[1] == {5: Effect.NONE, dest: Effect(FADE, (100, 0, 0, 0))}
+
+
+def test_rotation_must_be_a_right_angle(registry, store):
+    with pytest.raises(ValueError):
+        make_runner(registry, store, rotation=45)
+    runner, _, _ = make_runner(registry, store)
+    with pytest.raises(ValueError):
+        runner.set_rotation(-90)

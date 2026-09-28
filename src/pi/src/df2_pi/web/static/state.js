@@ -115,6 +115,31 @@ export async function command(name, body) {
   }
 }
 
+/** PATCH `/api/settings`. A setting the floor applies live (brightness,
+ *  rotation) shows on a following poll, which this brings forward.
+ *  Resolves true if accepted; a refusal lands in `commandError`. */
+export async function changeSettings(changes) {
+  try {
+    const response = await fetch("api/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(changes),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      commandError.value = `settings: ${await refusal(response)}`;
+      return false;
+    }
+    commandError.value = null;
+    return true;
+  } catch (exc) {
+    commandError.value = `settings: ${exc.message}`;
+    return false;
+  } finally {
+    pollSoon();
+  }
+}
+
 // ---- live params ---------------------------------------------------------
 
 const PARAM_INTERVAL_MS = 66; // ~15 Hz per param: a dragged slider streams, the server is not flooded

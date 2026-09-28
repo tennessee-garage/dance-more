@@ -122,6 +122,7 @@ df2-pi play --no-hardware --terminal         # no floor: render in the terminal
 df2-pi play --no-hardware --terminal=tiles   # ...as the 8x8 tile view
 df2-pi play --animation ripple --window      # a real window (pip install -e ".[preview]")
 df2-pi play --no-hardware --animation chase --record out.gif --frames 90
+df2-pi play --rotation 90                    # picture turned a quarter clockwise (default: the stored setting)
 
 df2-pi animations -v                         # what was found, params, and load errors
 df2-pi playlists                             # list; also show/create/add/move/remove/set-startup/delete
@@ -167,7 +168,8 @@ df2-pi tilewalk                   # one tile at a time: tile 0 nearest the Pi, 0
 
 Neither discovers anything - the LED winding and floor orientation are
 fixed in `geometry.py` - so a tile or row that walks the wrong way is a
-build fault to fix with a screwdriver, not a setting.
+build fault to fix with a screwdriver, not a setting. For the same reason
+both ignore the rotation setting, which only turns the rendered picture.
 
 Row Bus admin:
 

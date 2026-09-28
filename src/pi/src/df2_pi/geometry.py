@@ -23,6 +23,13 @@ nearest the Pi and the canonical view is drawn with origin at the
 bottom-left. `to_display()` is the one place that flip happens; the array
 itself, the encoder, and every animation stay in canonical orientation.
 
+Rotation is a separate thing again. `rotation(k)` describes the picture
+turned k x 90 degrees clockwise (as seen in the canonical view) - the
+floor-rotation setting, applied to the output frame after render so the
+canonical "up" can face whichever way a venue needs. It moves content
+between LEDs; it never changes which LED is which, so addressing and chain
+order above are untouched by it.
+
 Each tile is a 17x17 cell block (leds_per_side=15, corners dark): the
 64-cell perimeter ring holds the tile's 60 LEDs with the 4 corner cells
 unpopulated, and the inner 15x15 is dark. Chain index 0 sits at the
@@ -44,6 +51,7 @@ first. See docs/hardware-tile.md's open question on it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -63,6 +71,41 @@ class Side(Enum):
     EAST = "east"
     SOUTH = "south"
     WEST = "west"
+
+
+ROTATIONS = (0, 90, 180, 270)
+
+
+def quarter_turns(degrees: int) -> int:
+    """0/90/180/270 as 0-3; anything else is a ValueError."""
+    if isinstance(degrees, bool) or degrees not in ROTATIONS:
+        raise ValueError(f"rotation must be one of {ROTATIONS} degrees, got {degrees!r}")
+    return ROTATIONS.index(degrees)
+
+
+@dataclass(frozen=True, eq=False)
+class Rotation:
+    """The picture turned `quarter_turns` x 90 degrees clockwise, as index
+    tables. "Source" is the canonical frame an animation rendered;
+    "destination" is where that content lands on the floor.
+
+        led_gather   (tiles, N) int  - flat source LED for each destination LED
+        tile_gather  (tiles,) int    - source tile for each destination tile
+        tile_dest    (tiles,) int    - destination tile for each source tile
+        led_shift    int             - dest led = (source led + led_shift) % N
+
+    A rotation keeps each tile's ring winding the same way, so every tile's
+    content moves whole to one other tile and turns round its ring by the
+    same number of LEDs - one side (leds_per_side) per quarter turn.
+    `led_shift` is that number, which is what an effect parameter naming an
+    LED position needs (effects.py).
+    """
+
+    quarter_turns: int
+    led_gather: np.ndarray
+    tile_gather: np.ndarray
+    tile_dest: np.ndarray
+    led_shift: int
 
 
 class FloorGeometry:
@@ -158,6 +201,7 @@ class FloorGeometry:
         self.lit_mask = cell_to_led[..., 0] >= 0
 
         self._local_led_cell = local
+        self._rotations: dict[int, Rotation] = {}
 
     @classmethod
     def default(cls) -> FloorGeometry:
@@ -283,6 +327,49 @@ class FloorGeometry:
         boundary only - the array, the encoder, and every animation stay in
         canonical orientation. Applying this twice is the identity."""
         return grid[::-1, ...]
+
+    # ---- rotation -------------------------------------------------------------
+
+    def rotation(self, quarter_turns: int) -> Rotation:
+        """The tables for turning the picture `quarter_turns` x 90 degrees
+        clockwise in the canonical view (y up). Built on first use from
+        `led_positions` rotated about the floor centre, and cached."""
+        k = quarter_turns % 4
+        cached = self._rotations.get(k)
+        if cached is None:
+            cached = self._rotations[k] = self._build_rotation(k)
+        return cached
+
+    def _build_rotation(self, k: int) -> Rotation:
+        if k % 2 and self.height != self.width:
+            raise ValueError(f"a {self.height}x{self.width} floor cannot turn a quarter")
+        pos = self.led_positions.reshape(-1, 2).astype(np.float64)
+        cy, cx = self.height / 2.0, self.width / 2.0
+        dy, dx = pos[:, 0] - cy, pos[:, 1] - cx
+        for _ in range(k):
+            dy, dx = -dx, dy  # clockwise with y up: right -> down, up -> right
+        ys = np.floor(cy + dy).astype(np.intp)
+        xs = np.floor(cx + dx).astype(np.intp)
+        dest = self.cell_to_led[ys, xs]  # (led_count, 2): (tile, led) each LED lands on
+        if (dest < 0).any():
+            raise ValueError("rotation maps an LED onto a dark cell")
+        n = self.leds_per_tile
+        dest_flat = dest[:, 0] * n + dest[:, 1]
+        if np.unique(dest_flat).size != self.led_count:
+            raise ValueError("rotation is not a one-to-one mapping of LEDs")
+
+        led_gather = np.empty(self.led_count, dtype=np.intp)
+        led_gather[dest_flat] = np.arange(self.led_count)
+
+        src_led = np.tile(np.arange(n), self.tiles)
+        tile_dest = dest[:, 0].reshape(self.tiles, n)
+        shifts = (dest[:, 1] - src_led) % n
+        if (tile_dest != tile_dest[:, :1]).any() or (shifts != shifts[0]).any():
+            raise ValueError("rotation does not move tiles whole")
+        tile_dest = tile_dest[:, 0].copy()
+        tile_gather = np.empty(self.tiles, dtype=np.intp)
+        tile_gather[tile_dest] = np.arange(self.tiles)
+        return Rotation(k, led_gather.reshape(self.tiles, n), tile_gather, tile_dest, int(shifts[0]))
 
 
 def _local_led_cell(n: int) -> np.ndarray:

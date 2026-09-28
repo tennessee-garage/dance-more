@@ -247,11 +247,13 @@ def test_editing_the_loaded_playlist_says_so(client, runner):
 
 def test_settings_round_trip(client):
     assert client.get("/api/settings").json() == {
-        "brightness": 255, "default_entry_duration": 60.0, "startup_playlist": None,
+        "brightness": 255, "rotation": 0, "default_entry_duration": 60.0, "startup_playlist": None,
     }
     pid = make(client)["id"]
-    changed = client.patch("/api/settings", json={"brightness": 128, "default_entry_duration": 90, "startup_playlist": pid}).json()
-    assert changed == {"brightness": 128, "default_entry_duration": 90.0, "startup_playlist": pid}
+    changed = client.patch(
+        "/api/settings", json={"brightness": 128, "rotation": 270, "default_entry_duration": 90, "startup_playlist": pid}
+    ).json()
+    assert changed == {"brightness": 128, "rotation": 270, "default_entry_duration": 90.0, "startup_playlist": pid}
     assert client.get("/api/settings").json() == changed
     assert client.patch("/api/settings", json={"startup_playlist": None}).json()["startup_playlist"] is None
 
@@ -263,6 +265,18 @@ def test_a_new_brightness_setting_is_applied_to_the_floor_now(client, runner):
     runner.set_brightness.assert_called_once()  # untouched when brightness is not sent
 
 
+def test_a_new_rotation_setting_is_applied_to_the_floor_now(client, runner):
+    client.patch("/api/settings", json={"rotation": 90})
+    runner.set_rotation.assert_called_once_with(90)
+    client.patch("/api/settings", json={"brightness": 30})
+    runner.set_rotation.assert_called_once()  # untouched when rotation is not sent
+
+
+def test_an_invalid_stored_rotation_reads_as_zero(client, store):
+    store.set_setting("rotation", 45)
+    assert client.get("/api/settings").json()["rotation"] == 0
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -272,6 +286,10 @@ def test_a_new_brightness_setting_is_applied_to_the_floor_now(client, runner):
         {"startup_playlist": 999},
         {"brightness": 100, "default_entry_duration": -1},  # one bad value: nothing written
         {"brightness": None},
+        {"rotation": 45},
+        {"rotation": -90},
+        {"rotation": "90"},
+        {"rotation": None},
         {"default_entry_duration": None},
         {"fps": 25},  # not a setting here: refused, not ignored
     ],
@@ -282,3 +300,4 @@ def test_malformed_settings_never_reach_the_store(client, store, runner, body):
     assert response.status_code == 422, response.text
     assert store.settings() == before
     runner.set_brightness.assert_not_called()
+    runner.set_rotation.assert_not_called()

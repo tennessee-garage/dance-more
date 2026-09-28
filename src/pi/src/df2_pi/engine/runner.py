@@ -39,6 +39,16 @@ failures disable that entry for the session and flag it in the state.
 An overrun is not an error - the clock drops the frame and counts it -
 but persistent dropping shows up in `state.warnings`.
 
+Rotation. The floor-rotation setting turns the picture in 90-degree
+steps so the canonical "up" can face whichever way the venue needs. It is
+the last thing done to a frame before the fan-out - after crossfades, on
+the held frame while paused - so every sink sees what the floor shows, and
+no animation ever knows about it. Effect writes move with it: to the
+rotated tile, with positional parameters turned round the ring
+(`Effect.rotated`). The runner keeps the canonical value of every effect
+register it has written so that changing the rotation mid-show can move
+the registers already set, clearing the tiles they leave.
+
 Startup and shutdown. With no playlist, or one with nothing playable,
 a built-in idle animation runs: a dark floor after boot reads as broken
 hardware. `stop()` (and SIGTERM / SIGINT, via `install_signal_handlers()`)
@@ -65,7 +75,7 @@ from df2_pi.animation.meta import AnimationMeta
 from df2_pi.animation.registry import AnimationRegistry
 from df2_pi.effects import Effect
 from df2_pi.engine.clock import FrameClock, FrameInfo, TelemetrySnapshot
-from df2_pi.geometry import FloorGeometry
+from df2_pi.geometry import ROTATIONS, FloorGeometry, quarter_turns
 from df2_pi.pixels import Frame, PixelFrame, TileFrame, blend, default_geometry
 from df2_pi.playlists.store import PlaylistStore, ResolvedEntry, ResolvedPlaylist
 
@@ -129,6 +139,7 @@ class RunnerState:
     # The playing entry's id: stable when the entries are reordered, which
     # its index (a position in the runner's loaded copy) is not.
     entry_id: int | None = None
+    rotation: int = 0  # degrees clockwise: 0, 90, 180 or 270
 
 
 @dataclass
@@ -163,6 +174,7 @@ class Runner:
         geometry: FloorGeometry | None = None,
         fps: float = 30.0,
         brightness: int = 255,
+        rotation: int = 0,
         seed: int | None = None,
     ) -> None:
         self.registry = registry
@@ -187,6 +199,11 @@ class Runner:
         self._paused_at: float | None = None
         self._blacked_out = False
         self._brightness = brightness
+        self._quarter_turns = quarter_turns(rotation)
+        # Canonical tile -> the effect last written there (NONE is absence),
+        # and physical writes owed by a rotation change, sent with the next frame.
+        self._registers: dict[int, Effect] = {}
+        self._pending_physical: dict[int, Effect] = {}
         self._stopping = False
         self._strikes: dict[int, int] = {}
         self._disabled: set[int] = set()
@@ -253,6 +270,12 @@ class Runner:
             raise ValueError(f"brightness must be 0..255, got {value}")
         self._enqueue(lambda: self._do_brightness(int(value)))
 
+    def set_rotation(self, degrees: int) -> None:
+        """Turn the picture 0, 90, 180 or 270 degrees clockwise, as a cut
+        at the next frame."""
+        turns = quarter_turns(degrees)  # validate on the caller's thread
+        self._enqueue(lambda: self._do_rotation(turns))
+
     def blackout(self) -> None:
         """Broadcast blackout; playback continues underneath."""
         self._enqueue(lambda: self._do_blackout(True))
@@ -301,7 +324,7 @@ class Runner:
                 if self._stopping:
                     self.clock.stop()
                     break
-                frame, effects = self._produce(tick)
+                frame, effects = self._orient(*self._produce(tick))
                 self._state = self._snapshot(tick)
                 self.fanout.submit(frame, tick, effects)
                 self.clock.mark("submit")
@@ -375,6 +398,35 @@ class Runner:
 
         self._held = frame
         return frame, effects
+
+    def _orient(self, frame: Frame, effects: dict[int, Effect]) -> tuple[Frame, dict[int, Effect]]:
+        """Canonical -> floor: apply the rotation to this frame and its
+        effect writes, plus any writes a rotation change is owed."""
+        for tile, effect in effects.items():
+            if effect == Effect.NONE:
+                self._registers.pop(tile, None)
+            else:
+                self._registers[tile] = effect
+        physical, self._pending_physical = self._pending_physical, {}
+        if self._quarter_turns == 0:
+            if not physical:
+                return frame, effects
+            physical.update(effects)
+            return frame, physical
+        physical.update(self._rotate_effects(effects, self._quarter_turns))
+        frame = frame.rotated(self._quarter_turns)
+        self.clock.mark("rotate")
+        return frame, physical
+
+    def _rotate_effects(self, effects: Mapping[int, Effect], turns: int) -> dict[int, Effect]:
+        if turns == 0:
+            return dict(effects)
+        rotation = self.geometry.rotation(turns)
+        n = self.geometry.leds_per_tile
+        return {
+            int(rotation.tile_dest[tile]): effect.rotated(rotation.led_shift, n)
+            for tile, effect in effects.items()
+        }
 
     def _render(self, playing: _Playing, t: float, effects: dict[int, Effect]) -> Frame | None:
         """Render one animation for this tick; None if it raised (and the
@@ -675,6 +727,18 @@ class Runner:
         self._brightness = value
         self.fanout.set_brightness(value)
 
+    def _do_rotation(self, turns: int) -> None:
+        old, self._quarter_turns = self._quarter_turns, turns
+        if old == turns or not self._registers:
+            return
+        # Move every register that is set: clear the tiles it leaves, write
+        # the tiles it lands on. Rides with the next frame, like any effect write.
+        before = self._rotate_effects(self._registers, old)
+        after = self._rotate_effects(self._registers, turns)
+        owed = {tile: Effect.NONE for tile in before if tile not in after}
+        owed.update({tile: effect for tile, effect in after.items() if before.get(tile) != effect})
+        self._pending_physical.update(owed)
+
     def _do_blackout(self, on: bool) -> None:
         self._blacked_out = on
         if on:
@@ -741,4 +805,5 @@ class Runner:
             warnings=tuple(warnings),
             one_off=self._one_off is not None,
             entry_id=entry_id,
+            rotation=ROTATIONS[self._quarter_turns],
         )

@@ -220,3 +220,65 @@ def test_corners_populated_true_is_rejected():
 def test_tables_are_cached_not_rebuilt(geo):
     assert geo.led_to_cell is geo.led_to_cell
     assert geo.lit_mask is geo.lit_mask
+
+
+# ---- rotation --------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("k", range(4))
+def test_rotation_turns_the_displayed_image_clockwise(geo, k):
+    """Checked against np.rot90 on the display view (row 0 at the bottom),
+    which knows nothing about chain order or dark corners."""
+    rotation = geo.rotation(k)
+    rng = np.random.default_rng(k)
+    leds = rng.integers(1, 255, size=(geo.tiles, geo.leds_per_tile, 3), dtype=np.uint8)
+    img = np.zeros((geo.height, geo.width, 3), dtype=np.uint8)
+    img[geo.led_to_cell[..., 0], geo.led_to_cell[..., 1]] = leds
+    turned = leds.reshape(-1, 3)[rotation.led_gather.ravel()].reshape(leds.shape)
+    out = np.zeros_like(img)
+    out[geo.led_to_cell[..., 0], geo.led_to_cell[..., 1]] = turned
+    assert np.array_equal(geo.to_display(out), np.rot90(geo.to_display(img), -k))
+
+
+@pytest.mark.parametrize("k", range(4))
+def test_rotation_moves_tiles_whole_and_turns_each_ring_one_side_per_quarter(geo, k):
+    rotation = geo.rotation(k)
+    n = geo.leds_per_tile
+    assert rotation.led_shift == k * geo.leds_per_side
+    leds = np.arange(n)
+    for dst in range(geo.tiles):
+        expected = rotation.tile_gather[dst] * n + (leds - rotation.led_shift) % n
+        assert np.array_equal(rotation.led_gather[dst], expected)
+    assert np.array_equal(rotation.tile_gather[rotation.tile_dest], np.arange(geo.tiles))
+
+
+def test_a_quarter_turn_takes_the_pi_corner_tile_to_the_top_left(geo):
+    # Tile 0 is bottom-left in the canonical view; clockwise, that corner goes to the top-left.
+    assert geo.rotation(1).tile_dest[0] == (geo.tile_rows - 1) * geo.tile_cols
+    assert geo.rotation(2).tile_dest[0] == geo.tiles - 1
+    assert geo.rotation(3).tile_dest[0] == geo.tile_cols - 1
+
+
+def test_four_quarter_turns_are_the_identity_and_tables_are_cached(geo):
+    gather = np.arange(geo.led_count)
+    for _ in range(4):
+        gather = gather[geo.rotation(1).led_gather.ravel()]
+    assert np.array_equal(gather, np.arange(geo.led_count))
+    assert np.array_equal(geo.rotation(0).led_gather.ravel(), np.arange(geo.led_count))
+    assert geo.rotation(5) is geo.rotation(1)
+
+
+def test_a_non_square_floor_only_turns_by_halves():
+    geo = FloorGeometry(tile_grid=(2, 3))
+    assert geo.rotation(2).tile_dest[0] == geo.tiles - 1
+    with pytest.raises(ValueError, match="cannot turn a quarter"):
+        geo.rotation(1)
+
+
+def test_quarter_turns_accepts_only_right_angles():
+    from df2_pi.geometry import quarter_turns
+
+    assert [quarter_turns(d) for d in (0, 90, 180, 270)] == [0, 1, 2, 3]
+    for bad in (45, -90, 360, True, "90"):
+        with pytest.raises(ValueError):
+            quarter_turns(bad)

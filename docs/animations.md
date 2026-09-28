@@ -109,6 +109,13 @@ away from it. Every renderer (terminal, window, the web preview) draws row 0
 along the **bottom**, matching the floor as you stand at the rack — you never
 flip anything yourself.
 
+Write for that orientation and nothing else. The floor's **rotation** setting
+(0/90/180/270°, set in the web UI or with `--rotation`) turns the finished
+picture clockwise so its "up" can face the audience wherever the venue puts
+the Pi. The runner applies it after `render()`, including to your effect
+writes, so an animation never sees it. Renderers show the rotated picture, as
+the floor does.
+
 `PixelFrame.grid` gives you the 136×136×3 image (dark cells zero) and
 `PixelFrame.from_grid(img)` samples one back, keeping only the lit cells. That
 is the image path `plasma.py` uses.

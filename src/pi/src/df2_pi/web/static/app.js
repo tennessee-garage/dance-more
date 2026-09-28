@@ -6,11 +6,12 @@ import { AnimationsPanel } from "./animations.js";
 import { DiagnosticsPanel } from "./diagnostics.js";
 import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
-import { ParamControls } from "./params.js";
+import { ParamControls, useDraft } from "./params.js";
 import { PlaylistsPanel } from "./playlists.js";
 import {
   activeTab,
   animationList,
+  changeSettings,
   command,
   commandError,
   connection,
@@ -199,6 +200,46 @@ function PreviewStatus() {
   return html`<div class="preview-status num">${connection}${detail}</div>`;
 }
 
+const ROTATIONS = [0, 90, 180, 270];
+
+// Where the picture's "up" lands on the preview (Pi side at the bottom) once
+// the floor-rotation setting has turned it clockwise; unmarked at 0.
+const UP_MARKERS = { 90: ["right", "up ▶"], 180: ["bottom", "▼ up"], 270: ["left", "◀ up"] };
+
+function UpMarker() {
+  const marker = UP_MARKERS[runnerState.value?.rotation];
+  if (!marker) return null;
+  const [edge, text] = marker;
+  return html`<span class=${`up-marker up-${edge}`} aria-label=${`The top of the picture is on the ${edge}`}>${text}</span>`;
+}
+
+/** The floor-rotation setting: stored, and applied to the floor at once.
+ *  Values are strings because the DOM's are: Preact writes `value` whenever
+ *  it differs from the element's, so a number would be rewritten on every
+ *  poll - resetting the menu if it is open at the time. The draft keeps the
+ *  pick shown until a poll reports it. */
+function RotationPicker() {
+  const state = runnerState.value;
+  const live = connection.value === "ok" && state != null;
+  const [shown, edit, release] = useDraft(state?.rotation ?? 0);
+  return html`
+    <label class="rotation">
+      <span class="label">Rotation</span>
+      <select
+        value=${String(shown)}
+        disabled=${!live}
+        onChange=${(e) => {
+          const rotation = Number(e.currentTarget.value);
+          edit(rotation);
+          release();
+          changeSettings({ rotation });
+        }}
+      >
+        ${ROTATIONS.map((d) => html`<option value=${String(d)}>${d}°</option>`)}
+      </select>
+    </label>`;
+}
+
 /** The floor, drawn by preview.js. Re-renders only when the geometry
  *  arrives: the stream hands each record to the renderer's draw() directly,
  *  so a frame never goes through Preact. */
@@ -251,8 +292,12 @@ function Preview() {
 
   return html`
     <section class="preview" aria-label="Floor preview">
-      <canvas class="floor" ref=${canvas} hidden=${!!failure}></canvas>
+      <div class="floor-frame" hidden=${!!failure}>
+        <canvas class="floor" ref=${canvas}></canvas>
+        <${UpMarker} />
+      </div>
       ${failure ? html`<p class="preview-failure">${failure}</p>` : html`<${PreviewStatus} />`}
+      <${RotationPicker} />
     </section>`;
 }
 

@@ -77,7 +77,7 @@ def test_every_command_parses():
         ["play", "--playlist", "Party", "--fps", "25", "--brightness", "128"],
         ["play", "--animation", "ripple", "--param", "speed=2.0", "--param", "hue=0.6"],
         ["play", "--no-hardware", "--terminal"],
-        ["play", "--no-hardware", "--terminal=tiles", "--frames", "10"],
+        ["play", "--no-hardware", "--terminal=tiles", "--frames", "10", "--rotation", "270"],
         ["play", "--animation", "lightning", "--window", "--fps", "30", "--realtime"],
         ["play", "--animation", "chase", "--record", "out.gif", "--frames", "90"],
         ["animations"],
@@ -106,6 +106,8 @@ def test_every_command_parses():
     assert args.param == [("speed", "2.0")]
     assert p.parse_args(["play", "--no-hardware", "--terminal"]).terminal == "grid"
     assert p.parse_args(["play"]).terminal is None
+    assert p.parse_args(["play"]).rotation is None  # None: the stored setting
+    assert p.parse_args(["serve", "--rotation", "90"]).rotation == 90
     assert p.parse_args(["playlists"]).action == "list"
     assert p.parse_args(["ledwalk", "--color", "1,2,3"]).color == (1, 2, 3)
 
@@ -117,6 +119,8 @@ def test_bad_arguments_are_rejected(capsys):
         ["play", "--terminal=huge"],
         ["ledwalk", "--color", "1,2"],
         ["ledwalk", "--color", "1,2,300"],
+        ["play", "--rotation", "45"],
+        ["ledwalk", "--rotation", "90"],  # the walks verify physical addressing: never rotated
         ["nonsense"],
     ):
         with pytest.raises(SystemExit):
