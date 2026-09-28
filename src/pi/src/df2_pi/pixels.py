@@ -356,6 +356,42 @@ def blend(a: F, b: F, t: float) -> F:
     return type(a)(from_linear(lin), a.geometry)
 
 
+BLEND_MODES = ("add", "max", "multiply", "mix")
+
+
+def composite(base: Frame, top: Frame, mode: str = "add", amount: float = 1.0) -> Frame:
+    """`top` layered over `base`, in linear light. Returns a new frame.
+
+        add       base + top, saturating - light on light, what sparkles and
+                  chases over a scene want
+        max       the brighter of the two, per channel
+        multiply  base x top - the top layer as a mask; black hides, white shows
+        mix       top replaces base
+
+    `amount` (0..1) fades the result in from `base`, for every mode alike:
+    0 is `base` untouched, 1 is the full blend. Two tile frames composite to
+    a tile frame; if either is a PixelFrame, the other is expanded.
+    """
+    if mode not in BLEND_MODES:
+        raise ValueError(f"blend mode must be one of {BLEND_MODES}, got {mode!r}")
+    if not 0.0 <= amount <= 1.0:
+        raise ValueError(f"amount must be in 0..1, got {amount}")
+    if type(base) is not type(top):
+        base = base.to_pixels() if isinstance(base, TileFrame) else base
+        top = top.to_pixels() if isinstance(top, TileFrame) else top
+    b = to_linear(base.data)
+    o = to_linear(top.data)
+    if mode == "add":
+        blended = b + o
+    elif mode == "max":
+        blended = np.maximum(b, o)
+    elif mode == "multiply":
+        blended = b * o
+    else:
+        blended = o
+    return type(base)(from_linear(b + (blended - b) * amount), base.geometry)
+
+
 def check_ownership(previous: Frame, result: Frame) -> None:
     """Raise `FrameOwnershipError` if `result` is the `previous` frame, or
     shares its buffer. The runner calls this on every frame an animation

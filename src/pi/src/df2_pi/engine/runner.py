@@ -48,6 +48,14 @@ by the wall step times the speed, and `ctx.dt` scaled to match, so a
 speed change never makes an animation jump. Entry durations stay on the
 wall clock.
 
+Layers. One animation can run as a LAYER over whatever is playing -
+sparkles over a scene, a mask, a second look faded in - composited with
+`composite()` (add, max, multiply or mix, faded in by `amount`) before the
+show controls. The layer has its own clock, so a base-layer transition
+does not restart it, and it follows the show speed like any animation.
+Effects are the base layer's: a layer's effect writes are dropped, and
+logged once. A layer that raises is logged and removed; the base plays on.
+
 Rotation. The floor-rotation setting turns the picture in 90-degree
 steps so the canonical "up" can face whichever way the venue needs. It is
 the last thing done to a frame before the fan-out - after crossfades, on
@@ -93,7 +101,7 @@ from df2_pi.engine.overlays import (
     check_strobe_max,
 )
 from df2_pi.geometry import ROTATIONS, FloorGeometry, quarter_turns
-from df2_pi.pixels import Frame, PixelFrame, TileFrame, blend, default_geometry
+from df2_pi.pixels import BLEND_MODES, Frame, PixelFrame, TileFrame, blend, composite, default_geometry
 from df2_pi.playlists.store import PlaylistStore, ResolvedEntry, ResolvedPlaylist
 
 if TYPE_CHECKING:
@@ -158,6 +166,27 @@ class RunnerState:
     entry_id: int | None = None
     rotation: int = 0  # degrees clockwise: 0, 90, 180 or 270
     show: ShowState = ShowState()
+    layer: LayerState | None = None
+
+
+@dataclass(frozen=True)
+class LayerState:
+    """The animation layered over what is playing, if any."""
+
+    animation: tuple[str, str]  # (id, name)
+    params: Mapping[str, Any]
+    mode: str  # one of pixels.BLEND_MODES
+    amount: float
+
+
+@dataclass
+class _Layer:
+    """An animation running as a layer, and how it combines."""
+
+    playing: _Playing
+    mode: str
+    amount: float
+    warned_effects: bool = False
 
 
 @dataclass
@@ -229,7 +258,9 @@ class Runner:
         self._outgoing: _Playing | None = None  # during a crossfade
         self._one_off: _Playing | None = None
         self._idle: _Playing | None = None
-        self._held: Frame | None = None
+        self._held: Frame | None = None  # the last base frame, never composited
+        self._shown: Frame | None = None  # the last composited frame, what a pause holds
+        self._layer: _Layer | None = None
         self._playing = False
         self._ended = False  # a non-looping playlist ran out: hold the last frame
         self._paused_at: float | None = None
@@ -297,6 +328,33 @@ class Runner:
             raise KeyError(f"no animation {animation_id!r}")
         resolved = definition.meta.resolve_params(params)  # validate on the caller's thread
         self._enqueue(lambda: self._do_play_animation(definition, resolved, hold))
+
+    def set_layer(
+        self,
+        animation_id: str,
+        params: Mapping[str, Any] | None = None,
+        mode: str = "add",
+        amount: float = 1.0,
+    ) -> None:
+        """Run `animation_id` as a layer over whatever plays, replacing any
+        layer there is. Starts from its first frame."""
+        definition = self.registry.get(animation_id)
+        if definition is None:
+            raise KeyError(f"no animation {animation_id!r}")
+        resolved = definition.meta.resolve_params(params)  # validate on the caller's thread
+        _check_blend(mode, amount)
+        amount = float(amount)
+        self._enqueue(lambda: self._do_set_layer(definition, resolved, mode, amount))
+
+    def set_layer_blend(self, mode: str | None = None, amount: float | None = None) -> None:
+        """Change how the layer combines without restarting it - what a
+        fader binds to. A no-op when there is no layer."""
+        _check_blend("add" if mode is None else mode, 0.0 if amount is None else amount)
+        amount = None if amount is None else float(amount)
+        self._enqueue(lambda: self._do_set_layer_blend(mode, amount))
+
+    def clear_layer(self) -> None:
+        self._enqueue(self._do_clear_layer)
 
     def set_params(self, **params: Any) -> None:
         """Live-tune the running animation by param name."""
@@ -471,8 +529,14 @@ class Runner:
     def _produce(self, tick: FrameInfo) -> tuple[Frame, dict[int, Effect]]:
         """The frame for this tick and the effect writes to send with it."""
         if self._paused_at is not None:
-            return self._held_frame(), {}
+            return self._shown if self._shown is not None else self._held_frame(), {}
+        base, effects = self._produce_base(tick)
+        frame = self._with_layer(base, tick.t)
+        self._shown = frame
+        return frame, effects
 
+    def _produce_base(self, tick: FrameInfo) -> tuple[Frame, dict[int, Effect]]:
+        """What is playing, before any layer: `_held` is only ever this."""
         t = tick.t
         if self._one_off is not None:
             remaining = self._one_off.remaining(t)
@@ -498,6 +562,25 @@ class Runner:
 
         self._held = frame
         return frame, effects
+
+    def _with_layer(self, base: Frame, t: float) -> Frame:
+        layer = self._layer
+        if layer is None:
+            return base
+        speed = self.overlays.speed
+        playing = layer.playing
+        try:
+            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed)
+        except AnimationError as exc:
+            log.error("layer %s failed and was removed:\n%s", playing.definition.id, "".join(traceback.format_exception(exc)))
+            self._layer = None
+            return base
+        if rendered.effects and not layer.warned_effects:
+            layer.warned_effects = True
+            log.warning("layer %s writes tile effects; effects belong to the base layer, so they are dropped", playing.definition.id)
+        frame = composite(base, rendered.frame, layer.mode, layer.amount)
+        self.clock.mark("layer")
+        return frame
 
     def _show(self, frame: Frame, t: float) -> Frame:
         shown = self.overlays.apply(frame, t)
@@ -731,7 +814,8 @@ class Runner:
             return
         gap = self._last_t - self._paused_at
         self._paused_at = None
-        for playing in (self._current, self._outgoing, self._one_off):
+        layered = self._layer.playing if self._layer is not None else None
+        for playing in (self._current, self._outgoing, self._one_off, layered):
             if playing is not None:
                 playing.started_t += gap
                 if playing.last_t is not None:
@@ -842,6 +926,21 @@ class Runner:
             return
         self._do_set_params({key: meta.params[key].from_unit(unit)})
 
+    def _do_set_layer(self, definition: AnimationDef, params: dict[str, Any], mode: str, amount: float) -> None:
+        run = definition.start(self.geometry, params, fps=self.fps, seed=self._rng.getrandbits(32))
+        self._layer = _Layer(_Playing(definition, run, self._last_t, None), mode, amount)
+
+    def _do_set_layer_blend(self, mode: str | None, amount: float | None) -> None:
+        if self._layer is None:
+            return
+        if mode is not None:
+            self._layer.mode = mode
+        if amount is not None:
+            self._layer.amount = amount
+
+    def _do_clear_layer(self) -> None:
+        self._layer = None
+
     def _do_brightness(self, value: int) -> None:
         self._brightness = value
         self.fanout.set_brightness(value)
@@ -926,6 +1025,19 @@ class Runner:
             entry_id=entry_id,
             rotation=ROTATIONS[self._quarter_turns],
             show=self.overlays.state(),
+            layer=self._layer_state(),
+        )
+
+    def _layer_state(self) -> LayerState | None:
+        layer = self._layer
+        if layer is None:
+            return None
+        definition = layer.playing.definition
+        return LayerState(
+            animation=(definition.id, definition.meta.name),
+            params=dict(layer.playing.run.params),
+            mode=layer.mode,
+            amount=layer.amount,
         )
 
 
@@ -942,3 +1054,10 @@ def _checked(value: float, low: float, high: float, what: str) -> float:
     if math.isnan(number) or not low <= number <= high or math.isinf(number):
         raise ValueError(f"{what} must be in {low}..{high}, got {value!r}")
     return number
+
+
+def _check_blend(mode: str, amount: float) -> None:
+    """ValueError unless `mode` is a blend mode and `amount` is in 0..1."""
+    if mode not in BLEND_MODES:
+        raise ValueError(f"blend mode must be one of {BLEND_MODES}, got {mode!r}")
+    _checked(amount, 0.0, 1.0, "layer amount")
