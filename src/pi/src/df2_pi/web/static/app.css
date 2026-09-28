@@ -233,12 +233,51 @@ main {
 
 /* The floor is square and black whatever the theme: it is where the lit
    LEDs are drawn. */
-.preview .floor {
-  display: block;
+.preview .floor-frame {
+  position: relative;
   width: min(100%, 80vh);
   aspect-ratio: 1;
+}
+.preview .floor {
+  display: block;
+  width: 100%;
+  height: 100%;
   background: #000;
   border-radius: 4px;
+}
+
+/* Drawn over the black floor, so fixed colours rather than theme tokens. */
+.up-marker {
+  position: absolute;
+  padding: 2px 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.up-right { right: 6px; top: 50%; transform: translateY(-50%); }
+.up-bottom { bottom: 6px; left: 50%; transform: translateX(-50%); }
+.up-left { left: 6px; top: 50%; transform: translateY(-50%); }
+
+.rotation {
+  position: absolute;
+  left: 20px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rotation select {
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 .preview-status {
@@ -292,7 +331,9 @@ main {
 
 @media (max-width: 800px) {
   main { grid-template-columns: minmax(0, 1fr); align-content: start; }
-  .preview .floor { width: 100%; }
+  .preview .floor-frame { width: 100%; }
+  .preview { flex-direction: column; gap: 8px; }
+  .rotation { position: static; align-self: flex-start; }
 }
 
 /* ---- animations tab ---- */
@@ -415,7 +456,7 @@ button.play { flex: none; padding: 6px 14px; }
   text-align: center;
   color: var(--muted);
 }
-.preview .floor[hidden] { display: none; }
+.preview .floor-frame[hidden] { display: none; }
 
 /* ---- param controls ---- */
 
