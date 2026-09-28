@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE FixtureDefinition>
+<FixtureDefinition xmlns="http://www.qlcplus.org/FixtureDefinition">
+ <Creator>
+  <Name>Q Light Controller Plus</Name>
+  <Version>4.12.0</Version>
+  <Author>df2-pi (generated from interfacing/dmx_control.py)</Author>
+ </Creator>
+ <Manufacturer>Tennessee Garage</Manufacturer>
+ <Model>Dance Floor v2</Model>
+ <Type>Other</Type>
+ <Channel Name="Master dimmer">
+  <Group Byte="0">Intensity</Group>
+  <Capability Min="0" Max="255">0 dark .. 255 full</Capability>
+ </Channel>
+ <Channel Name="Strobe">
+  <Group Byte="0">Shutter</Group>
+  <Capability Min="0" Max="0">Off</Capability>
+  <Capability Min="1" Max="255">Strobe slow to fast</Capability>
+ </Channel>
+ <Channel Name="Source">
+  <Group Byte="0">Maintenance</Group>
+  <Capability Min="0" Max="84">Internal (playlist only)</Capability>
+  <Capability Min="85" Max="169">External (Art-Net takes over)</Capability>
+  <Capability Min="170" Max="255">Mix (Art-Net over the playlist)</Capability>
+ </Channel>
+ <Channel Name="External mix">
+  <Group Byte="0">Intensity</Group>
+  <Capability Min="0" Max="255">External over the playlist, when source is mix</Capability>
+ </Channel>
+ <Channel Name="Bank">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">Playlist N in name order, from 0</Capability>
+ </Channel>
+ <Channel Name="Program">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">Entry N of the playlist, from 0</Capability>
+ </Channel>
+ <Channel Name="Speed">
+  <Group Byte="0">Speed</Group>
+  <Capability Min="0" Max="127">Slower (0 stops)</Capability>
+  <Capability Min="128" Max="128">Normal</Capability>
+  <Capability Min="129" Max="255">Faster (up to 4x)</Capability>
+ </Channel>
+ <Channel Name="Macro 1">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">The playing animation's macro 1</Capability>
+ </Channel>
+ <Channel Name="Macro 2">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">The playing animation's macro 2</Capability>
+ </Channel>
+ <Channel Name="Macro 3">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">The playing animation's macro 3</Capability>
+ </Channel>
+ <Channel Name="Macro 4">
+  <Group Byte="0">Effect</Group>
+  <Capability Min="0" Max="255">The playing animation's macro 4</Capability>
+ </Channel>
+ <Channel Name="Tint red">
+  <Group Byte="0">Intensity</Group>
+  <Colour>Red</Colour>
+  <Capability Min="0" Max="255">Tint colour</Capability>
+ </Channel>
+ <Channel Name="Tint green">
+  <Group Byte="0">Intensity</Group>
+  <Colour>Green</Colour>
+  <Capability Min="0" Max="255">Tint colour</Capability>
+ </Channel>
+ <Channel Name="Tint blue">
+  <Group Byte="0">Intensity</Group>
+  <Colour>Blue</Colour>
+  <Capability Min="0" Max="255">Tint colour</Capability>
+ </Channel>
+ <Channel Name="Tint amount">
+  <Group Byte="0">Intensity</Group>
+  <Capability Min="0" Max="255">0 off .. 255 fully the tint</Capability>
+ </Channel>
+ <Channel Name="Bump">
+  <Group Byte="0">Intensity</Group>
+  <Capability Min="0" Max="255">A flash of value/255 each time it rises</Capability>
+ </Channel>
+ <Mode Name="Control 16ch">
+  <Channel Number="0">Master dimmer</Channel>
+  <Channel Number="1">Strobe</Channel>
+  <Channel Number="2">Source</Channel>
+  <Channel Number="3">External mix</Channel>
+  <Channel Number="4">Bank</Channel>
+  <Channel Number="5">Program</Channel>
+  <Channel Number="6">Speed</Channel>
+  <Channel Number="7">Macro 1</Channel>
+  <Channel Number="8">Macro 2</Channel>
+  <Channel Number="9">Macro 3</Channel>
+  <Channel Number="10">Macro 4</Channel>
+  <Channel Number="11">Tint red</Channel>
+  <Channel Number="12">Tint green</Channel>
+  <Channel Number="13">Tint blue</Channel>
+  <Channel Number="14">Tint amount</Channel>
+  <Channel Number="15">Bump</Channel>
+ </Mode>
+ <Physical>
+  <Bulb Type="LED" Lumens="0" ColourTemperature="0"/>
+  <Dimensions Weight="0" Width="3048" Height="3048" Depth="100"/>
+  <Lens Name="Other" DegreesMin="0" DegreesMax="0"/>
+  <Focus Type="Fixed" PanMax="0" TiltMax="0"/>
+  <Technical PowerConsumption="0" DmxConnector="Other"/>
+ </Physical>
+</FixtureDefinition>
