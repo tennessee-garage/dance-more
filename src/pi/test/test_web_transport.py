@@ -136,6 +136,15 @@ def mocked(registry, store):
         ("brightness", {"value": 200}, "set_brightness", (200,)),
         ("blackout", {"on": True}, "blackout", ()),
         ("blackout", {"on": False}, "unblackout", ()),
+        ("speed", {"value": 2.5}, "set_speed", (2.5,)),
+        ("freeze", {"on": True}, "freeze", (True,)),
+        ("bump", {"level": 0.5, "decay_s": 1.0}, "bump", (0.5, 1.0)),
+        ("bump", None, "bump", (1.0, 0.25)),
+        ("strobe", {"rate_hz": 8}, "set_strobe", (8.0,)),
+        ("tint", {"r": 255, "g": 80, "b": 0, "amount": 0.5}, "set_tint", (255, 80, 0, 0.5)),
+        ("hue_shift", {"value": 0.25}, "set_hue_shift", (0.25,)),
+        ("saturation", {"value": 1.5}, "set_saturation", (1.5,)),
+        ("reset_show", None, "reset_show", ()),
     ],
 )
 def test_route_maps_to_runner_call(mocked, route, body, method, args):
@@ -145,6 +154,26 @@ def test_route_maps_to_runner_call(mocked, route, body, method, args):
     getattr(runner, method).assert_called_once_with(*args)
     assert response.json()["queued"] is True
     assert response.json()["state"]["frame"] == runner.state.frame
+
+
+@pytest.mark.parametrize(
+    "route, body",
+    [
+        ("speed", {"value": 5}),
+        ("speed", {"value": -1}),
+        ("bump", {"level": 2}),
+        ("bump", {"decay_s": 0}),
+        ("strobe", {"rate_hz": -3}),
+        ("tint", {"r": 300, "g": 0, "b": 0, "amount": 0.5}),
+        ("tint", {"r": 0, "g": 0, "b": 0, "amount": 1.5}),
+        ("hue_shift", {"value": "a lot"}),
+        ("saturation", {"value": 2.5}),
+    ],
+)
+def test_bad_show_values_are_refused_before_the_runner(mocked, route, body):
+    client, runner = mocked
+    assert client.post(f"/api/transport/{route}", json=body).status_code == 422
+    assert not [c for c in runner.method_calls if c[0] != "state"]
 
 
 @pytest.mark.parametrize("key", ["Party", 1])
@@ -369,10 +398,10 @@ def test_openapi_documents_that_commands_are_asynchronous(mocked):
     schema = client.get("/openapi.json").json()
     assert "next frame boundary" in schema["info"]["description"]
     commands = {path: ops["post"] for path, ops in schema["paths"].items() if path.startswith("/api/transport/")}
-    assert len(commands) == 12
+    assert len(commands) == 20  # 12 transport + 8 show controls
     for path, op in commands.items():
         assert "next frame boundary" in op["description"], path
-    assert {"RunnerState", "TelemetrySnapshot", "Percentiles"} <= set(schema["components"]["schemas"])
+    assert {"RunnerState", "TelemetrySnapshot", "Percentiles", "ShowState"} <= set(schema["components"]["schemas"])
 
 
 def test_openapi_says_percentiles_can_be_null(mocked):

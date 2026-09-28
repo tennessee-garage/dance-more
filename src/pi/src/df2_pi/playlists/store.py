@@ -49,6 +49,7 @@ from typing import Any, Iterable, Mapping
 
 from df2_pi.animation.loader import AnimationDef
 from df2_pi.animation.registry import AnimationRegistry
+from df2_pi.engine.overlays import STROBE_MAX_HZ_LIMIT
 from df2_pi.geometry import ROTATIONS
 from df2_pi.playlists.schema import migrate
 
@@ -58,6 +59,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "startup_playlist": None,  # a playlist id
     "brightness": 255,
     "rotation": 0,  # degrees clockwise: 0, 90, 180 or 270
+    "strobe_max_hz": 10.0,  # the strobe show control's cap
     "enabled": True,
     "fps": 30.0,
     "default_entry_duration": 60.0,
@@ -521,6 +523,16 @@ class PlaylistStore:
         if value not in ROTATIONS:
             log.warning("setting 'rotation' has invalid value %r; using 0", value)
             return 0
+        return value
+
+    def get_strobe_max_hz(self) -> float:
+        """The strobe cap in Hz. A stored value outside 0..15 is logged and
+        read as the default rather than refusing to start."""
+        value = self.get_float("strobe_max_hz")
+        if value is None or not 0.0 <= value <= STROBE_MAX_HZ_LIMIT:
+            fallback = DEFAULT_SETTINGS["strobe_max_hz"]
+            log.warning("setting 'strobe_max_hz' has invalid value %r; using %r", value, fallback)
+            return fallback
         return value
 
     def _typed(self, key: str, default: Any, parse) -> Any:

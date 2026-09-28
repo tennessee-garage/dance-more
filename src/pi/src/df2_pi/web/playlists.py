@@ -6,7 +6,7 @@
     PATCH/DELETE    /api/playlists/{id}/entries/{entry_id}
     POST            /api/playlists/{id}/entries/{entry_id}/move
     POST            /api/playlists/{id}/startup
-    GET/PATCH       /api/settings     brightness, rotation, default_entry_duration, startup_playlist
+    GET/PATCH       /api/settings     brightness, rotation, strobe_max_hz, default_entry_duration, startup_playlist
 
 A playlist is always served RESOLVED: each entry with its animation's name,
 format and period when the registry knows it, `unresolved` and the reason
@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from df2_pi.engine.overlays import STROBE_MAX_HZ_LIMIT
 from df2_pi.playlists.store import DuplicatePlaylistName, Playlist, ResolvedEntry
 
 if TYPE_CHECKING:
@@ -118,6 +119,7 @@ Rotation = Literal[0, 90, 180, 270]
 class Settings(BaseModel):
     brightness: int = Field(ge=0, le=255, description="What the floor starts at; changing it also applies it now.")
     rotation: Rotation = Field(description="Degrees clockwise the picture is turned; changing it also applies it now.")
+    strobe_max_hz: float = Field(description="The strobe show control's cap; changing it also applies it now.")
     default_entry_duration: float = Field(gt=0, description="Seconds, for an entry added without a duration.")
     startup_playlist: int | None = Field(description="Loaded when the floor starts.")
 
@@ -128,6 +130,7 @@ class SettingsChanges(BaseModel):
     # Omitted means unchanged; null is refused except where clearing means something.
     brightness: int = Field(default=None, ge=0, le=255)
     rotation: Rotation = Field(default=None)
+    strobe_max_hz: float = Field(default=None, ge=0, le=STROBE_MAX_HZ_LIMIT)
     default_entry_duration: float = Field(default=None, gt=0)
     startup_playlist: int | None = Field(default=None, description="A playlist id; send null explicitly to clear it.")
 
@@ -310,6 +313,7 @@ def playlists_router(ctx: AppContext) -> APIRouter:
         return Settings(
             brightness=s.get_int("brightness"),
             rotation=s.get_rotation(),
+            strobe_max_hz=s.get_strobe_max_hz(),
             default_entry_duration=s.get_float("default_entry_duration"),
             startup_playlist=s.get_int("startup_playlist"),
         )
@@ -321,8 +325,8 @@ def playlists_router(ctx: AppContext) -> APIRouter:
     @router.patch("/settings", response_model=Settings, tags=["settings"])
     def update_settings(body: SettingsChanges) -> Settings:
         """Validated before anything is written: all of it lands, or none.
-        A new brightness or rotation is applied to the floor now as well
-        as stored."""
+        A new brightness, rotation or strobe cap is applied to the floor
+        now as well as stored."""
         changes = body.model_dump(exclude_unset=True)
         if changes.get("startup_playlist") is not None:
             try:
@@ -335,6 +339,8 @@ def playlists_router(ctx: AppContext) -> APIRouter:
             ctx.runner.set_brightness(changes["brightness"])
         if "rotation" in changes:
             ctx.runner.set_rotation(changes["rotation"])
+        if "strobe_max_hz" in changes:
+            ctx.runner.set_strobe_max(changes["strobe_max_hz"])
         return settings()
 
     return router

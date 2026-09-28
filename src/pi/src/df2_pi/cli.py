@@ -239,7 +239,14 @@ def _cmd_play(args: argparse.Namespace) -> int:
     fanout, window, collector = build_sinks(args, clock)
     rotation = store.get_rotation() if args.rotation is None else args.rotation
     runner = Runner(
-        registry, fanout, store=store, clock=clock, brightness=args.brightness, rotation=rotation, seed=args.seed
+        registry,
+        fanout,
+        store=store,
+        clock=clock,
+        brightness=args.brightness,
+        rotation=rotation,
+        strobe_max_hz=store.get_strobe_max_hz(),
+        seed=args.seed,
     )
 
     if args.animation:
@@ -311,7 +318,15 @@ def build_app(args: argparse.Namespace):
     fanout, _, _ = build_sinks(args, clock)
     preview = PreviewSink()  # always: the page's preview subscribes to it
     fanout.attach(preview)
-    runner = Runner(registry, fanout, store=store, clock=clock, brightness=args.brightness, rotation=args.rotation)
+    runner = Runner(
+        registry,
+        fanout,
+        store=store,
+        clock=clock,
+        brightness=args.brightness,
+        rotation=args.rotation,
+        strobe_max_hz=store.get_strobe_max_hz(),
+    )
     return create_app(AppContext(registry, store, fanout, runner, preview))
 
 
