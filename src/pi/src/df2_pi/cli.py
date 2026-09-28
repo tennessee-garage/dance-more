@@ -33,8 +33,6 @@ from typing import Any
 
 from .protocol.constants import DEFAULT_BAUDRATE, Cmd
 
-STATUS_STATE_NAMES = {0x00: "idle", 0x01: "discovering", 0x02: "running", 0x03: "error"}
-
 log = logging.getLogger("df2_pi")
 
 
@@ -62,6 +60,7 @@ def _open_floor(args: argparse.Namespace):
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
+    from .row_status import RowStatus
     from .transport.floor import RowNotResponding
 
     with _open_floor(args) as floor:
@@ -70,19 +69,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
         except RowNotResponding as exc:
             print(exc, file=sys.stderr)
             return 1
-        state, tiles = frame.payload[0], frame.payload[1]
-        # Uptime is appended after the 8 tile-status bytes; a shorter payload
-        # is firmware that predates the field, not a malformed reply.
-        up = ""
-        if len(frame.payload) >= 14:
-            p = frame.payload
-            secs = (p[10] << 24) | (p[11] << 16) | (p[12] << 8) | p[13]
-            h, rem = divmod(secs, 3600)
-            m, sec = divmod(rem, 60)
-            up = f" up={h}h{m:02d}m{sec:02d}s"
+        status = RowStatus.decode(frame.payload)
+        up = f" up={status.format_uptime()}" if status.uptime_s is not None else ""
         print(
             f"row 0x{frame.addr:02X} (chain {floor.chain_map.chain_for(args.row)}): "
-            f"state={STATUS_STATE_NAMES.get(state, hex(state))} tiles_found={tiles}{up}"
+            f"state={status.state_name} tiles_found={status.tiles_found}{up}"
         )
         return 0
 
