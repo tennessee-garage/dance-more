@@ -125,8 +125,8 @@ is the image path `plasma.py` uses.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `ctx.frame` | `int` | Frames since this animation started; 0 on the first call |
-| `ctx.t` | `float` | Seconds since it started. **Use this for motion**, not wall time: it advances exactly `1/fps` per frame however late a frame renders, so motion never stutters |
-| `ctx.dt`, `ctx.fps` | `float` | Nominal seconds per frame, target rate |
+| `ctx.t` | `float` | Seconds since it started, on the animation's own clock. **Use this for motion**, not wall time or `ctx.frame`: it advances exactly `1/fps` per frame however late a frame renders, so motion never stutters, and the show's Speed control scales it |
+| `ctx.dt`, `ctx.fps` | `float` | Seconds per frame on that clock (nominal `1/fps` times the show speed), target rate |
 | `ctx.params` | `dict` | Your `Param` defaults ← playlist overrides ← live UI edits, already validated |
 | `ctx.geometry` | `FloorGeometry` | The floor: sizes, lookup tables, edges, rings (§5) |
 | `ctx.state` | `dict` | `{}` on frame 0, then yours until the animation is stopped. Particle lists, phase, anything |
@@ -136,6 +136,15 @@ is the image path `plasma.py` uses.
 | `ctx.send_effect(tile, effect)` | | Write a tile's effect register (see below) |
 
 There is deliberately no "time remaining". Fading out is the runner's job.
+
+**Show speed.** An operator can run everything faster or slower (0–4×) from
+the web UI or, later, a MIDI knob. It works by scaling `ctx.t` and `ctx.dt`,
+so an animation that moves by either follows it for free — including one
+that spawns things at `rate * ctx.dt`. Motion counted in `ctx.frame` does not
+follow it. At speed 0 time stops: `ctx.dt` is 0 and `ctx.t` holds, but
+`render()` is still called every frame. The show's other controls — freeze,
+strobe, bump, tint, hue and saturation — act on your finished frame, so you
+never see them.
 
 **Effects** are registers on each tile — an id and four parameter bytes — that
 transform the tile's pixels on their way to the LEDs, and persist until

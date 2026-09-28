@@ -8,6 +8,7 @@ import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls, useDraft } from "./params.js";
 import { PlaylistsPanel } from "./playlists.js";
+import { ShowControls } from "./show.js";
 import {
   activeTab,
   animationList,
@@ -138,6 +139,7 @@ function LiveParams() {
   if (!specs || Object.keys(specs).length === 0) return null;
   return html`
     <div class="live-params" aria-label="Animation parameters">
+      <span class="row-label" title="This animation's own parameters">Animation</span>
       <${ParamControls}
         key=${id}
         specs=${specs}
@@ -185,6 +187,7 @@ function TransportBar() {
         <${ConnectionBadge} />
       </div>
       <${LiveParams} />
+      <${ShowControls} state=${state} live=${live} />
       <${Progress} state=${state} />
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
     </header>`;

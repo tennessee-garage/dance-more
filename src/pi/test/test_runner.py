@@ -79,6 +79,18 @@ def render(previous, ctx):
 '''
 
 
+CLOCKED = '''
+from df2_pi.animation import animation
+from df2_pi.pixels import TileFrame
+
+@animation(name="Clocked")
+def render(previous, ctx):
+    frame = TileFrame.black(ctx.geometry)
+    frame.data[:] = (min(255, round(ctx.t * 10)), round(ctx.dt * 100), 50)
+    return frame
+'''
+
+
 CONTROLLED = '''
 from df2_pi.animation import animation, Param
 from df2_pi.pixels import TileFrame
@@ -152,6 +164,7 @@ def registry(tmp_path: Path) -> AnimationRegistry:
     (d / "crashes.py").write_text(textwrap.dedent(CRASHES))
     (d / "crashes_later.py").write_text(textwrap.dedent(CRASHES_LATER))
     (d / "trail.py").write_text(textwrap.dedent(WITH_EFFECT))
+    (d / "clocked.py").write_text(textwrap.dedent(CLOCKED))
     (d / "controlled.py").write_text(textwrap.dedent(CONTROLLED))
     (d / "broken.py").write_text("def render(:\n")
     return AnimationRegistry.discover(d)
@@ -693,6 +706,108 @@ def test_rotation_must_be_a_right_angle(registry, store):
     runner, _, _ = make_runner(registry, store)
     with pytest.raises(ValueError):
         runner.set_rotation(-90)
+
+
+# ---- show controls -------------------------------------------------------------------------------
+
+
+def clock_readings(probe) -> list[tuple[int, int]]:
+    """(ctx.t in tenths, ctx.dt in hundredths) per frame, from Clocked."""
+    return [(int(f.data[0, 0, 0]), int(f.data[0, 0, 1])) for _, f in probe.frames]
+
+
+def test_speed_scales_the_animations_clock_without_a_jump(registry, store):
+    def faster_after_three(runner, n):
+        if n == 3:
+            runner.set_speed(2.0)
+        return n >= 6
+
+    runner, probe, _ = make_runner(registry, store, until=faster_after_three)
+    runner.play_animation("clocked")
+    runner.run()
+    # 10 fps: t steps 0.1 a frame, then 0.2 from the change on; dt follows.
+    assert clock_readings(probe) == [(0, 10), (1, 10), (2, 10), (4, 20), (6, 20), (8, 20)]
+    assert probe.states[-1].show.speed == 2.0
+
+
+def test_speed_zero_stops_the_clock_and_a_pause_does_not_advance_it(registry, store):
+    def script(runner, n):
+        if n == 2:
+            runner.set_speed(0.0)
+        if n == 4:
+            runner.set_speed(1.0)
+            runner.pause()
+        if n == 6:
+            runner.resume()
+        return n >= 8
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.play_animation("clocked")
+    runner.run()
+    t = [r[0] for r in clock_readings(probe)]
+    assert t[:4] == [0, 1, 1, 1]  # stopped at speed 0
+    assert t[6:] == [2, 3]  # resumed from where it held, not ahead by the pause
+
+
+def test_entry_durations_stay_on_the_wall_clock(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=6)
+    runner.set_speed(4.0)
+    runner.load_playlist(playlist(store, ("a", 3 * PERIOD), ("b", 3 * PERIOD), loop=False))
+    runner.run()
+    assert probe.levels() == [10, 10, 10, 20, 20, 20]
+
+
+def test_show_controls_act_on_the_output_and_are_reported(registry, store):
+    def script(runner, n):
+        if n == 1:
+            runner.set_tint(255, 0, 0, 1.0)
+            runner.set_strobe(5.0)  # 10 fps: lit every other frame
+        return n >= 5
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.play_animation("a")  # (10, frame, 0) everywhere
+    runner.run()
+    lit = [bool(f.data.any()) for _, f in probe.frames]
+    assert lit == [True, True, False, True, False]
+    r, g, b = probe.frames[1][1].data[0, 0]
+    assert r > 0 and g == 0 and b == 0  # colourised red
+    show = probe.states[-1].show
+    assert (show.tint, show.tint_amount, show.strobe_hz) == ((255, 0, 0), 1.0, 5.0)
+
+
+def test_a_bump_starts_at_the_frame_it_is_applied_on(registry, store):
+    def script(runner, n):
+        if n == 2:
+            runner.bump(1.0, 2 * PERIOD)
+        return n >= 5
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.play_animation("a")
+    runner.run()
+    reds = [int(f.data[0, 0, 0]) for _, f in probe.frames]
+    assert reds[2] == 255 and 10 < reds[3] < 255 and reds[4] == 10
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda r: r.set_speed(4.5),
+        lambda r: r.set_speed(float("nan")),
+        lambda r: r.bump(1.5),
+        lambda r: r.bump(1.0, 0.0),
+        lambda r: r.set_strobe(-1),
+        lambda r: r.set_strobe_max(20),
+        lambda r: r.set_tint(256, 0, 0, 0.5),
+        lambda r: r.set_tint(0, 0, 0, 2.0),
+        lambda r: r.set_saturation(3.0),
+        lambda r: r.set_hue_shift(float("inf")),
+        lambda r: r.set_speed(True),
+    ],
+)
+def test_bad_show_values_are_refused_on_the_callers_thread(registry, store, call):
+    runner, _, _ = make_runner(registry, store)
+    with pytest.raises(ValueError):
+        call(runner)
 
 
 # ---- external controls ---------------------------------------------------------------------------

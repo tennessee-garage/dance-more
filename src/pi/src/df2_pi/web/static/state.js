@@ -140,6 +140,35 @@ export async function changeSettings(changes) {
   }
 }
 
+// ---- streamed commands -----------------------------------------------------
+
+const STREAM_INTERVAL_MS = 66; // ~15 Hz per command, like live params
+
+const streamLatest = new Map(); // command -> the latest body not yet sent
+const streamSentAt = new Map(); // command -> when it was last sent
+const streamBusy = new Set(); // commands with a send scheduled or in flight
+
+/** `command(name, body)` for a control that is dragged: coalesced per
+ *  command, at most one POST per STREAM_INTERVAL_MS and one at a time, always
+ *  carrying the latest body - so the end of a drag is what lands. */
+export function streamCommand(name, body) {
+  streamLatest.set(name, body);
+  if (!streamBusy.has(name)) scheduleStream(name);
+}
+
+function scheduleStream(name) {
+  streamBusy.add(name);
+  const wait = Math.max(0, (streamSentAt.get(name) ?? -Infinity) + STREAM_INTERVAL_MS - performance.now());
+  setTimeout(async () => {
+    const body = streamLatest.get(name);
+    streamLatest.delete(name);
+    streamSentAt.set(name, performance.now());
+    await command(name, body);
+    streamBusy.delete(name);
+    if (streamLatest.has(name)) scheduleStream(name);
+  }, wait);
+}
+
 // ---- live params ---------------------------------------------------------
 
 const PARAM_INTERVAL_MS = 66; // ~15 Hz per param: a dragged slider streams, the server is not flooded

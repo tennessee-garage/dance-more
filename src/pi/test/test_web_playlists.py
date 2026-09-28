@@ -247,13 +247,16 @@ def test_editing_the_loaded_playlist_says_so(client, runner):
 
 def test_settings_round_trip(client):
     assert client.get("/api/settings").json() == {
-        "brightness": 255, "rotation": 0, "default_entry_duration": 60.0, "startup_playlist": None,
+        "brightness": 255, "rotation": 0, "strobe_max_hz": 10.0, "default_entry_duration": 60.0, "startup_playlist": None,
     }
     pid = make(client)["id"]
     changed = client.patch(
-        "/api/settings", json={"brightness": 128, "rotation": 270, "default_entry_duration": 90, "startup_playlist": pid}
+        "/api/settings",
+        json={"brightness": 128, "rotation": 270, "strobe_max_hz": 6, "default_entry_duration": 90, "startup_playlist": pid},
     ).json()
-    assert changed == {"brightness": 128, "rotation": 270, "default_entry_duration": 90.0, "startup_playlist": pid}
+    assert changed == {
+        "brightness": 128, "rotation": 270, "strobe_max_hz": 6.0, "default_entry_duration": 90.0, "startup_playlist": pid,
+    }
     assert client.get("/api/settings").json() == changed
     assert client.patch("/api/settings", json={"startup_playlist": None}).json()["startup_playlist"] is None
 
@@ -270,6 +273,16 @@ def test_a_new_rotation_setting_is_applied_to_the_floor_now(client, runner):
     runner.set_rotation.assert_called_once_with(90)
     client.patch("/api/settings", json={"brightness": 30})
     runner.set_rotation.assert_called_once()  # untouched when rotation is not sent
+
+
+def test_a_new_strobe_cap_is_applied_to_the_floor_now(client, runner):
+    client.patch("/api/settings", json={"strobe_max_hz": 4})
+    runner.set_strobe_max.assert_called_once_with(4.0)
+
+
+def test_an_invalid_stored_strobe_cap_reads_as_the_default(client, store):
+    store.set_setting("strobe_max_hz", 99)
+    assert client.get("/api/settings").json()["strobe_max_hz"] == 10.0
 
 
 def test_an_invalid_stored_rotation_reads_as_zero(client, store):
@@ -290,6 +303,8 @@ def test_an_invalid_stored_rotation_reads_as_zero(client, store):
         {"rotation": -90},
         {"rotation": "90"},
         {"rotation": None},
+        {"strobe_max_hz": 16},
+        {"strobe_max_hz": -1},
         {"default_entry_duration": None},
         {"fps": 25},  # not a setting here: refused, not ignored
     ],

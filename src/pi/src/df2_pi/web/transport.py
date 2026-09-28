@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from df2_pi.engine import RunnerState
+from df2_pi.engine.overlays import DECAY_MAX_S, SATURATION_MAX, SPEED_MAX
 
 if TYPE_CHECKING:
     from df2_pi.web.app import AppContext
@@ -71,6 +72,41 @@ class Brightness(BaseModel):
 
 class Blackout(BaseModel):
     on: bool
+
+
+# ---- show controls ----
+
+
+class Speed(BaseModel):
+    value: float = Field(ge=0, le=SPEED_MAX, description="Scales the time animations see; 1 is as written.")
+
+
+class Freeze(BaseModel):
+    on: bool
+
+
+class Bump(BaseModel):
+    level: float = Field(default=1.0, ge=0, le=1, description="How far toward white.")
+    decay_s: float = Field(default=0.25, ge=0.01, le=DECAY_MAX_S, description="Seconds to fade back.")
+
+
+class Strobe(BaseModel):
+    rate_hz: float = Field(ge=0, description="0 is off; held to the strobe_max_hz setting.")
+
+
+class Tint(BaseModel):
+    r: int = Field(ge=0, le=255)
+    g: int = Field(ge=0, le=255)
+    b: int = Field(ge=0, le=255)
+    amount: float = Field(ge=0, le=1, description="0 is off; 1 is fully the tint's colour.")
+
+
+class HueShift(BaseModel):
+    value: float = Field(description="Turns; 1.0 is all the way round, wrapped.", allow_inf_nan=False)
+
+
+class Saturation(BaseModel):
+    value: float = Field(ge=0, le=SATURATION_MAX, description="0 is grey; 1 is unchanged.")
 
 
 def transport_router(ctx: AppContext) -> APIRouter:
@@ -190,5 +226,44 @@ def transport_router(ctx: AppContext) -> APIRouter:
     def blackout(body: Blackout) -> Queued:
         """Black out the floor (playback continues underneath), or lift it."""
         return queued(runner.blackout if body.on else runner.unblackout)
+
+    # ---- show controls: act on whatever is playing; not stored ----
+
+    @router.post("/transport/speed", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def speed(body: Speed) -> Queued:
+        """Scale the time animations see, 0..4."""
+        return queued(lambda: runner.set_speed(body.value))
+
+    @router.post("/transport/freeze", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def freeze(body: Freeze) -> Queued:
+        """Hold the picture while animations keep running underneath, or let it go."""
+        return queued(lambda: runner.freeze(body.on))
+
+    @router.post("/transport/bump", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def bump(body: Bump = Bump()) -> Queued:
+        """A flash toward white, fading back. At level 1 it is a full-white frame."""
+        return queued(lambda: runner.bump(body.level, body.decay_s))
+
+    @router.post("/transport/strobe", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def strobe(body: Strobe) -> Queued:
+        """Shutter the picture at `rate_hz`; 0 is off."""
+        return queued(lambda: runner.set_strobe(body.rate_hz))
+
+    @router.post("/transport/tint", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def tint(body: Tint) -> Queued:
+        """Colourise toward a colour by `amount`; black stays black."""
+        return queued(lambda: runner.set_tint(body.r, body.g, body.b, body.amount))
+
+    @router.post("/transport/hue_shift", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def hue_shift(body: HueShift) -> Queued:
+        """Rotate every hue, in turns."""
+        return queued(lambda: runner.set_hue_shift(body.value))
+
+    @router.post("/transport/saturation", response_model=Queued, tags=["show"], description=ASYNC_NOTE)
+    def saturation(body: Saturation) -> Queued:
+        """Scale saturation, 0..2."""
+        return queued(lambda: runner.set_saturation(body.value))
+
+    simple("reset_show", runner.reset_show, "Every show control back to where it does nothing")
 
     return router
