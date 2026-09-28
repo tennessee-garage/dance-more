@@ -43,8 +43,8 @@ Returning `previous` itself (or anything aliasing its buffer) is an error -
 the runner calls `check_ownership()` and gets a clear message rather than a
 silent aliasing bug. An 11,520-byte copy at 30 FPS is ~346 KB/s of memcpy,
 irrelevant next to the render and worth it to keep the rule unambiguous.
-`copy()`, `gain()` and `blend()` are all pure for the same reason: they
-return new frames and never mutate their inputs.
+`copy()`, `gain()`, `rotated()` and `blend()` are all pure for the same
+reason: they return new frames and never mutate their inputs.
 """
 
 from __future__ import annotations
@@ -136,6 +136,18 @@ class Frame:
             raise ValueError(f"gain must be non-negative, got {k}")
         scaled = np.clip(np.rint(self.data * float(k)), 0, 255).astype(np.uint8)
         return type(self)(scaled, self.geometry)
+
+    def rotated(self: F, quarter_turns: int) -> F:
+        """The picture turned `quarter_turns` x 90 degrees clockwise in the
+        canonical view - the floor-rotation setting, which the runner
+        applies to the output frame. A TileFrame stays a TileFrame. Returns
+        a new frame, even for a whole number of turns."""
+        rotation = self.geometry.rotation(quarter_turns)
+        if isinstance(self, TileFrame):
+            flat = self.data.reshape(-1, CHANNELS)[rotation.tile_gather]
+        else:
+            flat = self.data.reshape(-1, CHANNELS)[rotation.led_gather.ravel()]
+        return type(self)(flat.reshape(self.data.shape), self.geometry)
 
     # ---- ownership ------------------------------------------------------------
 

@@ -35,6 +35,14 @@ CHASE = 0x04
 HUE_SPLIT = 0x06
 FADE = 0x07
 
+# Parameters that name an LED position in the tile's chain (0..leds_per_tile-1),
+# by effect id. When the picture is rotated they move round the ring with the
+# content (`Effect.rotated`); an effect that adds one declares it here.
+# CHASE starts at LED 0 and has no offset parameter, so it has none.
+POSITIONAL_PARAMS: dict[int, tuple[int, ...]] = {
+    HUE_SPLIT: (1,),  # offset: where the split falls
+}
+
 
 @dataclass(frozen=True)
 class Effect:
@@ -66,6 +74,20 @@ class Effect:
 
     def __bytes__(self) -> bytes:
         return bytes((self.id, *self.params))
+
+    def rotated(self, led_shift: int, leds_per_tile: int) -> Effect:
+        """This effect on a tile whose content has turned `led_shift` LEDs
+        round its ring (`Rotation.led_shift`): every positional parameter
+        moves with it, mod `leds_per_tile`. A value already out of range is
+        left alone - the tile drops it either way."""
+        positional = POSITIONAL_PARAMS.get(self.id)
+        if not positional or led_shift % leds_per_tile == 0:
+            return self
+        params = list(self.params)
+        for i in positional:
+            if params[i] < leds_per_tile:
+                params[i] = (params[i] + led_shift) % leds_per_tile
+        return Effect(self.id, tuple(params))
 
 
 Effect.NONE = Effect(NONE)

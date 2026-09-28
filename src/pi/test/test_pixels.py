@@ -294,3 +294,32 @@ def test_the_documented_idiom_passes_ownership(noise):
     frame = prev.copy().gain(0.88)
     check_ownership(prev, frame)  # no raise
     check_ownership(prev, PixelFrame.like(prev))
+
+
+# ---- rotation --------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("k", range(4))
+def test_rotated_tile_frame_turns_the_displayed_tiles_clockwise_and_stays_tile_format(geo, k):
+    frame = TileFrame(np.random.default_rng(k).integers(0, 255, (8, 8, 3), dtype=np.uint8), geo)
+    turned = frame.rotated(k)
+    assert type(turned) is TileFrame
+    assert np.array_equal(geo.to_display(turned.data), np.rot90(geo.to_display(frame.data), -k))
+
+
+@pytest.mark.parametrize("k", range(4))
+def test_rotating_then_reducing_to_tiles_is_reducing_then_rotating(geo, k):
+    frame = PixelFrame(np.random.default_rng(k).integers(0, 255, (64, 60, 3), dtype=np.uint8), geo)
+    assert frame.rotated(k).to_tiles() == frame.to_tiles().rotated(k)
+    assert frame.to_tiles().to_pixels().rotated(k) == frame.to_tiles().rotated(k).to_pixels()
+
+
+def test_rotated_is_pure_and_never_aliases(geo):
+    frame = PixelFrame(np.random.default_rng(0).integers(0, 255, (64, 60, 3), dtype=np.uint8), geo).freeze()
+    before = frame.data.copy()
+    for k in range(4):
+        turned = frame.rotated(k)
+        assert not np.may_share_memory(turned.data, frame.data)
+        assert not turned.frozen
+    assert np.array_equal(frame.data, before)
+    assert frame.rotated(0) == frame
