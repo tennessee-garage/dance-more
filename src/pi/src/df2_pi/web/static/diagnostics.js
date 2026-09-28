@@ -6,12 +6,15 @@
 // when a button is pressed.
 
 import { html } from "htm/preact";
-import { useState } from "preact/hooks";
-import { runnerState } from "./state.js";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { activeTab, runnerState } from "./state.js";
 
 const DASH = "—";
 const WARN_AT = 0.5; // of the frame budget
 const BAD_AT = 0.9;
+// While the row status table is on screen, its voltage and current are
+// re-read this often (POWER only, and only from rows that answered STATUS).
+const POWER_REFRESH_MS = 5000;
 
 function ms(value, digits = 2) {
   return value == null ? DASH : value.toFixed(digits);
@@ -154,7 +157,7 @@ function amps(mA) {
   return mA == null ? DASH : `${(mA / 1000).toFixed(2)} A`;
 }
 
-function StatusTable({ rows }) {
+function StatusTable({ rows, powerAt }) {
   return html`
     <table class="diag-table num">
       <thead><tr><th>row</th><th>chain</th><th>state</th><th>tiles</th><th>uptime</th><th>voltage</th><th>current</th></tr></thead>
@@ -168,7 +171,55 @@ function StatusTable({ rows }) {
               : html`<td colspan="5">not responding</td>`}
           </tr>`)}
       </tbody>
-    </table>`;
+    </table>
+    <p class="muted">
+      Voltage and current refresh every ${POWER_REFRESH_MS / 1000} s while this table is showing${powerAt
+        ? ` \u00b7 last read ${powerAt.toLocaleTimeString()}` : ""}.
+    </p>`;
+}
+
+/** While a status result is on screen - this tab showing, the page visible -
+ *  re-read POWER from the rows that answered, and fold it into the table.
+ *  Nothing else in it changes without a click. */
+function usePowerRefresh(result, setResult, busy) {
+  const statusAt = result?.kind === "status" ? result.at : null;
+  const busyNow = useRef(busy);
+  busyNow.current = busy;
+  useEffect(() => {
+    if (statusAt == null) return undefined;
+    const rows = result.data.rows.filter((r) => r.responding).map((r) => r.row);
+    if (rows.length === 0) return undefined;
+    const query = rows.map((r) => `rows=${r}`).join("&");
+    let inFlight = false;
+    let stopped = false;
+    const timer = setInterval(async () => {
+      if (inFlight || busyNow.current || activeTab.value !== "diagnostics" || document.hidden) return;
+      inFlight = true;
+      try {
+        const response = await fetch(`api/floor/power?${query}`);
+        if (!response.ok || stopped) return;
+        const power = new Map((await response.json()).map((p) => [p.row, p]));
+        setResult((prev) => prev?.kind !== "status" || prev.at !== statusAt ? prev : {
+          ...prev,
+          powerAt: new Date(),
+          data: {
+            rows: prev.data.rows.map((r) => {
+              const p = power.get(r.row);
+              return p ? { ...r, voltage_mV: p.voltage_mV, current_mA: p.current_mA, power_mW: p.power_mW } : r;
+            }),
+          },
+        });
+      } catch {
+        // a missed refresh: the next one tries again
+      } finally {
+        inFlight = false;
+      }
+    }, POWER_REFRESH_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [statusAt]);
 }
 
 function VersionTable({ report }) {
@@ -204,6 +255,7 @@ function VersionTable({ report }) {
 function Floor({ hardware }) {
   const [busy, setBusy] = useState(null);
   const [result, setResult] = useState(null); // {kind, data} or {kind: "error", message}
+  usePowerRefresh(result, setResult, busy);
   if (!hardware) return html`<p class="muted">No floor attached (started with --no-hardware).</p>`;
   const run = async (kind, method, path) => {
     setBusy(kind);
@@ -233,7 +285,7 @@ function Floor({ hardware }) {
       </div>
       <p class="muted">Admin requests on the Row Bus, sent between frames, one row a frame.</p>
       ${result?.kind === "error" && html`<div class="command-error" role="alert">${result.message}</div>`}
-      ${result?.kind === "status" && html`<${StatusTable} rows=${result.data.rows} />`}
+      ${result?.kind === "status" && html`<${StatusTable} rows=${result.data.rows} powerAt=${result.powerAt} />`}
       ${result?.kind === "version" && html`<${VersionTable} report=${result.data} />`}
       ${result?.kind === "blackout" && html`<p class="muted">BLACKOUT sent at ${result.at.toLocaleTimeString()}.</p>`}
     </div>`;

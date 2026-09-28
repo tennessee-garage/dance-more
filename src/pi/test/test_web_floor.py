@@ -146,6 +146,31 @@ def test_status_asks_every_row_between_frames(registry):
     assert runner.clock.dropped == 0
 
 
+def test_power_asks_only_the_rows_given_between_frames(registry):
+    floor = FakeFloor(powerless_rows={4})
+    app, runner = floor_app(registry, floor)
+    with TestClient(app) as client:
+        body = client.get("/api/floor/power", params=[("rows", 1), ("rows", 4), ("rows", 1)]).json()
+        everyone = client.get("/api/floor/power").json()
+    assert [r["row"] for r in body] == [1, 4]  # each row once
+    assert (body[0]["responding"], body[0]["voltage_mV"], body[0]["current_mA"]) == (True, 12100, 1350)
+    assert body[1] == {"row": 4, "responding": False, "voltage_mV": None, "current_mA": None, "power_mW": None}
+    assert [r["row"] for r in everyone] == list(range(8))
+    asked = [e for e, _ in floor.events if e.startswith("request")]
+    assert asked[:2] == ["request 1", "request 4"]
+    requests_are_between_frames(floor.events)
+    assert runner.clock.dropped == 0
+
+
+def test_power_refuses_a_row_that_is_not_on_the_floor(registry):
+    floor = FakeFloor()
+    app, _ = floor_app(registry, floor)
+    with TestClient(app) as client:
+        response = client.get("/api/floor/power", params={"rows": 9})
+    assert response.status_code == 422 and "9" in response.json()["detail"]
+    assert not [e for e in floor.events if e[0].startswith("request")]
+
+
 def test_version_reports_what_is_out_of_step(registry):
     floor = FakeFloor(dead_rows={2}, dirty_row=6)
     app, runner = floor_app(registry, floor)
@@ -232,7 +257,7 @@ def test_without_hardware_every_floor_route_is_503(registry):
     fanout = FanOut([NullSink(), preview])
     runner = Runner(registry, fanout, clock=FrameClock(fps=30.0, spin_margin=0.0, now=PacedFakeTime().now, sleep=PacedFakeTime().sleep))
     client = TestClient(create_app(AppContext(registry, None, fanout, runner, preview)))
-    for method, path in [("GET", "/api/floor/status"), ("GET", "/api/floor/version"), ("POST", "/api/floor/blackout")]:
+    for method, path in [("GET", "/api/floor/status"), ("GET", "/api/floor/power"), ("GET", "/api/floor/version"), ("POST", "/api/floor/blackout")]:
         response = client.request(method, path)
         assert response.status_code == 503, path
         assert "--no-hardware" in response.json()["detail"]
