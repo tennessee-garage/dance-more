@@ -7,6 +7,10 @@ configured from the settings store and changed live.
     external.status()                                   # what the web UI shows
     external.stop()
 
+It also owns the DMX control block (dmx_control.py): off until
+`dmx_enabled`, then fed by the receiver from its own universe and start
+address, released on the same timeout as the pixels.
+
 Every setting lives in the `setting` table under the keys in `KEYS`, so a
 restart comes back listening the way it was left. `update()` validates the
 whole change before touching anything: all of it lands, or none.
@@ -19,6 +23,8 @@ import time
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from df2_pi.interfacing.dmx_control import WIDTH as DMX_WIDTH
+from df2_pi.interfacing.dmx_control import DmxControl
 from df2_pi.interfacing.external import ExternalSource, SOURCES, external_animation
 from df2_pi.interfacing.receiver import MODES, Layout, Receiver
 
@@ -41,7 +47,12 @@ KEYS = {
     "source": "external_source",
     "mix": "external_mix",
     "timeout_s": "external_timeout_s",
+    "dmx_enabled": "dmx_enabled",
+    "dmx_artnet_universe": "dmx_artnet_universe",
+    "dmx_sacn_universe": "dmx_sacn_universe",
+    "dmx_address": "dmx_address",
 }
+DMX_KEYS = {"dmx_enabled", "dmx_artnet_universe", "dmx_sacn_universe", "dmx_address"}
 
 ARTNET_UNIVERSES = 32768  # 15-bit port-addresses
 SACN_UNIVERSE_MAX = 63999
@@ -63,15 +74,29 @@ class ExternalInput:
         )
         self.source = ExternalSource(runner, self.receiver, source=s["source"], mix=s["mix"], timeout_s=s["timeout_s"])
         registry.add_builtin(external_animation(self.receiver))
+        self.dmx = DmxControl(runner, self.source, store, timeout_s=s["timeout_s"])
+        self.receiver.on_control = self.dmx.handle
+        self._configure_dmx(s)
         self._frame_times: deque[tuple[float, int]] = deque(maxlen=64)
 
     def start(self) -> None:
         self.receiver.start()
         self.source.start()
+        self.dmx.start()
 
     def stop(self) -> None:
+        self.dmx.stop()
         self.source.stop()
         self.receiver.stop()
+
+    def _configure_dmx(self, s: dict[str, Any]) -> None:
+        self.receiver.configure_control(
+            artnet_universe=s["dmx_artnet_universe"],
+            sacn_universe=s["dmx_sacn_universe"],
+            address=s["dmx_address"],
+            width=DMX_WIDTH,
+            enabled=s["dmx_enabled"],
+        )
 
     # ---- settings ---------------------------------------------------------------------
 
@@ -95,8 +120,11 @@ class ExternalInput:
                 artnet=merged["artnet_enabled"],
                 sacn=merged["sacn_enabled"],
             )
+        if DMX_KEYS & set(changes):
+            self._configure_dmx(merged)
         if "timeout_s" in changes:
             self.source.set_timeout(merged["timeout_s"])
+            self.dmx.timeout_s = merged["timeout_s"]
         if "mix" in changes:
             self.source.set_mix(merged["mix"])
         if "source" in changes:
@@ -145,11 +173,12 @@ class ExternalInput:
             "fps": round(fps, 1),
             "universes": layout.universes,
             "ports": self.receiver.ports(),
+            "dmx": self.dmx.status(),
         }
 
 
 def _validate(s: dict[str, Any]) -> None:
-    for key in ("artnet_enabled", "sacn_enabled"):
+    for key in ("artnet_enabled", "sacn_enabled", "dmx_enabled"):
         if not isinstance(s[key], bool):
             raise TypeError(f"{key} must be true or false")
     if s["mode"] not in MODES:
@@ -166,3 +195,9 @@ def _validate(s: dict[str, Any]) -> None:
         raise ValueError("mix must be in 0..1")
     if not 0.2 <= float(s["timeout_s"]) <= 60.0:
         raise ValueError("timeout_s must be 0.2..60")
+    if not 0 <= int(s["dmx_artnet_universe"]) < ARTNET_UNIVERSES:
+        raise ValueError(f"dmx_artnet_universe must be 0..{ARTNET_UNIVERSES - 1}")
+    if not 1 <= int(s["dmx_sacn_universe"]) <= SACN_UNIVERSE_MAX:
+        raise ValueError(f"dmx_sacn_universe must be 1..{SACN_UNIVERSE_MAX}")
+    if not 1 <= int(s["dmx_address"]) <= 512 - DMX_WIDTH + 1:
+        raise ValueError(f"dmx_address must be 1..{512 - DMX_WIDTH + 1} for the {DMX_WIDTH}-channel block")

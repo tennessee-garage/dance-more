@@ -30,6 +30,10 @@ class ExternalSettings(BaseModel):
     source: Literal["internal", "external", "mix"] = Field(description="What the floor shows while there is signal.")
     mix: float = Field(description="External's amount over the playlist in mix.")
     timeout_s: float = Field(description="Seconds without a frame before the floor takes its own show back.")
+    dmx_enabled: bool = Field(description="Listen for the 16-channel DMX control block.")
+    dmx_artnet_universe: int = Field(description="The control block's Art-Net universe (0-based).")
+    dmx_sacn_universe: int = Field(description="The control block's sACN universe (1-based).")
+    dmx_address: int = Field(description="The control block's first channel (1-based).")
 
 
 class ExternalChanges(BaseModel):
@@ -45,12 +49,16 @@ class ExternalChanges(BaseModel):
     source: Literal["internal", "external", "mix"] = None
     mix: float = Field(default=None, ge=0, le=1)
     timeout_s: float = Field(default=None, ge=0.2, le=60)
+    dmx_enabled: bool = None
+    dmx_artnet_universe: int = Field(default=None, ge=0, le=32767)
+    dmx_sacn_universe: int = Field(default=None, ge=1, le=63999)
+    dmx_address: int = Field(default=None, ge=1, le=497)
 
 
 class ExternalInfo(BaseModel):
     settings: ExternalSettings
     status: dict[str, Any] = Field(
-        description="live, applied source, frames, fps, age_s, protocol, sender, universes, listening, ports, errors, packets, polls."
+        description="live, applied source, frames, fps, age_s, protocol, sender, universes, listening, ports, errors, packets, polls, dmx {live, packets, values}."
     )
 
 
