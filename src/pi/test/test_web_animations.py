@@ -22,12 +22,14 @@ from df2_pi.pixels import TileFrame
     format="tile",
     tags=["test", "flat"],
     params={
-        "level": Param(int, default=10, min=0, max=255, label="Level", help="How bright"),
-        "speed": Param(float, default=1.5, min=0.1, max=5.0),
+        "level": Param(int, default=10, min=0, max=255, label="Level", help="How bright", role="intensity", macro=2),
+        "speed": Param(float, default=1.5, min=0.1, max=5.0, curve="log"),
         "mode": Param(str, default="up", choices=["up", "down"]),
         "wobble": Param(bool, default=False),
     },
     period=2.0,
+    sync="beat",
+    triggers=True,
     preview_hint="loop",
     energy="low",
     weights=[1, 2, 3],
@@ -89,13 +91,16 @@ def client(registry) -> TestClient:
 def test_every_field_of_an_animation_is_served(client):
     body = client.get("/api/animations").json()
     every = next(a for a in body["animations"] if a["id"] == "every")
-    assert {k: every[k] for k in ("name", "description", "author", "format", "tags", "period", "path", "error")} == {
+    keys = ("name", "description", "author", "format", "tags", "period", "sync", "triggers", "path", "error")
+    assert {k: every[k] for k in keys} == {
         "name": "Every Param",
         "description": "One of each kind.",
         "author": "test",
         "format": "tile",
         "tags": ["test", "flat"],
         "period": 2.0,
+        "sync": "beat",
+        "triggers": True,
         "path": "every.py",
         "error": None,
     }
@@ -104,10 +109,22 @@ def test_every_field_of_an_animation_is_served(client):
 def test_every_param_field_and_type_name_is_serialised(client):
     params = client.get("/api/animations/every").json()["params"]
     assert params == {
-        "level": {"type": "int", "default": 10, "min": 0, "max": 255, "choices": None, "label": "Level", "help": "How bright"},
-        "speed": {"type": "float", "default": 1.5, "min": 0.1, "max": 5.0, "choices": None, "label": None, "help": None},
-        "mode": {"type": "str", "default": "up", "min": None, "max": None, "choices": ["up", "down"], "label": None, "help": None},
-        "wobble": {"type": "bool", "default": False, "min": None, "max": None, "choices": None, "label": None, "help": None},
+        "level": {
+            "type": "int", "default": 10, "min": 0, "max": 255, "choices": None, "label": "Level", "help": "How bright",
+            "role": "intensity", "macro": 2, "curve": "linear",
+        },
+        "speed": {  # a role by its name
+            "type": "float", "default": 1.5, "min": 0.1, "max": 5.0, "choices": None, "label": None, "help": None,
+            "role": "speed", "macro": None, "curve": "log",
+        },
+        "mode": {
+            "type": "str", "default": "up", "min": None, "max": None, "choices": ["up", "down"], "label": None, "help": None,
+            "role": None, "macro": None, "curve": "linear",
+        },
+        "wobble": {
+            "type": "bool", "default": False, "min": None, "max": None, "choices": None, "label": None, "help": None,
+            "role": None, "macro": None, "curve": "linear",
+        },
     }
 
 
