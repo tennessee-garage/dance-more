@@ -64,6 +64,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 OUTCOMES = ("completed", "skipped", "error")
 
 
+class DuplicatePlaylistName(ValueError):
+    """A playlist with that name already exists. A ValueError, so callers
+    that treat every bad write alike still can; the web layer tells it
+    apart (409, not 422)."""
+
+
 def default_db_path() -> Path:
     """`$DF2_DB`, else `~/.local/share/df2/df2.sqlite3` (XDG_DATA_HOME
     respected)."""
@@ -267,7 +273,7 @@ class PlaylistStore:
                     (name.strip(), description, int(loop), int(shuffle), float(crossfade_s), now, now),
                 )
             except sqlite3.IntegrityError as exc:
-                raise ValueError(f"a playlist named {name!r} already exists") from exc
+                raise DuplicatePlaylistName(f"a playlist named {name!r} already exists") from exc
             return self._playlist_from_row(conn, self._playlist_row(conn, cur.lastrowid))
 
     def update_playlist(self, playlist: Playlist | int, **fields: Any) -> Playlist:
@@ -300,7 +306,7 @@ class PlaylistStore:
             try:
                 conn.execute(f"UPDATE playlist SET {assignments} WHERE id = ?", (*values.values(), pid))
             except sqlite3.IntegrityError as exc:
-                raise ValueError(f"a playlist named {values.get('name')!r} already exists") from exc
+                raise DuplicatePlaylistName(f"a playlist named {values.get('name')!r} already exists") from exc
             return self._playlist_from_row(conn, self._playlist_row(conn, pid))
 
     def delete_playlist(self, playlist: Playlist | int) -> None:

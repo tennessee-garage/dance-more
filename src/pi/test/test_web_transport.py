@@ -276,6 +276,23 @@ def test_a_queued_command_shows_in_the_state_on_the_next_tick(registry, store):
     assert paused[:4] == [False] * 4 and all(paused[4:])
 
 
+# ---- brightness is persisted -----------------------------------------------------------------
+
+
+def test_the_brightness_command_is_also_stored(mocked, store):
+    client, runner = mocked
+    assert client.post("/api/transport/brightness", json={"value": 77}).status_code == 200
+    runner.set_brightness.assert_called_once_with(77)
+    assert store.get_int("brightness") == 77
+    assert client.get("/api/settings").json()["brightness"] == 77
+
+
+def test_a_refused_brightness_is_not_stored(mocked, store):
+    client, _ = mocked
+    assert client.post("/api/transport/brightness", json={"value": 300}).status_code == 422
+    assert store.get_setting("brightness") is None
+
+
 # ---- live params ----------------------------------------------------------------------------
 
 

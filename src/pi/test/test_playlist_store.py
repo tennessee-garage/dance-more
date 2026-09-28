@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from df2_pi.animation import AnimationRegistry
-from df2_pi.playlists import DEFAULT_SETTINGS, PlaylistStore, ResolvedPlaylist, default_db_path
+from df2_pi.playlists import DEFAULT_SETTINGS, DuplicatePlaylistName, PlaylistStore, ResolvedPlaylist, default_db_path
 from df2_pi.playlists.schema import MIGRATIONS, SCHEMA_VERSION, current_version, migrate
 
 SOLID = '''
@@ -97,8 +97,12 @@ def test_playlist_crud(store):
     assert (pl.name, pl.description, pl.loop, pl.shuffle, pl.crossfade_s) == ("Friday", "the usual", False, True, 1.5)
     assert pl.entries == () and pl.created_at == pl.updated_at
     assert store.playlist(pl.id) == pl and store.playlist("Friday") == pl
-    with pytest.raises(ValueError, match="already exists"):
+    with pytest.raises(DuplicatePlaylistName, match="already exists"):
         store.create_playlist("Friday")
+    other = store.create_playlist("Saturday")
+    with pytest.raises(DuplicatePlaylistName, match="already exists"):
+        store.update_playlist(other, name="Friday")
+    store.delete_playlist(other)
     with pytest.raises(ValueError):
         store.create_playlist("  ")
     with pytest.raises(ValueError):

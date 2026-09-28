@@ -271,6 +271,19 @@ def test_serve_no_hardware_builds_the_app_without_binding(serve_args, no_serial,
     assert ctx.fanout.get("hardware") is None
 
 
+def test_serve_starts_at_the_stored_brightness_unless_told_otherwise(serve_args, no_serial, tmp_path):
+    from df2_pi.playlists import PlaylistStore
+
+    assert cli.build_app(cli.build_parser().parse_args([*serve_args, "serve", "--no-hardware"])).state.ctx.runner.state.brightness == 255
+    store = PlaylistStore(tmp_path / "df2.sqlite3")
+    store.set_setting("brightness", 60)
+    store.close()
+    stored = cli.build_app(cli.build_parser().parse_args([*serve_args, "serve", "--no-hardware"]))
+    assert stored.state.ctx.runner.state.brightness == 60
+    flagged = cli.build_app(cli.build_parser().parse_args([*serve_args, "serve", "--no-hardware", "--brightness", "200"]))
+    assert flagged.state.ctx.runner.state.brightness == 200
+
+
 def test_serve_hands_the_app_to_uvicorn(serve_args, no_serial, monkeypatch):
     import uvicorn
 
