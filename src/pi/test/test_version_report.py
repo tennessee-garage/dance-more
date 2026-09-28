@@ -5,6 +5,7 @@ from df2_pi.version_report import (
     NUM_TILE_SLOTS,
     VERSION_RESP_SIZE,
     RowVersionReport,
+    assess_versions,
     format_version_report,
 )
 
@@ -89,6 +90,28 @@ def test_report_flags_missing_tile_version():
     text, ok = format_version_report(reports)
     assert not ok
     assert "slot 3: no version" in text
+
+
+def test_slot_status_labels_a_missing_version_and_an_empty_slot_is_in_step():
+    tiles = list(_all_clean_report().tiles)
+    tiles[3] = tiles[4] = None
+    reports = {0: RowVersionReport(ROW_V, tuple(tiles))}
+    statuses = {0: (1, 1, 1, 0x00, 0x02, 1, 1, 1)}  # slot 3 empty, slot 4 not responding
+    assessment = assess_versions(reports, statuses)
+    by_slot = {t.slot: t for t in assessment.rows[0].tiles}
+    assert (by_slot[3].state, by_slot[3].out_of_step) == ("empty", False)
+    assert (by_slot[4].state, by_slot[4].out_of_step) == ("not responding", True)
+    assert not assessment.ok
+    statuses = {0: (1, 1, 1, 0x00, 0x00, 1, 1, 1)}  # both empty: nothing out of step
+    assert assess_versions(reports, statuses).ok
+
+
+def test_assessment_names_the_majorities():
+    odd = FirmwareVersion(version=6, git_sha=0x2B5C293C, flags=0)
+    reports = {0: _all_clean_report(), 1: _all_clean_report(), 2: RowVersionReport(odd, _all_clean_report().tiles)}
+    assessment = assess_versions(reports)
+    assert (assessment.row_majority, assessment.tile_majority) == (ROW_V, TILE_V)
+    assert [r.out_of_step for r in assessment.rows] == [False, False, True]
 
 
 def test_report_flags_minority_tile_version():

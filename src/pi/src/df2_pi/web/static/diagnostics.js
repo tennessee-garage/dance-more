@@ -165,20 +165,26 @@ function StatusTable({ rows }) {
 function VersionTable({ report }) {
   return html`
     <div class=${report.ok ? "health ok" : "health bad"}>${report.ok ? "Every row and tile in step" : "Out of step (marked)"}</div>
-    <table class="diag-table num">
+    <p class="muted versions-against">
+      In step means matching what most of the floor runs —
+      rows: <strong>${report.row_version?.text ?? DASH}</strong>,
+      tiles: <strong>${report.tile_version?.text ?? DASH}</strong>
+    </p>
+    <table class="diag-table num versions">
       <thead><tr><th>row</th><th>firmware</th><th>tiles</th></tr></thead>
       <tbody>
         ${report.rows.map((r) => {
-          const odd = r.tiles.filter((t) => t.out_of_step);
-          const present = r.tiles.filter((t) => t.version);
+          const inStep = r.tiles.filter((t) => t.version && !t.out_of_step).length;
+          const empty = r.tiles.filter((t) => t.state === "empty").length;
+          const problems = r.tiles.filter((t) => t.out_of_step);
           return html`
             <tr>
               <th>${r.row}</th>
               <td class=${r.out_of_step ? "bad" : ""}>${r.responding ? r.version.text : "not responding"}</td>
-              <td class=${odd.length ? "bad" : ""}>
-                ${!r.responding ? DASH : odd.length === 0
-                  ? `${present.length}/8 · ${present[0]?.version.text ?? "none"}`
-                  : odd.map((t) => `slot ${t.slot}: ${t.version ? t.version.text : "no version"}`).join("; ")}
+              <td>
+                ${!r.responding ? DASH : html`
+                  <span>${inStep} in step${empty ? ` · ${empty} empty` : ""}</span>
+                  ${problems.map((t) => html`<div class="bad">slot ${t.slot}: ${t.version ? t.version.text : t.state}</div>`)}`}
               </td>
             </tr>`;
         })}

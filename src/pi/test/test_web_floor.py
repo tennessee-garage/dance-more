@@ -33,8 +33,11 @@ class PacedFakeTime:
         time.sleep(0.002)
 
 
-def status_payload(state=0x02, tiles=8, uptime=3725) -> bytes:
-    return bytes([state, tiles]) + bytes(8) + uptime.to_bytes(4, "big")
+OK, EMPTY, SILENT, FAILED = 0x01, 0x00, 0x02, 0x03
+
+
+def status_payload(state=0x02, slots=(OK,) * 7 + (EMPTY,), uptime=3725) -> bytes:
+    return bytes([state, sum(s == OK for s in slots)]) + bytes(slots) + uptime.to_bytes(4, "big")
 
 
 def version_payload(row: FirmwareVersion, tiles: list[FirmwareVersion | None]) -> bytes:
@@ -46,11 +49,12 @@ def version_payload(row: FirmwareVersion, tiles: list[FirmwareVersion | None]) -
 class FakeFloor:
     """Records what reaches the Row Bus, in order, and on which thread."""
 
-    def __init__(self, dead_rows=(), dirty_row=None) -> None:
+    def __init__(self, dead_rows=(), dirty_row=None, slots=None) -> None:
         self.chain_map = RowChainMap.alternating(2)
         self.events: list[tuple[str, str]] = []
         self.dead_rows = set(dead_rows)
         self.dirty_row = dirty_row
+        self.slots = slots or {}  # row -> STATUS tile_status; default: 7 tiles, slot 7 empty
         self._lock = threading.Lock()
 
     def _log(self, what: str) -> None:
@@ -71,7 +75,7 @@ class FakeFloor:
         if row in self.dead_rows:
             raise RowNotResponding(f"row 0x{row:02X} did not answer cmd 0x{cmd:02X} after 3 attempts")
         if cmd == Cmd.STATUS:
-            return Frame(row, Resp.STATUS_RESP, status_payload())
+            return Frame(row, Resp.STATUS_RESP, status_payload(slots=self.slots.get(row, (OK,) * 7 + (EMPTY,))))
         if cmd == Cmd.VERSION:
             head = DIRTY if row == self.dirty_row else GOOD
             return Frame(row, Resp.VERSION_RESP, version_payload(head, [GOOD] * 7 + [None]))
@@ -122,7 +126,8 @@ def test_status_asks_every_row_between_frames(registry):
     assert [r["row"] for r in rows] == list(range(8))
     assert [r["chain"] for r in rows] == [0, 1] * 4
     alive = rows[0]
-    assert (alive["responding"], alive["state"], alive["tiles_found"], alive["uptime_s"]) == (True, "running", 8, 3725)
+    assert (alive["responding"], alive["state"], alive["tiles_found"], alive["uptime_s"]) == (True, "running", 7, 3725)
+    assert alive["tile_status"] == [OK] * 7 + [EMPTY]
     assert rows[5]["responding"] is False and "did not answer" in rows[5]["error"]
     requests_are_between_frames(floor.events)
     assert runner.clock.dropped == 0
@@ -140,15 +145,60 @@ def test_version_reports_what_is_out_of_step(registry):
     assert rows[2]["responding"] is False and rows[2]["out_of_step"] is True
     assert rows[6]["version"]["dirty"] is True and rows[6]["out_of_step"] is True
     slot7 = rows[0]["tiles"][7]
-    assert slot7["version"] is None and slot7["out_of_step"] is True  # no version cached
+    assert slot7["version"] is None and slot7["state"] == "empty" and slot7["out_of_step"] is False
     assert rows[0]["tiles"][0]["out_of_step"] is False
     requests_are_between_frames(floor.events)
     assert runner.clock.dropped == 0
 
 
+def test_the_majorities_are_served_as_what_everything_is_compared_against(registry):
+    floor = FakeFloor(dirty_row=6)
+    app, _ = floor_app(registry, floor)
+    with TestClient(app) as client:
+        body = client.get("/api/floor/version").json()
+    assert body["row_version"]["git_sha"] == "1c00158a" and body["row_version"]["dirty"] is False
+    assert body["tile_version"]["text"] == body["rows"][0]["tiles"][0]["version"]["text"]
+
+
+def test_a_missing_tile_version_is_labelled_from_the_slot_status(registry):
+    """VERSION alone cannot tell an empty slot from a tile that is there
+    and never answered; each row's STATUS can."""
+    floor = FakeFloor(slots={
+        0: (OK,) * 7 + (EMPTY,),
+        1: (OK,) * 7 + (OK,),  # found, but its version never arrived
+        3: (OK,) * 7 + (SILENT,),
+        4: (OK,) * 7 + (FAILED,),
+    })
+    app, runner = floor_app(registry, floor)
+    with TestClient(app) as client:
+        body = client.get("/api/floor/version").json()
+    slot7 = {r["row"]: r["tiles"][7] for r in body["rows"]}
+    assert (slot7[0]["state"], slot7[0]["out_of_step"]) == ("empty", False)
+    assert (slot7[1]["state"], slot7[1]["out_of_step"]) == ("no version", True)
+    assert (slot7[3]["state"], slot7[3]["out_of_step"]) == ("not responding", True)
+    assert (slot7[4]["state"], slot7[4]["out_of_step"]) == ("test failed", True)
+    assert body["rows"][0]["tiles"][0]["state"] == "ok"
+    requests_are_between_frames(floor.events)
+    assert runner.clock.dropped == 0
+
+
+def test_a_floor_whose_only_gaps_are_empty_slots_is_ok(registry):
+    app, _ = floor_app(registry, FakeFloor())  # every row: 7 tiles, slot 7 empty
+    with TestClient(app) as client:
+        body = client.get("/api/floor/version").json()
+    assert body["ok"] is True
+    assert all(r["tiles"][7]["state"] == "empty" for r in body["rows"])
+
+
 def test_a_clean_floor_is_ok(registry):
     floor = FakeFloor()
-    floor.request = lambda row, cmd, payload=b"": Frame(row, Resp.VERSION_RESP, version_payload(GOOD, [GOOD] * 8))
+
+    def full_floor(row, cmd, payload=b""):
+        if cmd == Cmd.STATUS:
+            return Frame(row, Resp.STATUS_RESP, status_payload(slots=(OK,) * 8))
+        return Frame(row, Resp.VERSION_RESP, version_payload(GOOD, [GOOD] * 8))
+
+    floor.request = full_floor
     app, _ = floor_app(registry, floor)
     with TestClient(app) as client:
         assert client.get("/api/floor/version").json()["ok"] is True

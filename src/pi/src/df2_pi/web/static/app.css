@@ -686,3 +686,6 @@ button.icon-small { padding: 0 8px; font-size: 16px; line-height: 24px; }
 .floor-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .floor-buttons button { padding: 6px 12px; }
 .floor-admin .diag-table { margin-top: 6px; }
+.versions-against { margin: 0 0 4px; }
+.versions td { vertical-align: top; }
+.versions td .bad { color: var(--bad); }

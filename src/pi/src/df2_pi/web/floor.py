@@ -1,7 +1,7 @@
 """The floor's own view of itself: Row Bus admin requests, for diagnostics.
 
     GET  /api/floor/status     STATUS from every row: state, tiles found, uptime
-    GET  /api/floor/version    VERSION from every row, with what is out of step
+    GET  /api/floor/version    VERSION (and STATUS) from every row, with what is out of step
     POST /api/floor/blackout   the BLACKOUT broadcast itself
 
 The same queries as `df2-pi status` / `df2-pi version`. Each one waits for
@@ -59,8 +59,12 @@ class VersionInfo(BaseModel):
 
 class TileVersionInfo(BaseModel):
     slot: int
-    version: VersionInfo | None = Field(description="Null: the row has no version cached for this slot.")
-    out_of_step: bool
+    version: VersionInfo | None = Field(description="Null: the row has no version for this slot; `state` says why.")
+    state: str = Field(
+        description='"ok" with a version. Without: "empty" (no tile found), "no version" (found, never answered '
+        'VERSION), "not responding" or "test failed" - from the row\'s STATUS for that slot.'
+    )
+    out_of_step: bool = Field(description="Differs from the majority, dirty, or missing a version. An empty slot is not.")
 
 
 class RowVersionInfo(BaseModel):
@@ -74,6 +78,8 @@ class RowVersionInfo(BaseModel):
 class FloorVersions(BaseModel):
     rows: list[RowVersionInfo]
     ok: bool = Field(description="Every row and tile responding, clean, and in step.")
+    row_version: VersionInfo | None = Field(description="What most rows run: what each row is compared against.")
+    tile_version: VersionInfo | None = Field(description="What most tiles run: what each tile is compared against.")
 
 
 def version_info(v: FirmwareVersion | None) -> VersionInfo | None:
@@ -143,17 +149,28 @@ def floor_router(ctx: AppContext) -> APIRouter:
 
     @router.get("/version", response_model=FloorVersions)
     async def version() -> FloorVersions:
-        """VERSION from every row, one row per frame boundary, and what is
-        out of step - the same verdict as `df2-pi version`."""
+        """VERSION from every row, and what is out of step against the
+        majority - `df2-pi version`'s verdict. Each row's STATUS as well, so
+        a tile with no version is told apart: an empty slot, or a tile that
+        is there and did not answer. One request per frame boundary."""
         floor = the_floor()
         reports: dict[int, RowVersionReport | None] = {}
+        slot_status: dict[int, tuple[int, ...]] = {}
         for row, _chain in floor.chain_map.items():
             reply = await ask(floor, row, Cmd.VERSION)
             try:
                 reports[row] = None if isinstance(reply, Exception) else RowVersionReport.decode(reply.payload)
             except ValueError:
                 reports[row] = None
-        assessment = assess_versions(reports)
+            if reports[row] is None:
+                continue
+            status = await ask(floor, row, Cmd.STATUS)
+            if not isinstance(status, Exception):
+                try:
+                    slot_status[row] = RowStatus.decode(status.payload).tile_status
+                except ValueError:
+                    pass  # unlabelled: its missing versions stay "no version"
+        assessment = assess_versions(reports, slot_status)
         return FloorVersions(
             rows=[
                 RowVersionInfo(
@@ -161,11 +178,16 @@ def floor_router(ctx: AppContext) -> APIRouter:
                     responding=r.version is not None,
                     version=version_info(r.version),
                     out_of_step=r.out_of_step,
-                    tiles=[TileVersionInfo(slot=t.slot, version=version_info(t.version), out_of_step=t.out_of_step) for t in r.tiles],
+                    tiles=[
+                        TileVersionInfo(slot=t.slot, version=version_info(t.version), state=t.state, out_of_step=t.out_of_step)
+                        for t in r.tiles
+                    ],
                 )
                 for r in assessment.rows
             ],
             ok=assessment.ok,
+            row_version=version_info(assessment.row_majority),
+            tile_version=version_info(assessment.tile_majority),
         )
 
     @router.post("/blackout", status_code=204)
