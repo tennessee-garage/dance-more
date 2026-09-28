@@ -284,6 +284,21 @@ def test_serve_starts_at_the_stored_brightness_unless_told_otherwise(serve_args,
     assert flagged.state.ctx.runner.state.brightness == 200
 
 
+def test_serve_starts_at_the_stored_rotation_unless_told_otherwise(serve_args, no_serial, tmp_path):
+    from df2_pi.playlists import PlaylistStore
+
+    def rotation(*extra):
+        app = cli.build_app(cli.build_parser().parse_args([*serve_args, "serve", "--no-hardware", *extra]))
+        return app.state.ctx.runner.state.rotation
+
+    assert rotation() == 0
+    store = PlaylistStore(tmp_path / "df2.sqlite3")
+    store.set_setting("rotation", 180)
+    store.close()
+    assert rotation() == 180
+    assert rotation("--rotation", "90") == 90
+
+
 def test_serve_hands_the_app_to_uvicorn(serve_args, no_serial, monkeypatch):
     import uvicorn
 

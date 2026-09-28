@@ -7,6 +7,7 @@
     df2-pi play --no-hardware --terminal      # no floor at all; renders in the terminal
     df2-pi play --animation bolt --window     # a real window (pip install -e ".[preview]")
     df2-pi play --animation chase --no-hardware --record out.gif --frames 90
+    df2-pi play --rotation 90                 # picture turned a quarter clockwise (default: the stored setting)
 
     df2-pi serve                              # the floor plus the admin UI on :8000 (pip install -e ".[web]")
     df2-pi serve --no-hardware --terminal     # the whole UI on a laptop, no floor
@@ -236,7 +237,10 @@ def _cmd_play(args: argparse.Namespace) -> int:
 
     clock = FrameClock(fps=args.fps, realtime=args.realtime)
     fanout, window, collector = build_sinks(args, clock)
-    runner = Runner(registry, fanout, store=store, clock=clock, brightness=args.brightness, seed=args.seed)
+    rotation = store.get_rotation() if args.rotation is None else args.rotation
+    runner = Runner(
+        registry, fanout, store=store, clock=clock, brightness=args.brightness, rotation=rotation, seed=args.seed
+    )
 
     if args.animation:
         definition = registry.get(args.animation)
@@ -300,12 +304,14 @@ def build_app(args: argparse.Namespace):
     if args.brightness is None:
         # The last brightness set from the page (or the API) survives a restart.
         args.brightness = store.get_int("brightness")
+    if args.rotation is None:
+        args.rotation = store.get_rotation()
 
     clock = FrameClock(fps=args.fps)
     fanout, _, _ = build_sinks(args, clock)
     preview = PreviewSink()  # always: the page's preview subscribes to it
     fanout.attach(preview)
-    runner = Runner(registry, fanout, store=store, clock=clock, brightness=args.brightness)
+    runner = Runner(registry, fanout, store=store, clock=clock, brightness=args.brightness, rotation=args.rotation)
     return create_app(AppContext(registry, store, fanout, runner, preview))
 
 
@@ -543,6 +549,16 @@ def _add_output_flags(p: argparse.ArgumentParser, *, frames_help: str) -> None:
     p.add_argument("--brightness", type=int, default=255, metavar="0-255", help="global brightness (default 255)")
 
 
+def _add_rotation_flag(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--rotation",
+        type=int,
+        choices=(0, 90, 180, 270),  # geometry.ROTATIONS, not imported: it would pull numpy into every command
+        metavar="{0,90,180,270}",
+        help="turn the picture this many degrees clockwise; default: the stored rotation setting (0 until one is set)",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="df2-pi", description="Dance Floor v2 host controller")
     parser.add_argument(
@@ -565,6 +581,7 @@ def build_parser() -> argparse.ArgumentParser:
     play.add_argument("--fps", type=float, default=30.0, help="frame rate (default 30)")
     play.add_argument("--realtime", action="store_true", help="raise scheduler priority (needs privileges)")
     play.add_argument("--seed", type=int, help="seed the runner's rng for a reproducible run")
+    _add_rotation_flag(play)
     _add_output_flags(play, frames_help="exit after N frames")
     play.set_defaults(func=_cmd_play)
 
@@ -586,6 +603,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="0-255",
         help="global brightness; default: the stored brightness setting (255 until one is set)",
     )
+    _add_rotation_flag(serve)
     # build_sinks() reads these; a window needs the main thread, which uvicorn owns.
     serve.set_defaults(func=_cmd_serve, window=False, record=None, frames=None)
 

@@ -49,6 +49,7 @@ from typing import Any, Iterable, Mapping
 
 from df2_pi.animation.loader import AnimationDef
 from df2_pi.animation.registry import AnimationRegistry
+from df2_pi.geometry import ROTATIONS
 from df2_pi.playlists.schema import migrate
 
 log = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ log = logging.getLogger(__name__)
 DEFAULT_SETTINGS: dict[str, Any] = {
     "startup_playlist": None,  # a playlist id
     "brightness": 255,
+    "rotation": 0,  # degrees clockwise: 0, 90, 180 or 270
     "enabled": True,
     "fps": 30.0,
     "default_entry_duration": 60.0,
@@ -511,6 +513,15 @@ class PlaylistStore:
             raise ValueError(v)
 
         return self._typed(key, default, parse)
+
+    def get_rotation(self) -> int:
+        """The rotation setting in degrees. A stored value that is not 0,
+        90, 180 or 270 is logged and read as 0 rather than refusing to start."""
+        value = self.get_int("rotation")
+        if value not in ROTATIONS:
+            log.warning("setting 'rotation' has invalid value %r; using 0", value)
+            return 0
+        return value
 
     def _typed(self, key: str, default: Any, parse) -> Any:
         value = self.get_setting(key)
