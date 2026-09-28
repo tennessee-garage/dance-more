@@ -461,8 +461,44 @@ button.play { flex: none; padding: 6px 14px; }
 /* ---- param controls ---- */
 
 .live-params {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
   border-top: 1px solid var(--border);
   padding-top: 8px;
+}
+/* Which row is which: an animation's own params and the show controls can
+   share names (speed, saturation). */
+.row-label {
+  flex: none;
+  width: 5.5em;
+  padding-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Show controls: the same parts as the param controls, plus buttons. */
+.show-buttons {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.show-buttons button { padding: 6px 12px; }
+.show-buttons button.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.tint-colour {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
 }
 
 .param-controls {
