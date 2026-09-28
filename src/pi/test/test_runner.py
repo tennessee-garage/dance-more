@@ -91,6 +91,21 @@ def render(previous, ctx):
 '''
 
 
+CONTROLLED = '''
+from df2_pi.animation import animation, Param
+from df2_pi.pixels import TileFrame
+
+@animation(name="Controlled", params={
+    "speed": Param(float, default=1.0, min=0.1, max=10.0, curve="log"),
+    "tail": Param(int, default=10, min=0, max=100, macro=1),
+})
+def render(previous, ctx):
+    frame = TileFrame.black(ctx.geometry)
+    frame.data[:] = (40, ctx.params["tail"], 0)
+    return frame
+'''
+
+
 class FakeTime:
     def __init__(self) -> None:
         self.t = 100.0
@@ -150,6 +165,7 @@ def registry(tmp_path: Path) -> AnimationRegistry:
     (d / "crashes_later.py").write_text(textwrap.dedent(CRASHES_LATER))
     (d / "trail.py").write_text(textwrap.dedent(WITH_EFFECT))
     (d / "clocked.py").write_text(textwrap.dedent(CLOCKED))
+    (d / "controlled.py").write_text(textwrap.dedent(CONTROLLED))
     (d / "broken.py").write_text("def render(:\n")
     return AnimationRegistry.discover(d)
 
@@ -792,3 +808,42 @@ def test_bad_show_values_are_refused_on_the_callers_thread(registry, store, call
     runner, _, _ = make_runner(registry, store)
     with pytest.raises(ValueError):
         call(runner)
+
+
+# ---- external controls ---------------------------------------------------------------------------
+
+
+def test_a_control_reaches_the_param_with_that_role_or_macro(registry, store):
+    def controls(runner, n):
+        if n == 1:
+            runner.set_control("speed", 0.5)
+            runner.set_control("macro1", 0.25)
+        return n >= 3
+
+    runner, probe, _ = make_runner(registry, store, until=controls)
+    runner.play_animation("controlled")
+    runner.run()
+    assert probe.states[0].params == {"speed": 1.0, "tail": 10}
+    assert probe.states[1].params["speed"] == pytest.approx(1.0)  # log: the middle of 0.1..10
+    assert probe.states[1].params["tail"] == 25
+    assert int(probe.frames[1][1].data[0, 0, 1]) == 25
+
+
+def test_a_control_the_animation_does_not_have_is_ignored(registry, store):
+    def controls(runner, n):
+        if n == 1:
+            runner.set_control("hue", 0.9)
+            runner.set_control("macro3", 0.9)
+        return n >= 3
+
+    runner, probe, _ = make_runner(registry, store, until=controls)
+    runner.play_animation("controlled")
+    runner.run()
+    assert probe.states[-1].params == {"speed": 1.0, "tail": 10}
+
+
+def test_a_bad_control_target_or_value_is_refused_on_the_callers_thread(registry, store):
+    runner, _, _ = make_runner(registry, store)
+    for target, value in (("tempo", 0.5), ("macro9", 0.5), ("speed", float("nan"))):
+        with pytest.raises(ValueError):
+            runner.set_control(target, value)

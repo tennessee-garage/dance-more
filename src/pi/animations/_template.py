@@ -25,7 +25,11 @@ from df2_pi.pixels import PixelFrame, TileFrame
     tags=["mine"],
     params={
         # Each Param becomes a control in the web UI and `--param name=value`.
-        "speed": Param(float, default=1.0, min=0.1, max=5.0, label="Speed"),
+        # External controls (MIDI, DMX, OSC) reach a param by its role - a
+        # param named after one (speed, intensity, density, scale, hue,
+        # variation) has it; others can declare role="density" etc. - or by
+        # macro=1..4. curve="log" suits ranges that span decades.
+        "speed": Param(float, default=1.0, min=0.1, max=5.0, label="Speed", macro=1),
     },
     # period=4.0,          # optional: the loop length in seconds, if it has one
     # effect=Effect(...),  # optional: a tile effect written on the first frame

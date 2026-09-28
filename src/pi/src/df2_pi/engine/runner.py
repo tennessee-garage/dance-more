@@ -80,7 +80,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, TypeVar
 
 from df2_pi.animation.loader import AnimationDef, AnimationError, AnimationRun
-from df2_pi.animation.meta import AnimationMeta
+from df2_pi.animation.meta import AnimationMeta, check_control_target
 from df2_pi.animation.registry import AnimationRegistry
 from df2_pi.effects import Effect
 from df2_pi.engine.clock import FrameClock, FrameInfo, TelemetrySnapshot
@@ -299,8 +299,20 @@ class Runner:
         self._enqueue(lambda: self._do_play_animation(definition, resolved, hold))
 
     def set_params(self, **params: Any) -> None:
-        """Live-tune the running animation - what a MIDI knob binds to."""
+        """Live-tune the running animation by param name."""
         self._enqueue(lambda: self._do_set_params(params))
+
+    def set_control(self, target: str, unit: float) -> None:
+        """What a MIDI knob, DMX channel or OSC fader binds to: `target` is
+        a role ("speed") or a macro ("macro1"), `unit` a 0..1 value. Resolved
+        against whatever is playing at the next frame boundary and mapped by
+        that param's `from_unit()`; an animation with nothing at `target`
+        ignores it. Lands in the live layer, like `set_params()`."""
+        check_control_target(target)  # validate on the caller's thread
+        unit = float(unit)
+        if not math.isfinite(unit):
+            raise ValueError(f"control value must be finite, got {unit}")
+        self._enqueue(lambda: self._do_set_control(target, unit))
 
     def set_brightness(self, value: int) -> None:
         if not 0 <= value <= 255:
@@ -819,6 +831,16 @@ class Runner:
             playing.run.set_params(merged)
         except ValueError as exc:
             log.warning("set_params rejected: %s", exc)
+
+    def _do_set_control(self, target: str, unit: float) -> None:
+        playing = self._one_off or self._current
+        if playing is None:
+            return
+        meta = playing.definition.meta
+        key = meta.control(target)
+        if key is None:
+            return
+        self._do_set_params({key: meta.params[key].from_unit(unit)})
 
     def _do_brightness(self, value: int) -> None:
         self._brightness = value

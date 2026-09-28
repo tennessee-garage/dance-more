@@ -21,7 +21,7 @@ from df2_pi.pixels import TileFrame
     tags=["ambient", "colour"],
     params={
         "speed": Param(float, default=1.0, min=0.1, max=5.0, label="Speed"),
-        "saturation": Param(float, default=1.0, min=0.0, max=1.0, label="Saturation"),
+        "saturation": Param(float, default=1.0, min=0.0, max=1.0, label="Saturation", macro=1),
     },
     period=5.0,  # one full hue cycle at speed 1.0
     preview_hint="loop",

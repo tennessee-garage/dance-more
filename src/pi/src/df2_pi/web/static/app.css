@@ -520,6 +520,17 @@ button.play { flex: none; padding: 6px 14px; }
   gap: 6px;
 }
 
+/* Which macro an external control reaches this param as. */
+.param .macro {
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
 button.reset {
   padding: 0 6px;
   font-size: 13px;

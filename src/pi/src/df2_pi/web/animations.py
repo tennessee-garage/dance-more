@@ -40,6 +40,9 @@ class ParamSpec(BaseModel):
     choices: list[Any] | None = None
     label: str | None = None
     help: str | None = None
+    role: str | None = Field(description="The role an external control reaches this param by, if any.")
+    macro: int | None = Field(description="The macro number (1-4) an external control reaches this param by, if any.")
+    curve: str = Field(description='"linear" or "log": how a 0..1 control maps onto min..max.')
 
 
 class LoadErrorInfo(BaseModel):
@@ -56,6 +59,8 @@ class AnimationInfo(BaseModel):
     format: str = Field(description='"tile" or "pixel".')
     tags: list[str]
     period: float | None = Field(description="Seconds; advisory, never read by the runner.")
+    sync: str | None = Field(description='"beat" when the animation follows the tempo, else null.')
+    triggers: bool = Field(description="Whether the animation reacts to triggers.")
     params: dict[str, ParamSpec]
     extra: dict[str, Any] = Field(description="Every @animation keyword the decorator did not recognise, verbatim.")
     path: str = Field(description="Relative to the animations directory.")
@@ -117,6 +122,8 @@ def animations_router(ctx: AppContext) -> APIRouter:
             format=meta.format,
             tags=list(meta.tags),
             period=meta.period,
+            sync=meta.sync,
+            triggers=meta.triggers,
             params={
                 key: ParamSpec(
                     type=spec.type.__name__,
@@ -126,6 +133,9 @@ def animations_router(ctx: AppContext) -> APIRouter:
                     choices=None if spec.choices is None else [_jsonable(c) for c in spec.choices],
                     label=spec.label,
                     help=spec.help,
+                    role=next((role for role, name in meta.roles.items() if name == key), None),
+                    macro=spec.macro,
+                    curve=spec.curve,
                 )
                 for key, spec in meta.params.items()
             },
