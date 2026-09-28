@@ -14,6 +14,7 @@
 
     df2-pi animations                         # what the registry found, and what failed
     df2-pi playlists [list|show|create|add|move|remove|set-startup|delete]
+    df2-pi leds > leds.csv                    # every LED's position and raw-mode Art-Net address
     df2-pi ledwalk --row 0 --slot 0           # one LED at a time: verify LED 0 and the winding
     df2-pi tilewalk                           # one tile at a time: verify the install wiring
 
@@ -327,7 +328,12 @@ def build_app(args: argparse.Namespace):
         rotation=args.rotation,
         strobe_max_hz=store.get_strobe_max_hz(),
     )
-    return create_app(AppContext(registry, store, fanout, runner, preview))
+    external = None
+    if not args.no_external:
+        from .interfacing.service import ExternalInput
+
+        external = ExternalInput(runner, registry, store)  # sockets open when the app starts
+    return create_app(AppContext(registry, store, fanout, runner, preview, external))
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
@@ -344,6 +350,14 @@ def _playlist_key(text: str) -> int | str:
 
 
 # ---- animations and playlists -----------------------------------------------------------------
+
+
+def _cmd_leds(args: argparse.Namespace) -> int:
+    from .interfacing.leds import led_csv
+    from .pixels import default_geometry
+
+    sys.stdout.write(led_csv(default_geometry()))
+    return 0
 
 
 def _cmd_animations(args: argparse.Namespace) -> int:
@@ -619,6 +633,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="global brightness; default: the stored brightness setting (255 until one is set)",
     )
     _add_rotation_flag(serve)
+    serve.add_argument("--no-external", action="store_true", help="do not listen for Art-Net / sACN")
     # build_sinks() reads these; a window needs the main thread, which uvicorn owns.
     serve.set_defaults(func=_cmd_serve, window=False, record=None, frames=None)
 
@@ -680,6 +695,8 @@ def build_parser() -> argparse.ArgumentParser:
     version.set_defaults(func=_cmd_version)
     blackout = sub.add_parser("blackout", help="black out the whole floor")
     blackout.set_defaults(func=_cmd_blackout)
+    leds = sub.add_parser("leds", help="every LED's position and raw-mode Art-Net address, as CSV")
+    leds.set_defaults(func=_cmd_leds)
 
     return parser
 

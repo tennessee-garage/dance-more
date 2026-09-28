@@ -50,6 +50,11 @@ src/df2_pi/
                 GIF / mp4 / .df2rec export; all draw origin bottom-left
   cli.py        Command-line entry point (`df2-pi`): play, serve, animations,
                 playlists, ledwalk, tilewalk, and the Row Bus admin commands
+  interfacing/  Other programs driving the floor: Art-Net / sACN packets
+                (packets.py), the UDP receiver and frame assembly
+                (receiver.py), decoding and the External animation and
+                source control (external.py), their stored settings
+                (service.py), and the LED position table (leds.py)
   web/          The admin UI (`df2-pi serve`): FastAPI over the runner -
                 transport and state, animations, the preview WebSocket - and
                 static/, the page (Preact + htm + signals, vendored, no build)
@@ -137,7 +142,11 @@ bottom, as you see it standing at the rack.
 ```bash
 df2-pi serve                          # the floor, plus the page on :8000
 df2-pi serve --no-hardware --terminal # the whole UI on a laptop, no floor
+df2-pi serve --no-external            # without listening for Art-Net / sACN
 ```
+
+`serve` listens for Art-Net (UDP 6454) and sACN (UDP 5568) from a media server;
+see [docs/external-input.md](../../docs/external-input.md).
 
 Open `http://<pi>:8000/`: the transport bar, the floor as it is right now,
 and tabs for animations (and, to come, playlists and diagnostics). The
