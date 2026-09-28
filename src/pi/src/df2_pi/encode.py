@@ -113,6 +113,11 @@ class EncodeStats:
     def total_bytes(self) -> int:
         return sum(self.row_bytes)
 
+    def row_seconds(self, baudrate: int = DEFAULT_BAUDRATE) -> tuple[float, ...]:
+        """Each row's SEND_DATA on the wire: 10 bits per byte plus the
+        8-byte frame overhead. An estimate, not a measurement."""
+        return tuple((FRAME_OVERHEAD + n) * 10 / baudrate for n in self.row_bytes)
+
     def wire_seconds(self, chains: int = 2, baudrate: int = DEFAULT_BAUDRATE) -> float:
         """Estimated Row Bus phase for this frame: rows dealt round-robin
         over `chains` driven concurrently (the floor's alternating

@@ -46,52 +46,96 @@ def _majority(values) -> FirmwareVersion | None:
     return counts.most_common(1)[0][0] if counts else None
 
 
-def format_version_report(row_reports: dict[int, RowVersionReport | None]) -> tuple[str, bool]:
-    """Render a table and report whether the floor is consistent.
+# A slot's STATUS byte (docs/row-bus-protocol.md, STATUS_RESP tile_status)
+# names what a missing version means. Without it, a missing version is only
+# "no version": VERSION's tiles_valid bit is clear both for an empty slot and
+# for a tile that was found but never answered.
+SLOT_STATES = {0x00: "empty", 0x01: "no version", 0x02: "not responding", 0x03: "test failed"}
 
-    A row or tile is flagged if it didn't respond, was built dirty, or its
-    version differs from whatever most of the floor is running - there's no
-    notion of an "expected" version, only "is everything in step".
-    """
+
+@dataclass(frozen=True)
+class TileVersion:
+    slot: int
+    version: FirmwareVersion | None  # None: the row has no version cached for it
+    out_of_step: bool
+    state: str = "ok"  # "ok" with a version; else a SLOT_STATES value
+
+
+@dataclass(frozen=True)
+class RowVersion:
+    row: int
+    version: FirmwareVersion | None  # None: the row did not respond
+    out_of_step: bool
+    tiles: tuple[TileVersion, ...]
+
+
+@dataclass(frozen=True)
+class VersionAssessment:
+    rows: tuple[RowVersion, ...]
+    ok: bool
+    row_majority: FirmwareVersion | None  # what the rows are compared against
+    tile_majority: FirmwareVersion | None  # and the tiles
+
+
+def assess_versions(
+    row_reports: dict[int, RowVersionReport | None],
+    slot_status: dict[int, tuple[int, ...]] | None = None,
+) -> VersionAssessment:
+    """Flag every row and tile that is out of step: not responding, built
+    dirty, missing a version, or differing from what most of the floor
+    runs. There is no notion of an "expected" version, only "is everything
+    in step" - the majority is what everything is compared against.
+
+    `slot_status` (row -> STATUS tile_status bytes) says what a missing
+    tile version means; an EMPTY slot is not out of step. Without it every
+    missing version counts against the floor."""
     row_majority = _majority(r.row for r in row_reports.values() if r is not None)
     tile_majority = _majority(
         t for r in row_reports.values() if r is not None for t in r.tiles if t is not None
     )
-
-    lines = []
-    ok = True
+    rows = []
     for row in sorted(row_reports):
         report = row_reports[row]
         if report is None:
-            lines.append(f"row {row}  NOT RESPONDING")
-            ok = False
+            rows.append(RowVersion(row, None, True, ()))
             continue
-
-        row_bad = report.row.dirty or report.row != row_majority
-        ok = ok and not row_bad
-        row_text = format_version(report.row) + (" *" if row_bad else "")
-
-        tile_lines = []
+        statuses = (slot_status or {}).get(row)
+        tiles = []
         for slot, tile in enumerate(report.tiles):
-            if tile is None:
-                tile_lines.append(f"slot {slot}: no version")
-                ok = False
-            elif tile.dirty or tile != tile_majority:
-                tile_lines.append(f"slot {slot}: {format_version(tile)} *")
-                ok = False
+            if tile is not None:
+                tiles.append(TileVersion(slot, tile, tile.dirty or tile != tile_majority))
+                continue
+            state = "no version" if statuses is None else SLOT_STATES.get(statuses[slot], "no version")
+            tiles.append(TileVersion(slot, None, state != "empty", state))
+        tiles = tuple(tiles)
+        rows.append(RowVersion(row, report.row, report.row.dirty or report.row != row_majority, tiles))
+    ok = all(not r.out_of_step and not any(t.out_of_step for t in r.tiles) for r in rows)
+    return VersionAssessment(tuple(rows), ok, row_majority, tile_majority)
 
-        present = [t for t in report.tiles if t is not None]
+
+def format_version_report(row_reports: dict[int, RowVersionReport | None]) -> tuple[str, bool]:
+    """Render `assess_versions` as a table, and whether the floor is consistent."""
+    assessment = assess_versions(row_reports)
+    lines = []
+    for row in assessment.rows:
+        if row.version is None:
+            lines.append(f"row {row.row}  NOT RESPONDING")
+            continue
+        row_text = format_version(row.version) + (" *" if row.out_of_step else "")
+        tile_lines = [
+            f"slot {t.slot}: {t.state}" if t.version is None else f"slot {t.slot}: {format_version(t.version)} *"
+            for t in row.tiles
+            if t.out_of_step
+        ]
+        present = [t.version for t in row.tiles if t.version is not None]
         if tile_lines:
             tile_text = "; ".join(tile_lines)
         elif present:
             tile_text = f"all {format_version(present[0])}"
         else:
             tile_text = "(no tiles)"
+        lines.append(f"row {row.row}  {row_text}  tiles {len(present)}/{NUM_TILE_SLOTS}  {tile_text}")
 
-        lines.append(
-            f"row {row}  {row_text}  tiles {len(present)}/{NUM_TILE_SLOTS}  {tile_text}"
-        )
-
-    if not ok:
+    if not assessment.ok:
         lines.append("* mismatch, dirty build, missing version, or non-responding")
-    return "\n".join(lines), ok
+    return "\n".join(lines), assessment.ok

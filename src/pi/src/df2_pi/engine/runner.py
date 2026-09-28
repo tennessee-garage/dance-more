@@ -55,9 +55,10 @@ import random
 import signal
 import threading
 import traceback
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping, TypeVar
 
 from df2_pi.animation.loader import AnimationDef, AnimationError, AnimationRun
 from df2_pi.animation.meta import AnimationMeta
@@ -72,6 +73,8 @@ if TYPE_CHECKING:
     from df2_pi.output.fanout import FanOut
 
 log = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 MAX_STRIKES = 3
 EPSILON = 1e-6  # for "duration elapsed" tests; t accumulates float error
@@ -257,6 +260,26 @@ class Runner:
     def stop(self) -> None:
         """Clean shutdown: blackout, a final latch, close the fan-out."""
         self._enqueue(self._do_stop)
+
+    def call(self, fn: Callable[[], T]) -> Future[T]:
+        """Run `fn` on the render thread at the next frame boundary - after
+        a latch, before the next frame goes on the wire - and return a
+        future for its result or exception. For work that must not overlap
+        a frame on the Row Bus: an admin request that waits for a row's
+        reply. It spends that frame's slack, so keep each call to one
+        request; a long one makes the clock drop frames."""
+        future: Future[T] = Future()
+
+        def run() -> None:
+            if not future.set_running_or_notify_cancel():
+                return
+            try:
+                future.set_result(fn())
+            except BaseException as exc:
+                future.set_exception(exc)
+
+        self._enqueue(run)
+        return future
 
     @property
     def state(self) -> RunnerState:

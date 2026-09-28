@@ -1,10 +1,10 @@
 // The page shell: transport bar (top), preview (left), tabs (right).
-// Later issues fill the remaining tabs.
 
 import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { AnimationsPanel } from "./animations.js";
+import { DiagnosticsPanel } from "./diagnostics.js";
 import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls } from "./params.js";
@@ -256,11 +256,11 @@ function Preview() {
     </section>`;
 }
 
-// [id, label, panel component or null while the tab is still empty]
+// [id, label, panel component]
 const TABS = [
   ["playlists", "Playlists", PlaylistsPanel],
   ["animations", "Animations", AnimationsPanel],
-  ["diagnostics", "Diagnostics", null],
+  ["diagnostics", "Diagnostics", DiagnosticsPanel],
 ];
 const activeTab = signal(TABS[0][0]);
 

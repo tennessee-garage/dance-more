@@ -66,6 +66,27 @@ class HardwareSink:
     def healthy(self) -> bool:
         return self.consecutive_failures < self.max_failures
 
+    @property
+    def encode_stats(self) -> dict:
+        """The last frame's Row Bus load, for the admin page: bytes and
+        estimated wire ms per row, summed per chain (chains are driven
+        concurrently, so the slowest chain is the Row Bus phase), and how
+        many entries of each kind the encoder wrote."""
+        stats = self.encoder.stats
+        row_ms = [s * 1000.0 for s in stats.row_seconds()]
+        chains: dict = {}
+        for row, ms in enumerate(row_ms):
+            chains.setdefault(self.floor.chain_map.chain_for(row), []).append(row)
+        chain_ms = {chain: sum(row_ms[r] for r in rows) for chain, rows in chains.items()}
+        return {
+            "row_bytes": list(stats.row_bytes),
+            "row_wire_ms": row_ms,
+            "chains": [{"chain": int(c), "rows": chains[c], "wire_ms": chain_ms[c]} for c in sorted(chains, key=int)],
+            "wire_ms": max(chain_ms.values(), default=0.0),
+            "total_bytes": stats.total_bytes,
+            "entries": {str(k): v for k, v in stats.entries.items()},
+        }
+
     # ---- the Sink protocol -------------------------------------------------------------
 
     def submit(self, frame: Frame, info: FrameInfo, effects: Mapping[int, Effect] | None = None) -> None:

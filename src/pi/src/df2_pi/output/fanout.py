@@ -147,6 +147,8 @@ class FanOut:
                 "degraded",
                 "muted",
                 "subscriber_count",
+                "last_error",
+                "encode_stats",
             ):
                 value = getattr(sink, attr, None)
                 if value is not None:
