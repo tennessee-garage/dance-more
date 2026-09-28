@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from df2_pi.web.animations import animations_router
+from df2_pi.web.floor import floor_router
 from df2_pi.web.playlists import playlists_router
 from df2_pi.web.preview import preview_router
 from df2_pi.web.transport import mark_percentiles_nullable, transport_router
@@ -110,6 +111,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     app.include_router(transport_router(ctx))
     app.include_router(animations_router(ctx))
     app.include_router(playlists_router(ctx))
+    app.include_router(floor_router(ctx))
     app.include_router(preview_router(ctx))
 
     default_openapi = app.openapi
