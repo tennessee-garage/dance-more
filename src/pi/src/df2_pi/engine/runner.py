@@ -39,6 +39,15 @@ failures disable that entry for the session and flag it in the state.
 An overrun is not an error - the clock drops the frame and counts it -
 but persistent dropping shows up in `state.warnings`.
 
+Show controls. Speed, freeze, bump, strobe, tint and colour correction
+(`overlays.py`) act on whatever is playing, for an operator who does not
+know what that is. All but speed transform the output frame, after any
+crossfade and before the rotation. Speed scales the time an animation
+sees: each playing animation integrates its own clock, `ctx.t` advancing
+by the wall step times the speed, and `ctx.dt` scaled to match, so a
+speed change never makes an animation jump. Entry durations stay on the
+wall clock.
+
 Rotation. The floor-rotation setting turns the picture in 90-degree
 steps so the canonical "up" can face whichever way the venue needs. It is
 the last thing done to a frame before the fan-out - after crossfades, on
@@ -75,6 +84,14 @@ from df2_pi.animation.meta import AnimationMeta
 from df2_pi.animation.registry import AnimationRegistry
 from df2_pi.effects import Effect
 from df2_pi.engine.clock import FrameClock, FrameInfo, TelemetrySnapshot
+from df2_pi.engine.overlays import (
+    DECAY_MAX_S,
+    SATURATION_MAX,
+    SPEED_MAX,
+    Overlays,
+    ShowState,
+    check_strobe_max,
+)
 from df2_pi.geometry import ROTATIONS, FloorGeometry, quarter_turns
 from df2_pi.pixels import Frame, PixelFrame, TileFrame, blend, default_geometry
 from df2_pi.playlists.store import PlaylistStore, ResolvedEntry, ResolvedPlaylist
@@ -140,6 +157,7 @@ class RunnerState:
     # its index (a position in the runner's loaded copy) is not.
     entry_id: int | None = None
     rotation: int = 0  # degrees clockwise: 0, 90, 180 or 270
+    show: ShowState = ShowState()
 
 
 @dataclass
@@ -152,6 +170,23 @@ class _Playing:
     duration_s: float | None  # None: until told otherwise
     entry: ResolvedEntry | None = None
     effects_written: set[int] = field(default_factory=set)
+    # The animation's own clock: advances by the wall step times the show speed.
+    anim_t: float = 0.0
+    last_t: float | None = None
+
+    def advance(self, t: float, speed: float) -> float:
+        """The animation time for a frame shown at wall time `t`."""
+        if self.last_t is None:
+            self.anim_t = self.elapsed(t)
+        else:
+            self.anim_t += (t - self.last_t) * speed
+        self.last_t = t
+        return self.anim_t
+
+    def restart_clock(self, t: float) -> None:
+        self.started_t = t
+        self.anim_t = 0.0
+        self.last_t = None
 
     def elapsed(self, t: float) -> float:
         return t - self.started_t
@@ -175,6 +210,7 @@ class Runner:
         fps: float = 30.0,
         brightness: int = 255,
         rotation: int = 0,
+        strobe_max_hz: float = 10.0,
         seed: int | None = None,
     ) -> None:
         self.registry = registry
@@ -200,6 +236,7 @@ class Runner:
         self._blacked_out = False
         self._brightness = brightness
         self._quarter_turns = quarter_turns(rotation)
+        self.overlays = Overlays(strobe_max_hz)
         # Canonical tile -> the effect last written there (NONE is absence),
         # and physical writes owed by a rotation change, sent with the next frame.
         self._registers: dict[int, Effect] = {}
@@ -276,6 +313,55 @@ class Runner:
         turns = quarter_turns(degrees)  # validate on the caller's thread
         self._enqueue(lambda: self._do_rotation(turns))
 
+    # ---- show controls: see overlays.py ----
+
+    def set_speed(self, speed: float) -> None:
+        """Scale the time animations see, 0..4; 1 is as written."""
+        speed = _checked(speed, 0.0, SPEED_MAX, "speed")
+        self._enqueue(lambda: self.overlays.set_speed(speed))
+
+    def freeze(self, on: bool = True) -> None:
+        """Hold the picture; animations keep running underneath."""
+        on = bool(on)
+        self._enqueue(lambda: self.overlays.set_freeze(on))
+
+    def bump(self, level: float = 1.0, decay_s: float = 0.25) -> None:
+        """A flash toward white by `level`, fading over `decay_s`."""
+        level = _checked(level, 0.0, 1.0, "bump level")
+        decay_s = _checked(decay_s, 0.01, DECAY_MAX_S, "bump decay")
+        self._enqueue(lambda: self.overlays.bump(level, decay_s, self._last_t))
+
+    def set_strobe(self, rate_hz: float) -> None:
+        """Shutter the picture at `rate_hz`; 0 is off. Held to the strobe
+        cap, however high it is asked for."""
+        rate_hz = _checked(rate_hz, 0.0, math.inf, "strobe rate")
+        self._enqueue(lambda: self.overlays.set_strobe(rate_hz, self._last_t))
+
+    def set_strobe_max(self, hz: float) -> None:
+        """The strobe cap - an admin setting, not a live control."""
+        hz = check_strobe_max(hz)
+        self._enqueue(lambda: self.overlays.set_strobe_max(hz))
+
+    def set_tint(self, r: int, g: int, b: int, amount: float) -> None:
+        """Colourise toward (r, g, b) by `amount`, 0..1; black stays black."""
+        rgb = tuple(int(_checked(v, 0, 255, "tint channel")) for v in (r, g, b))
+        amount = _checked(amount, 0.0, 1.0, "tint amount")
+        self._enqueue(lambda: self.overlays.set_tint(rgb, amount))
+
+    def set_hue_shift(self, turns: float) -> None:
+        """Rotate every hue by `turns` (1.0 is all the way round)."""
+        turns = _checked(turns, -math.inf, math.inf, "hue shift")
+        self._enqueue(lambda: self.overlays.set_hue_shift(turns))
+
+    def set_saturation(self, k: float) -> None:
+        """Scale saturation, 0 (grey) .. 2; 1 is unchanged."""
+        k = _checked(k, 0.0, SATURATION_MAX, "saturation")
+        self._enqueue(lambda: self.overlays.set_saturation(k))
+
+    def reset_show(self) -> None:
+        """Every show control back to where it does nothing."""
+        self._enqueue(self.overlays.reset)
+
     def blackout(self) -> None:
         """Broadcast blackout; playback continues underneath."""
         self._enqueue(lambda: self._do_blackout(True))
@@ -324,7 +410,9 @@ class Runner:
                 if self._stopping:
                     self.clock.stop()
                     break
-                frame, effects = self._orient(*self._produce(tick))
+                frame, effects = self._produce(tick)
+                frame = self._show(frame, tick.t)
+                frame, effects = self._orient(frame, effects)
                 self._state = self._snapshot(tick)
                 self.fanout.submit(frame, tick, effects)
                 self.clock.mark("submit")
@@ -399,6 +487,12 @@ class Runner:
         self._held = frame
         return frame, effects
 
+    def _show(self, frame: Frame, t: float) -> Frame:
+        shown = self.overlays.apply(frame, t)
+        if shown is not frame:
+            self.clock.mark("overlays")
+        return shown
+
     def _orient(self, frame: Frame, effects: dict[int, Effect]) -> tuple[Frame, dict[int, Effect]]:
         """Canonical -> floor: apply the rotation to this frame and its
         effect writes, plus any writes a rotation change is owed."""
@@ -431,8 +525,9 @@ class Runner:
     def _render(self, playing: _Playing, t: float, effects: dict[int, Effect]) -> Frame | None:
         """Render one animation for this tick; None if it raised (and the
         failure has been handled)."""
+        speed = self.overlays.speed
         try:
-            rendered = playing.run.render(t=playing.elapsed(t))
+            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed)
         except AnimationError as exc:
             self._failed(playing, exc)
             return None
@@ -627,6 +722,8 @@ class Runner:
         for playing in (self._current, self._outgoing, self._one_off):
             if playing is not None:
                 playing.started_t += gap
+                if playing.last_t is not None:
+                    playing.last_t += gap
 
     def _do_skip(self, direction: int) -> None:
         if self._one_off is not None:
@@ -661,7 +758,7 @@ class Runner:
             return
         params = playing.run.params
         playing.run = playing.definition.start(self.geometry, params, fps=self.fps, seed=self._rng.getrandbits(32))
-        playing.started_t = self._last_t
+        playing.restart_clock(self._last_t)
 
     def _do_load(self, playlist: ResolvedPlaylist | None) -> None:
         self._outgoing = None
@@ -709,7 +806,7 @@ class Runner:
         if current is None:
             return
         current.run = current.definition.start(self.geometry, current.run.params, fps=self.fps, seed=self._rng.getrandbits(32))
-        current.started_t = self._last_t
+        current.restart_clock(self._last_t)
         current.effects_written.clear()
 
     def _do_set_params(self, params: dict[str, Any]) -> None:
@@ -806,4 +903,20 @@ class Runner:
             one_off=self._one_off is not None,
             entry_id=entry_id,
             rotation=ROTATIONS[self._quarter_turns],
+            show=self.overlays.state(),
         )
+
+
+def _checked(value: float, low: float, high: float, what: str) -> float:
+    """`value` as a float if it is a finite number in low..high (bounds
+    may be infinite); ValueError otherwise. Validates on the caller's
+    thread, so a bad value never reaches the control queue."""
+    if isinstance(value, bool):
+        raise ValueError(f"{what} must be a number, got {value!r}")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} must be a number, got {value!r}") from None
+    if math.isnan(number) or not low <= number <= high or math.isinf(number):
+        raise ValueError(f"{what} must be in {low}..{high}, got {value!r}")
+    return number

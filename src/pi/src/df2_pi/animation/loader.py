@@ -141,14 +141,16 @@ class AnimationRun:
     def set_params(self, params: Mapping[str, Any]) -> None:
         self.params = self.definition.meta.resolve_params(params)
 
-    def render(self, t: float | None = None, beat: BeatInfo | None = None) -> Rendered:
-        """Render the next frame. Raises `AnimationError` if the animation
-        returns the wrong format, hands back `previous`, or raises."""
+    def render(self, t: float | None = None, beat: BeatInfo | None = None, dt: float | None = None) -> Rendered:
+        """Render the next frame. `dt` defaults to one frame period; the
+        runner passes a scaled one when the show speed is not 1. Raises
+        `AnimationError` if the animation returns the wrong format, hands
+        back `previous`, or raises."""
         definition = self.definition
         ctx = FrameContext(
             frame=self.frame,
             t=self.frame * self.dt if t is None else float(t),
-            dt=self.dt,
+            dt=self.dt if dt is None else float(dt),
             fps=self.fps,
             params=self.params,
             geometry=self.geometry,
