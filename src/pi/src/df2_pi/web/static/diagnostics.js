@@ -146,17 +146,26 @@ function uptime(seconds) {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function volts(mV) {
+  return mV == null ? DASH : `${(mV / 1000).toFixed(2)} V`;
+}
+
+function amps(mA) {
+  return mA == null ? DASH : `${(mA / 1000).toFixed(2)} A`;
+}
+
 function StatusTable({ rows }) {
   return html`
     <table class="diag-table num">
-      <thead><tr><th>row</th><th>chain</th><th>state</th><th>tiles</th><th>uptime</th></tr></thead>
+      <thead><tr><th>row</th><th>chain</th><th>state</th><th>tiles</th><th>uptime</th><th>voltage</th><th>current</th></tr></thead>
       <tbody>
         ${rows.map((r) => html`
           <tr class=${!r.responding ? "bad" : r.state !== "running" ? "warn" : ""}>
             <th>${r.row}</th><td>${r.chain}</td>
             ${r.responding
-              ? html`<td>${r.state ?? DASH}</td><td>${r.tiles_found ?? DASH}</td><td>${uptime(r.uptime_s)}</td>`
-              : html`<td colspan="3">not responding</td>`}
+              ? html`<td>${r.state ?? DASH}</td><td>${r.tiles_found ?? DASH}</td><td>${uptime(r.uptime_s)}</td>
+                     <td>${volts(r.voltage_mV)}</td><td>${amps(r.current_mA)}</td>`
+              : html`<td colspan="5">not responding</td>`}
           </tr>`)}
       </tbody>
     </table>`;

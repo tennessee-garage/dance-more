@@ -1,4 +1,5 @@
-"""A row controller's STATUS reply, decoded (docs/row-bus-protocol.md).
+"""A row controller's STATUS and POWER replies, decoded
+(docs/row-bus-protocol.md).
 
 Shared by `df2-pi status` and the admin page's floor status.
 """
@@ -40,3 +41,19 @@ class RowStatus:
         h, rem = divmod(self.uptime_s, 3600)
         m, s = divmod(rem, 60)
         return f"{h}h{m:02d}m{s:02d}s"
+
+
+@dataclass(frozen=True)
+class RowPower:
+    """A POWER reply: the row's 12 V rail as its power monitor measures it."""
+
+    voltage_mV: int
+    current_mA: int
+    power_mW: int
+
+    @classmethod
+    def decode(cls, payload: bytes) -> RowPower:
+        if len(payload) < 6:
+            raise ValueError(f"POWER_RESP payload too short: {len(payload)} bytes")
+        p = payload
+        return cls((p[0] << 8) | p[1], (p[2] << 8) | p[3], (p[4] << 8) | p[5])

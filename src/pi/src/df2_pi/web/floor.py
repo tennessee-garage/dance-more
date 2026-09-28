@@ -1,6 +1,6 @@
 """The floor's own view of itself: Row Bus admin requests, for diagnostics.
 
-    GET  /api/floor/status     STATUS from every row: state, tiles found, uptime
+    GET  /api/floor/status     STATUS and POWER from every row: state, tiles found, uptime, 12 V rail
     GET  /api/floor/version    VERSION (and STATUS) from every row, with what is out of step
     POST /api/floor/blackout   the BLACKOUT broadcast itself
 
@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from df2_pi.protocol.constants import Cmd
 from df2_pi.protocol.firmware_version import FirmwareVersion, format_version
-from df2_pi.row_status import RowStatus
+from df2_pi.row_status import RowPower, RowStatus
 from df2_pi.version_report import RowVersionReport, assess_versions
 
 if TYPE_CHECKING:
@@ -43,6 +43,9 @@ class RowStatusInfo(BaseModel):
     tiles_found: int | None = None
     tile_status: list[int] | None = Field(default=None, description="One status byte per tile slot.")
     uptime_s: int | None = Field(default=None, description="Null for firmware that predates the field.")
+    voltage_mV: int | None = Field(default=None, description="The row's 12 V rail, from its power monitor. Null if POWER went unanswered.")
+    current_mA: int | None = Field(default=None, description="The row's draw from that rail.")
+    power_mW: int | None = None
     error: str | None = None
 
 
@@ -121,7 +124,8 @@ def floor_router(ctx: AppContext) -> APIRouter:
 
     @router.get("/status", response_model=FloorStatus)
     async def status() -> FloorStatus:
-        """STATUS from every row, one row per frame boundary."""
+        """STATUS and POWER from every row that answers, one request per
+        frame boundary."""
         floor = the_floor()
         rows = []
         for row, chain in floor.chain_map.items():
@@ -134,6 +138,13 @@ def floor_router(ctx: AppContext) -> APIRouter:
             except ValueError as exc:
                 rows.append(RowStatusInfo(row=row, chain=chain, responding=True, error=str(exc)))
                 continue
+            power = None
+            reply = await ask(floor, row, Cmd.POWER)
+            if not isinstance(reply, Exception):
+                try:
+                    power = RowPower.decode(reply.payload)
+                except ValueError:
+                    pass  # shown as unknown, like an unanswered POWER
             rows.append(
                 RowStatusInfo(
                     row=row,
@@ -143,6 +154,9 @@ def floor_router(ctx: AppContext) -> APIRouter:
                     tiles_found=s.tiles_found,
                     tile_status=list(s.tile_status),
                     uptime_s=s.uptime_s,
+                    voltage_mV=power.voltage_mV if power else None,
+                    current_mA=power.current_mA if power else None,
+                    power_mW=power.power_mW if power else None,
                 )
             )
         return FloorStatus(rows=rows)
