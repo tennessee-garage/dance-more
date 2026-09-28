@@ -23,9 +23,9 @@ from df2_pi.pixels import PixelFrame
     format="pixel",
     tags=["edges", "rhythm"],
     params={
-        "comets": Param(int, default=3, min=1, max=12, label="Comets"),
-        "speed": Param(float, default=120.0, min=10.0, max=480.0, label="LEDs per second"),
-        "tail": Param(int, default=40, min=2, max=200, label="Tail length"),
+        "comets": Param(int, default=3, min=1, max=12, label="Comets", role="density"),
+        "speed": Param(float, default=120.0, min=10.0, max=480.0, label="LEDs per second", curve="log"),
+        "tail": Param(int, default=40, min=2, max=200, label="Tail length", macro=1),
     },
     period=4.0,  # one lap at the default speed: 480 / 120
 )

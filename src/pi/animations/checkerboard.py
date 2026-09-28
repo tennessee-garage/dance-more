@@ -21,8 +21,8 @@ from df2_pi.pixels import TileFrame
     format="tile",
     tags=["basic", "rhythm"],
     params={
-        "interval": Param(float, default=0.5, min=0.1, max=4.0, label="Seconds per flip"),
-        "drift": Param(float, default=0.05, min=0.0, max=0.5, label="Hue drift per flip"),
+        "interval": Param(float, default=0.5, min=0.1, max=4.0, label="Seconds per flip", curve="log", macro=1),
+        "drift": Param(float, default=0.05, min=0.0, max=0.5, label="Hue drift per flip", role="variation"),
     },
 )
 def render(previous: TileFrame, ctx) -> TileFrame:

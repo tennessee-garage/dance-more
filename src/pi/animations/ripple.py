@@ -25,10 +25,10 @@ from df2_pi.pixels import PixelFrame
     format="pixel",
     tags=["ambient", "geometric"],
     params={
-        "rate": Param(float, default=1.5, min=0.1, max=10.0, label="Drops per second"),
+        "rate": Param(float, default=1.5, min=0.1, max=10.0, label="Drops per second", role="density", curve="log"),
         "speed": Param(float, default=40.0, min=5.0, max=150.0, label="Ring speed (cells/s)"),
-        "width": Param(float, default=4.0, min=1.0, max=20.0, label="Ring width (cells)"),
-        "decay": Param(float, default=0.85, min=0.5, max=0.98, label="Trail persistence"),
+        "width": Param(float, default=4.0, min=1.0, max=20.0, label="Ring width (cells)", role="scale"),
+        "decay": Param(float, default=0.85, min=0.5, max=0.98, label="Trail persistence", macro=1),
     },
 )
 def render(previous: PixelFrame, ctx) -> PixelFrame:

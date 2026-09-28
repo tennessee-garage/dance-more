@@ -77,6 +77,12 @@ def test_params_are_honoured(registry):
     assert int(frame.data.any(axis=-1).sum()) == 5
 
 
+@pytest.mark.parametrize("animation_id", sorted(PACK))
+def test_each_puts_a_param_under_macro_1(registry, animation_id):
+    """So a knob bound to macro 1 does something whatever is playing."""
+    assert registry[animation_id].meta.control("macro1") is not None
+
+
 def test_seams_light_both_halves_of_every_seam_identically(registry):
     geo = default_geometry()
     frame = registry["seams"].start(params={"base": 20}).render().frame

@@ -19,7 +19,7 @@ from df2_pi.pixels import TileFrame
     tags=["basic"],
     params={
         # Params become sliders in the web UI and `--param hue=0.3` on the command line.
-        "hue": Param(float, default=0.6, min=0.0, max=1.0, label="Hue", help="0 red, 0.33 green, 0.66 blue"),
+        "hue": Param(float, default=0.6, min=0.0, max=1.0, label="Hue", help="0 red, 0.33 green, 0.66 blue", macro=1),
     },
 )
 def render(previous: TileFrame, ctx) -> TileFrame:

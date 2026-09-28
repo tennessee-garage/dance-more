@@ -24,7 +24,7 @@ from df2_pi.pixels import PixelFrame
     tags=["ambient", "image"],
     params={
         "speed": Param(float, default=1.0, min=0.1, max=4.0, label="Speed"),
-        "scale": Param(float, default=1.0, min=0.3, max=3.0, label="Scale", help="bigger is blobbier"),
+        "scale": Param(float, default=1.0, min=0.3, max=3.0, label="Scale", help="bigger is blobbier", macro=1),
     },
 )
 def render(previous: PixelFrame, ctx) -> PixelFrame:

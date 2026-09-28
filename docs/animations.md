@@ -220,12 +220,48 @@ params={
 }
 ```
 
-`Param(type, default, min=, max=, choices=, label=, help=)`. The specs are what
+`Param(type, default, min=, max=, choices=, label=, help=, role=, macro=, curve=)`. The specs are what
 the web UI turns into controls automatically — a float with bounds becomes a
 slider, `choices` a select, a bool a switch — and what `--param speed=2` and
 playlist overrides are validated against. Read them as `ctx.params["speed"]`.
 Playlists store only the values that differ from your defaults, so changing a
 default in the file changes it everywhere it wasn't overridden.
+
+### External control: roles, macros and curves
+
+A MIDI knob, a DMX channel or an OSC fader sends a value with no idea what is
+playing. Three optional `Param` fields let one control do something sensible
+whatever animation is up:
+
+```python
+params={
+    "speed": Param(float, default=120, min=10, max=480, curve="log"),   # role "speed", by its name
+    "rate":  Param(float, default=1.5, min=0.1, max=10, role="density", curve="log"),
+    "tail":  Param(int, default=40, min=2, max=200, macro=1),
+}
+```
+
+- **`role`** is one of `speed`, `intensity`, `density`, `scale`, `hue`,
+  `variation`. A control bound to a role reaches the playing animation's param
+  with that role; an animation without one ignores it. A param *named* after a
+  role has it automatically, so declare `role=` only to give a differently
+  named param one — never rename a param to get a role, because playlists
+  store overrides by name. Roles carry meaning, not units.
+- **`macro=1..4`** puts a param under a general-purpose knob — the animation's
+  most interesting control, role or not. Every starter animation fills macro 1;
+  yours should too. The web UI badges it (M1).
+- **`curve="log"`** maps a 0–1 control along a log scale — right for ranges
+  that span decades, like a rate or a speed. The web UI's slider follows the
+  same curve, so it agrees with the knob. Needs `min > 0`.
+
+Each role and macro is claimed by at most one param per animation, and only a
+param with something to map onto (numbers with `min` and `max`, `choices`, or a
+bool) can claim one; both are checked when the file loads. A control value
+lands where a web UI edit does — on top of the playlist's overrides.
+
+Two more keywords describe how an animation responds to the music:
+`sync="beat"` if it follows `ctx.beat`, and `triggers=True` if it reacts to
+trigger hits. They are served to the UI for filtering and labelling.
 
 Anything else you pass to `@animation(...)` — `preview_hint="loop"`,
 `energy="low"` — is kept verbatim in `meta.extra` and served to the UI as-is.

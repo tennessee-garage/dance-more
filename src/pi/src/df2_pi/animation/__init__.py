@@ -16,7 +16,7 @@ from df2_pi.animation.loader import (
     Rendered,
     load_animation_file,
 )
-from df2_pi.animation.meta import FORMATS, AnimationMeta, Param, animation
+from df2_pi.animation.meta import FORMATS, MACROS, ROLES, AnimationMeta, Param, animation
 from df2_pi.animation.registry import AnimationRegistry, default_animations_dir
 from df2_pi.effects import CHASE, FADE, HUE_SPLIT, NONE, SHIMMER, Effect
 
@@ -34,8 +34,10 @@ __all__ = [
     "FrameContext",
     "HUE_SPLIT",
     "LoadError",
+    "MACROS",
     "NONE",
     "Param",
+    "ROLES",
     "Rendered",
     "SHIMMER",
     "animation",
