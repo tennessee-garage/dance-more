@@ -2,17 +2,19 @@
 renders headless, honours its declared format, and reproduces from a seed."""
 
 import os
+import sys
 import time
 
 import numpy as np
 import pytest
 
 from df2_pi.animation import AnimationRegistry, default_animations_dir
+from df2_pi.animation.loader import MODULE_PREFIX
 from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex"}
 
 
 @pytest.fixture(scope="module")
@@ -113,6 +115,27 @@ def test_comet_squares_land_as_whole_uniform_tiles(registry):
             if ring.max() == 255 and (ring == ring[0]).all():
                 return
     pytest.fail("no square formed")
+
+
+def test_vortex_rings_are_concentric_closed_loops(registry):
+    geo = default_geometry()
+    rings = sys.modules[MODULE_PREFIX + "vortex"]._rings(geo)
+    np.testing.assert_array_equal(rings[0], geo.floor_ring)
+    assert [len(r) for r in rings] == [480, 360, 360, 240, 240, 120, 120, 120]
+    every = np.concatenate(rings)
+    assert len(set(every.tolist())) == len(every)  # no LED on two rings
+    cells = geo.led_positions.reshape(-1, 2)
+    for ring in rings:
+        steps = np.linalg.norm(np.diff(cells[np.append(ring, ring[0])], axis=0), axis=1)
+        assert steps.max() <= 3.0 + 1e-9  # neighbours, or across a pair of dark corner cells
+
+
+def test_vortex_lights_only_its_rings(registry):
+    geo = default_geometry()
+    on_rings = set(np.concatenate(sys.modules[MODULE_PREFIX + "vortex"]._rings(geo)).tolist())
+    run = registry["vortex"].start(seed=0)
+    for _ in range(FRAMES):
+        assert set(np.flatnonzero(run.render().frame.flat.any(axis=-1)).tolist()) <= on_rings
 
 
 def test_lightning_bolts_run_along_edges(registry):
