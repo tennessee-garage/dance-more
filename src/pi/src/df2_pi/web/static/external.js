@@ -171,8 +171,55 @@ export function ExternalPanel() {
           For raw mode, <a href="api/floor/leds?format=csv" download>download every LED's position and address (CSV)</a>.
         </p>
       </section>
+      <${DmxSection} s=${s} dmx=${status.dmx} change=${change} />
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
     </div>`;
+}
+
+/** The 16-channel lighting-desk control block: where it is, and what it last said. */
+function DmxSection({ s, dmx, change }) {
+  return html`
+    <section class="diag-section">
+      <h3>DMX control <span class="diag-aside">the floor as a ${dmx.channels.length}-channel desk fixture</span></h3>
+      <label class="ext-check">
+        <input type="checkbox" checked=${s.dmx_enabled} onChange=${(e) => change({ dmx_enabled: e.currentTarget.checked })} />
+        Listen for the control block
+      </label>
+      ${s.dmx_enabled && html`
+        <div class="ext-row">
+          <${NumberField} label="Art-Net universe" value=${s.dmx_artnet_universe} min="0" max="32767" onCommit=${(v) => change({ dmx_artnet_universe: v })} />
+          <${NumberField} label="sACN universe" value=${s.dmx_sacn_universe} min="1" max="63999" onCommit=${(v) => change({ dmx_sacn_universe: v })} />
+          <${NumberField} label="Start address" value=${s.dmx_address} min="1" max=${513 - dmx.channels.length} onCommit=${(v) => change({ dmx_address: v })} />
+        </div>
+        ${sharesPixels(s) && html`
+          <p class="ext-note warn">
+            This shares the pixel universe. A media server that sends the whole universe fills these
+            channels with zeros - master dimmer 0 blacks out the floor. Give the desk its own universe,
+            or make sure the sender stops before channel ${s.dmx_address}.
+          </p>`}
+        ${dmx.live
+          ? html`
+            <table class="diag-table dmx-values">
+              <tbody>
+                ${dmx.channels.map((name, i) => html`
+                  <tr><th>${s.dmx_address + i}</th><td class="dmx-name">${name}</td><td class="num">${dmx.values[i]}</td></tr>`)}
+              </tbody>
+            </table>`
+          : html`<p class="ext-note">No control data${dmx.packets ? " (released after the timeout)" : " received yet"}.</p>`}
+        <p class="ext-note">
+          Bank picks a playlist in name order and program an entry, both from 0. When the desk goes quiet for the
+          timeout, dimmer, strobe, speed, tint and source return to their settings.
+          QLC+: <a href="https://github.com/tennessee-garage/dance-more/blob/main/docs/fixtures/dance-floor-v2.qxf">fixture definition</a>.
+        </p>`}
+    </section>`;
+}
+
+/** Whether the control block sits in a universe the pixel mode also uses. */
+function sharesPixels(s) {
+  const pixelUniverses = s.mode === "tile" ? 1 : s.mode === "raw" ? 23 : Math.ceil((s.grid_width * s.grid_height) / 170);
+  const inRange = (u, first) => u >= first && u < first + pixelUniverses;
+  return (s.artnet_enabled && inRange(s.dmx_artnet_universe, s.artnet_universe))
+    || (s.sacn_enabled && inRange(s.dmx_sacn_universe, s.sacn_universe));
 }
 
 function MixSlider({ value, onCommit }) {

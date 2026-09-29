@@ -42,7 +42,11 @@ def test_settings_and_status_are_served(registry, store):
     assert body["settings"] == {
         "artnet_enabled": True, "sacn_enabled": True, "mode": "tile", "grid_width": 34, "grid_height": 34,
         "artnet_universe": 0, "sacn_universe": 1, "source": "external", "mix": 0.5, "timeout_s": 2.0,
+        "dmx_enabled": False, "dmx_artnet_universe": 0, "dmx_sacn_universe": 1, "dmx_address": 201,
     }
+    dmx = body["status"]["dmx"]
+    assert (dmx["live"], dmx["packets"], dmx["values"]) == (False, 0, None)
+    assert dmx["channels"][0] == "Master dimmer" and len(dmx["channels"]) == 16
     status = body["status"]
     assert (status["live"], status["applied"], status["universes"], status["frames"]) == (False, "internal", 1, 0)
 
@@ -68,6 +72,8 @@ def test_a_change_is_applied_now_and_stored(registry, store):
         {"mode": "raw", "artnet_universe": 32760},  # 23 universes do not fit
         {"loud": True},
         {"mode": None},
+        {"dmx_address": 498},  # the 16-channel block would run past 512
+        {"dmx_sacn_universe": 0},
     ],
 )
 def test_a_bad_change_changes_nothing(registry, store, body):

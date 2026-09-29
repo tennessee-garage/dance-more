@@ -1,4 +1,4 @@
-# Driving the floor from a media server
+# Driving the floor from a media server or a lighting desk
 
 The floor listens for **Art-Net** (UDP 6454) and **sACN / E1.31** (UDP 5568,
 unicast or multicast), so Resolume Arena, TouchDesigner, a lighting desk or
@@ -80,6 +80,45 @@ Use a **DMX Out CHOP** (Art-Net or sACN) at the floor's IP.
   It lists every LED in wire order with `u,v` (0–1, origin bottom-left, which
   is TouchDesigner's texture convention) and its universe and channel. Sample
   your TOP at those `u,v` positions and send the result in `index` order.
+
+## Lighting desk control
+
+The floor can also be patched as a **16-channel fixture**, so a desk (grandMA,
+Chamsys, QLC+) or a media server's DMX output can dim it, strobe it and pick
+programs. It is **off by default**: turn it on in the External tab's DMX
+control section and set its universe (Art-Net and sACN separately) and start
+address (default 201).
+
+| Ch | Function | Values |
+| --- | --- | --- |
+| 1 | Master dimmer | 0 dark .. 255 full |
+| 2 | Strobe | 0 off, 1..255 up to the strobe cap (Settings, default 10 Hz) |
+| 3 | Source | 0–84 internal, 85–169 external, 170–255 mix |
+| 4 | External mix | how much of the sender's picture, in mix |
+| 5 | Bank | playlist N, **in name order**, from 0 |
+| 6 | Program | entry N of that playlist, from 0 |
+| 7 | Speed | 0 stop, 128 = 1×, 255 = 4× |
+| 8–11 | Macro 1–4 | the playing animation's macros |
+| 12–14 | Tint red, green, blue | the tint colour |
+| 15 | Tint amount | 0 off .. 255 fully the tint |
+| 16 | Bump | a white flash of value/255 each time it rises |
+
+- **Continuous controls follow the faders.** Dimmer, strobe, source, mix,
+  speed and tint take effect on the first packet, then on every change.
+- **Triggers act only on change.** Bank, program, macros and bump never act on
+  the first packet, so a desk that connects with them at 0 doesn't reload the
+  playlist or flash the floor. Changing either bank or program goes to that
+  entry.
+- **When the desk goes quiet for the timeout** (the same one as the pixels),
+  dimmer, strobe, speed, tint, source and mix return to their settings. What
+  bank and program loaded stays loaded.
+- **Keep it out of a pixel universe.** A media server sending tile mode
+  usually sends all 512 channels, zeros included, and zero on channel 1
+  blacks out the floor. The External tab warns when the two share a universe.
+
+For QLC+, import [fixtures/dance-floor-v2.qxf](fixtures/dance-floor-v2.qxf)
+(`df2-pi fixture` regenerates it from the code). For other desks, build a
+16-channel generic fixture from the table above.
 
 ## Checking it works
 

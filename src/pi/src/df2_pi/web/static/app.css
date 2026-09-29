@@ -809,6 +809,9 @@ button.icon-small { padding: 0 8px; font-size: 16px; line-height: 24px; }
 .ext-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; }
 .ext-check { display: flex; align-items: center; gap: 6px; min-width: 6em; margin-top: 10px; padding-bottom: 6px; font-size: 13px; }
 .ext-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.ext-note.warn { color: var(--warn); }
+.dmx-values { margin-top: 10px; max-width: 24em; }
+.dmx-values td.dmx-name { text-align: left; color: var(--muted); }
 .floor-admin .diag-table { margin-top: 6px; }
 .versions-against { margin: 0 0 4px; }
 .versions td { vertical-align: top; }

@@ -70,6 +70,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "external_source": "external",  # internal | external | mix
     "external_mix": 0.5,
     "external_timeout_s": 2.0,
+    # DMX control block (interfacing/dmx_control.py). Off by default: in a
+    # universe a media server fills with zeros it would read master dimmer 0.
+    "dmx_enabled": False,
+    "dmx_artnet_universe": 0,
+    "dmx_sacn_universe": 1,
+    "dmx_address": 201,  # 1-based start channel of the 16-channel block
     "strobe_max_hz": 10.0,  # the strobe show control's cap
     "enabled": True,
     "fps": 30.0,

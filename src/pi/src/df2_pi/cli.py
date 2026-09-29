@@ -15,6 +15,7 @@
     df2-pi animations                         # what the registry found, and what failed
     df2-pi playlists [list|show|create|add|move|remove|set-startup|delete]
     df2-pi leds > leds.csv                    # every LED's position and raw-mode Art-Net address
+    df2-pi fixture > dance-floor-v2.qxf       # the QLC+ fixture for the DMX control block
     df2-pi ledwalk --row 0 --slot 0           # one LED at a time: verify LED 0 and the winding
     df2-pi tilewalk                           # one tile at a time: verify the install wiring
 
@@ -360,6 +361,13 @@ def _cmd_leds(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_fixture(args: argparse.Namespace) -> int:
+    from .interfacing.dmx_control import qlc_fixture
+
+    sys.stdout.write(qlc_fixture())
+    return 0
+
+
 def _cmd_animations(args: argparse.Namespace) -> int:
     registry = _registry(args)
     for definition in sorted(registry, key=lambda d: d.id):
@@ -697,6 +705,8 @@ def build_parser() -> argparse.ArgumentParser:
     blackout.set_defaults(func=_cmd_blackout)
     leds = sub.add_parser("leds", help="every LED's position and raw-mode Art-Net address, as CSV")
     leds.set_defaults(func=_cmd_leds)
+    fixture = sub.add_parser("fixture", help="the QLC+ fixture definition for the DMX control block")
+    fixture.set_defaults(func=_cmd_fixture)
 
     return parser
 

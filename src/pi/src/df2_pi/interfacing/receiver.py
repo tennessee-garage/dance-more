@@ -27,6 +27,13 @@ The receiver answers ArtPoll with ArtPollReply, so the floor shows up in
 a sender's node list. sACN is received both unicast and on the multicast
 group of each configured universe.
 
+A DMX control block (dmx_control.py) can ride along: with
+`configure_control()` set, every data packet for the control universe of
+its protocol that covers the whole block is handed to `on_control` - on
+this thread, as it arrives, whether or not that universe also carries
+pixels. A packet that stops short of the block is ignored rather than
+padded, since 0 on the first channel means "dimmer off".
+
 Sockets are opened with SO_REUSEADDR (and SO_REUSEPORT where there is
 one) so another Art-Net program on the same machine can share the port.
 """
@@ -198,6 +205,11 @@ class Receiver:
         self.errors: dict[str, str] = {}  # protocol -> why its socket is not open
         self.packets = 0
         self.polls = 0
+        # The DMX control block: protocol -> universe, 1-based start address, width.
+        self._control: dict[str, int] | None = None
+        self._control_address = 1
+        self._control_width = 0
+        self.on_control: Callable[[bytes], None] | None = None
 
     # ---- any thread ---------------------------------------------------------------------
 
@@ -235,6 +247,13 @@ class Receiver:
             self._latest = None  # a frame in the old layout is no longer decodable as the new one
         if self._running:
             self._open_sockets()
+
+    def configure_control(self, *, artnet_universe: int, sacn_universe: int, address: int, width: int, enabled: bool = True) -> None:
+        """Where the DMX control block is, or `enabled=False` for nowhere."""
+        self._control = {"artnet": artnet_universe, "sacn": sacn_universe} if enabled else None
+        self._control_address, self._control_width = address, width
+        if self._running and "sacn" in self._sockets:
+            self._join_sacn_groups()
 
     def status(self) -> dict:
         latest = self._latest
@@ -299,6 +318,8 @@ class Receiver:
         sock = self._sockets["sacn"]
         sac = self._assemblers["sacn"]
         wanted = {sacn_group(sac.first + i) for i in range(sac.layout.universes)}
+        if self._control is not None:
+            wanted.add(sacn_group(self._control["sacn"]))
         for group in self._joined - wanted:
             self._membership(sock, socket.IP_DROP_MEMBERSHIP, group)
         for group in wanted - self._joined:
@@ -352,6 +373,11 @@ class Receiver:
             self.polls += 1
             self._reply_to_poll(host, sock)
             return
+        control, callback = self._control, self.on_control
+        if control is not None and callback is not None and isinstance(parsed, Dmx) and parsed.universe == control[protocol]:
+            start = self._control_address - 1
+            if len(parsed.data) >= start + self._control_width:
+                callback(parsed.data[start : start + self._control_width])
         now = self._now()
         with self._lock:
             assembler = self._assemblers[protocol]
