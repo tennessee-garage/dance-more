@@ -102,10 +102,12 @@ from df2_pi.engine.overlays import (
 )
 from df2_pi.geometry import ROTATIONS, FloorGeometry, quarter_turns
 from df2_pi.pixels import BLEND_MODES, Frame, PixelFrame, TileFrame, blend, composite, default_geometry
-from df2_pi.playlists.store import PlaylistStore, ResolvedEntry, ResolvedPlaylist
 
 if TYPE_CHECKING:
     from df2_pi.output.fanout import FanOut
+    # annotation-only: playlists.store imports engine.overlays, and a runtime
+    # import here closes a cycle through engine/__init__
+    from df2_pi.playlists.store import PlaylistStore, ResolvedEntry, ResolvedPlaylist
 
 log = logging.getLogger(__name__)
 
