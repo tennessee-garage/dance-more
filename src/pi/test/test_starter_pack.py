@@ -12,7 +12,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares"}
 
 
 @pytest.fixture(scope="module")
@@ -99,6 +99,20 @@ def test_chase_stays_on_the_floor_ring(registry):
     for _ in range(30):
         lit = np.flatnonzero(run.render().frame.flat.any(axis=-1))
         assert set(lit.tolist()) <= ring
+
+
+def test_comet_squares_land_as_whole_uniform_tiles(registry):
+    """Each side only fills in at full strength once its comet lands, so a
+    formed square is one tile's 60 LEDs at a single colour."""
+    geo = default_geometry()
+    run = registry["comet_squares"].start(seed=0, params={"squares": 1, "speed": 600.0})
+    for _ in range(FRAMES):
+        frame = run.render().frame
+        for tile in range(geo.tiles):
+            ring = frame.flat[tile * geo.leds_per_tile + geo.tile_ring(tile)]
+            if ring.max() == 255 and (ring == ring[0]).all():
+                return
+    pytest.fail("no square formed")
 
 
 def test_lightning_bolts_run_along_edges(registry):
