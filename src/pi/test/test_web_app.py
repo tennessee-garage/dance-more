@@ -308,6 +308,13 @@ def test_serve_hands_the_app_to_uvicorn(serve_args, no_serial, monkeypatch):
     (app, kw), = calls
     assert isinstance(app, FastAPI)
     assert kw["host"] == "127.0.0.1" and kw["port"] == 9123
+    assert kw["access_log"] is False  # the page polls; a line per request would bury the runner's
+    assert app.state.ctx.runner.clock.realtime is False
+
+
+def test_serve_realtime_reaches_the_frame_clock(serve_args, no_serial):
+    app = cli.build_app(cli.build_parser().parse_args([*serve_args, "serve", "--no-hardware", "--realtime"]))
+    assert app.state.ctx.runner.clock.realtime is True
 
 
 # ---- the GIL check --------------------------------------------------------------------------
@@ -358,15 +365,60 @@ def test_request_burst_does_not_disturb_the_render_clock(registry, store):
     full-rate preview streams, the clock must drop no frames and its jitter p95 must stay within a millisecond of the
     idle baseline. Real time, a real server on a real socket: run before
     every web PR, and on the Pi for a verdict that means anything."""
+    _assert_burst_leaves_the_clock_alone(registry, store, clients=GIL_CLIENTS, realtime=False)
+
+
+def _can_raise_priority() -> bool:
+    """Whether a thread of this process may take SCHED_FIFO: root, or
+    CAP_SYS_NICE as the systemd unit grants it. Probed on a throwaway
+    thread, since the policy is per thread."""
+    if not hasattr(os, "sched_setscheduler"):
+        return False
+    result = []
+
+    def probe():
+        try:
+            os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(10))
+            result.append(True)
+        except OSError:
+            result.append(False)
+
+    thread = threading.Thread(target=probe)
+    thread.start()
+    thread.join()
+    return result[0]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("DF2_SLOW_TESTS"), reason="set DF2_SLOW_TESTS=1 to run")
+@pytest.mark.skipif(not _can_raise_priority(), reason="needs CAP_SYS_NICE; see README 'Realtime priority'")
+def test_oversubscribed_burst_is_absorbed_by_realtime_priority(registry, store):
+    """More busy clients than the Pi has cores: the render thread now waits
+    on the OS scheduler, not the GIL. At normal priority that costs up to
+    tens of ms of jitter; with `serve --realtime`'s SCHED_FIFO it must hold
+    the same line as the 4-client check."""
+    _assert_burst_leaves_the_clock_alone(registry, store, clients=4 * GIL_CLIENTS, realtime=True)
+
+
+def _fifo_threads() -> int:
+    """How many of this process's threads are SCHED_FIFO (Linux /proc)."""
+    count = 0
+    for stat in Path("/proc/self/task").glob("*/stat"):
+        fields = stat.read_text().rsplit(")", 1)[1].split()  # from field 3 (state) on
+        count += fields[41 - 3] == "1"  # field 41 is the policy; 1 = SCHED_FIFO
+    return count
+
+
+def _assert_burst_leaves_the_clock_alone(registry, store, *, clients: int, realtime: bool) -> None:
     import httpx2
     import uvicorn
 
     window = int(GIL_WINDOW_S * 30)
-    ctx = make_context(registry, store, NullSink(), clock=FrameClock(fps=30.0, window=window))
+    ctx = make_context(registry, store, NullSink(), clock=FrameClock(fps=30.0, window=window, realtime=realtime))
     server = uvicorn.Server(uvicorn.Config(create_app(ctx), host="127.0.0.1", port=0, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
-    clients: list[subprocess.Popen] = []
+    procs: list[subprocess.Popen] = []
     try:
         wait_until(lambda: server.started, timeout=10.0)
         port = server.servers[0].sockets[0].getsockname()[1]
@@ -375,15 +427,20 @@ def test_request_burst_does_not_disturb_the_render_clock(registry, store):
 
         time.sleep(GIL_WINDOW_S)  # a full telemetry window at idle
         idle = ctx.runner.clock.telemetry()
+        if realtime:
+            assert ctx.runner.clock.scheduling == "SCHED_FIFO"
+            # The render thread only: the preview sink's thread starts from it
+            # and must not keep the SCHED_FIFO it inherits.
+            assert _fifo_threads() == 1
 
         run_s = GIL_CLIENT_START_S + GIL_WINDOW_S + 0.5
-        clients = [
+        procs = [
             subprocess.Popen(
                 [sys.executable, "-c", GIL_CLIENT, base, str(run_s), str(i), *paths],
                 stdout=subprocess.PIPE,
                 text=True,
             )
-            for i in range(GIL_CLIENTS)
+            for i in range(clients)
         ] + [
             subprocess.Popen(
                 [sys.executable, "-c", GIL_STREAM, f"ws://127.0.0.1:{port}/ws/preview", str(run_s)],
@@ -396,19 +453,19 @@ def test_request_burst_does_not_disturb_the_render_clock(registry, store):
         # passed under load it holds loaded frames only.
         time.sleep(GIL_CLIENT_START_S + GIL_WINDOW_S)
         loaded = ctx.runner.clock.telemetry()
-        counts = [int(c.communicate(timeout=10.0)[0]) for c in clients]
-        requests, streamed = sum(counts[:GIL_CLIENTS]), sum(counts[GIL_CLIENTS:])
+        counts = [int(c.communicate(timeout=10.0)[0]) for c in procs]
+        requests, streamed = sum(counts[:clients]), sum(counts[clients:])
     finally:
-        for c in clients:
+        for c in procs:
             if c.poll() is None:
                 c.kill()
         server.should_exit = True
         thread.join(10.0)
 
     print(
-        f"\n{requests} requests from {GIL_CLIENTS} clients, {streamed} frames to {GIL_STREAMS} streams; jitter p95 idle {idle.jitter_ms.p95:.3f} ms, "
+        f"\n{requests} requests from {clients} clients, {streamed} frames to {GIL_STREAMS} streams; jitter p95 idle {idle.jitter_ms.p95:.3f} ms, "
         f"loaded {loaded.jitter_ms.p95:.3f} ms (max {loaded.jitter_ms.max:.3f}); "
-        f"dropped {idle.dropped} -> {loaded.dropped}"
+        f"dropped {idle.dropped} -> {loaded.dropped}; scheduling {ctx.runner.clock.scheduling}"
     )
     assert requests > 100, "the burst never got going"
     assert streamed >= GIL_STREAMS * 30 * GIL_WINDOW_S * 0.9, "the streams did not keep up"

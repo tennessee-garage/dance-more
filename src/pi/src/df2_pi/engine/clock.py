@@ -86,6 +86,7 @@ fake clock without a single real sleep.
 from __future__ import annotations
 
 import gc
+import logging
 import math
 import os
 import time
@@ -94,6 +95,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterator
 
 import numpy as np
+
+log = logging.getLogger(__name__)
 
 # np.percentile's first call imports numpy.ma (np.unique checks is_masked),
 # ~11 ms on a Pi 5. The runner snapshots telemetry every frame, so left
@@ -331,10 +334,29 @@ class FrameClock:
             gc.disable()
         if self.realtime:
             self.scheduling = _raise_priority()
+            report = log.info if self.scheduling == "SCHED_FIFO" else log.warning
+            report("render thread scheduling: %s", self.scheduling)
 
     def _teardown(self) -> None:
         if self.manage_gc and getattr(self, "_gc_was_enabled", False):
             gc.enable()
+
+
+def drop_realtime() -> None:
+    """Put the calling thread back on the default scheduler at nice 0. A
+    thread started from the render thread inherits its SCHED_FIFO (or
+    negative nice); an observer that keeps it competes with the render
+    thread for a core. Lowering needs no privileges. Linux only: elsewhere
+    there is no per-thread priority to undo."""
+    if not hasattr(os, "sched_setscheduler"):
+        return
+    try:
+        if os.sched_getscheduler(0) != os.SCHED_OTHER:  # type: ignore[attr-defined]
+            os.sched_setscheduler(0, os.SCHED_OTHER, os.sched_param(0))  # type: ignore[attr-defined]
+        if os.getpriority(os.PRIO_PROCESS, 0) < 0:  # per thread on Linux
+            os.setpriority(os.PRIO_PROCESS, 0, 0)
+    except OSError:
+        pass
 
 
 def _raise_priority() -> str:

@@ -35,7 +35,7 @@ import threading
 from typing import Any, Callable, Mapping, Protocol, runtime_checkable
 
 from df2_pi.effects import Effect
-from df2_pi.engine.clock import FrameInfo
+from df2_pi.engine.clock import FrameInfo, drop_realtime
 from df2_pi.pixels import Frame
 
 log = logging.getLogger(__name__)
@@ -163,6 +163,7 @@ class ThreadedSink:
         return self.mailbox.replaced
 
     def _run(self) -> None:
+        drop_realtime()  # started by the first submit(), i.e. from the render thread
         try:
             while True:
                 item = self.mailbox.take()

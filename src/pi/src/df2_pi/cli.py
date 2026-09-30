@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -316,7 +317,7 @@ def build_app(args: argparse.Namespace):
     if args.rotation is None:
         args.rotation = store.get_rotation()
 
-    clock = FrameClock(fps=args.fps)
+    clock = FrameClock(fps=args.fps, realtime=args.realtime)
     fanout, _, _ = build_sinks(args, clock)
     preview = PreviewSink()  # always: the page's preview subscribes to it
     fanout.attach(preview)
@@ -342,7 +343,15 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     # uvicorn owns SIGINT/SIGTERM; the app's shutdown hook stops the runner.
-    uvicorn.run(app, host=args.host, port=args.port, log_level="debug" if args.verbose else "info")
+    # The page polls, so a line per request would bury the runner's own in
+    # the journal: access logging only with -v.
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="debug" if args.verbose else "info",
+        access_log=args.verbose,
+    )
     return 0
 
 
@@ -626,6 +635,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="0.0.0.0", help="interface to listen on (default 0.0.0.0)")
     serve.add_argument("--port", type=int, default=8000, help="port (default 8000)")
     serve.add_argument("--fps", type=float, default=30.0, help="frame rate (default 30)")
+    serve.add_argument("--realtime", action="store_true", help="raise the render thread's scheduler priority (needs CAP_SYS_NICE)")
     serve.add_argument("--no-hardware", action="store_true", help="never touch the floor (no serial, no GPIO)")
     serve.add_argument(
         "--terminal",
@@ -711,10 +721,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# syslog priorities, for journald's level prefix (sd-daemon(3)).
+_JOURNAL_PRIORITY = {logging.DEBUG: 7, logging.INFO: 6, logging.WARNING: 4, logging.ERROR: 3, logging.CRITICAL: 2}
+
+
+class _JournalFormatter(logging.Formatter):
+    """Prefixes each line with `<N>`, which journald strips and keeps as the
+    entry's priority, so `journalctl -u df2-pi -p warning` works. Only the
+    first line of a traceback carries it; the rest land at the default."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return f"<{_JOURNAL_PRIORITY.get(record.levelno, 6)}>{super().format(record)}"
+
+
+def _configure_logging(args: argparse.Namespace) -> None:
+    # serve is the long-running service: its INFO lines ("playing X for N s")
+    # are the record of what the floor did. The one-shot commands stay quiet.
+    level = logging.DEBUG if args.verbose else logging.INFO if args.command == "serve" else logging.WARNING
+    fmt = "%(levelname)s %(name)s: %(message)s"
+    handler = logging.StreamHandler()
+    # JOURNAL_STREAM is set when stderr is connected to journald (systemd.exec(5)).
+    handler.setFormatter(_JournalFormatter(fmt) if "JOURNAL_STREAM" in os.environ else logging.Formatter(fmt))
+    logging.basicConfig(level=level, handlers=[handler])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    _configure_logging(args)
     if getattr(args, "brightness", None) is not None and not 0 <= args.brightness <= 255:
         parser.error("--brightness must be 0..255")
     return args.func(args)
