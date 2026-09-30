@@ -30,6 +30,7 @@ one part of the API:
 | [`seams.py`](../src/pi/animations/seams.py) | pixel | `seams` — the facing pairs of edges between tiles |
 | [`comet_squares.py`](../src/pi/animations/comet_squares.py) | pixel | `rails` and `edges_at` together; objects with phases in `ctx.state` |
 | [`vortex.py`](../src/pi/animations/vortex.py) | pixel | Building your own rings from `geo.edge`; a little physics carried in `ctx.state` |
+| [`twin_peaks.py`](../src/pi/animations/twin_peaks.py) | pixel | A whole-floor texture from `led_positions`: shading a surface, not drawing lines |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
