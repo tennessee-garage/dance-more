@@ -49,14 +49,15 @@ driving native mocks through a Unix-socket broker, no hardware required.
 
 ## Bench setup
 
-A live Pi 5 is at **`garth@testing-pi`**. It is `src/pi` that syncs there, so
-`~/dance-floor` is the *package* root — `test/` and `src/df2_pi/` sit directly
-under it, not under a `src/pi/`. The venv is `venv`, not `.venv`.
+A live Pi 5 is at **`garth@dancefloor.local`** (formerly `testing-pi`). It is
+`src/pi` that syncs there, so `~/dance-floor` is the *package* root — `test/`
+and `src/df2_pi/` sit directly under it, not under a `src/pi/`. The venv is
+`venv`, not `.venv`.
 
 ```bash
 src/pi/tools/sync-to-pi.sh          # watch + rsync on change
 src/pi/tools/sync-to-pi.sh --once
-ssh garth@testing-pi 'cd ~/dance-floor && ./venv/bin/pytest -q'
+ssh garth@dancefloor.local 'cd ~/dance-floor && ./venv/bin/pytest -q'
 ```
 
 The venv is long-lived and does **not** track `pyproject.toml`. Adding a
