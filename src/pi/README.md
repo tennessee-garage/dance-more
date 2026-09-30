@@ -60,6 +60,7 @@ src/df2_pi/
                 static/, the page (Preact + htm + signals, vendored, no build)
 animations/     The animations themselves, one .py per animation; the
                 filename stem is the id playlists reference
+deploy/         The systemd unit (df2-pi.service) and its installer
 test/           Automated unit tests (pytest) - no hardware required
 test/integration/
                 Scripts that drive a real Pi + row controller + tile.
@@ -224,4 +225,76 @@ tools/sync-to-pi.sh --once       # sync once and exit
 
 # override the default target (garth@dancefloor.local:/home/garth/dance-floor)
 PI_HOST=user@host PI_DEST=/path/on/pi tools/sync-to-pi.sh
+```
+
+## Running as a service
+
+On the Pi the floor runs as the `df2-pi` systemd unit,
+[deploy/df2-pi.service](deploy/df2-pi.service): `df2-pi serve` as `garth`,
+started on boot and restarted 2 s after it exits. A stop or restart blacks
+the floor out first, so it goes dark rather than freezing on a frame. It
+doesn't wait for the network: the floor lights with none.
+
+Install it once, and again whenever the unit changes (safe to repeat; it
+never starts or restarts the service itself):
+
+```bash
+cd ~/dance-floor && sudo deploy/install.sh    # --dry-run prints the plan
+sudo systemctl restart df2-pi
+```
+
+While it runs it holds the serial ports and port 8000, so stop it before
+running `df2-pi play`, `scan` or a second `serve` by hand:
+`sudo systemctl stop df2-pi` (it comes back on the next boot, or with `start`).
+
+### Deploying a change
+
+```bash
+tools/sync-to-pi.sh --once && ssh garth@dancefloor.local 'sudo systemctl restart df2-pi'
+```
+
+If `pyproject.toml` changed, reinstall into the venv before restarting,
+because the venv doesn't track it:
+`ssh garth@dancefloor.local 'cd ~/dance-floor && ./venv/bin/pip install -e ".[dev]"'`.
+
+### Logs and health
+
+It logs to journald. `serve` logs at INFO: a line per playlist entry
+(`playing chase (Chase) for 30.0 s`), warnings for unresolved entries and
+animations that failed to load, errors with tracebacks for animations that
+fail while playing. Per-request access lines only appear with `-v`.
+
+```bash
+journalctl -u df2-pi -f                  # follow
+journalctl -u df2-pi -b -p warning       # this boot's warnings and errors
+curl -fsS http://dancefloor.local:8000/healthz   # 200 {"ok": true, ...} while the render thread runs
+```
+
+### Realtime priority
+
+`serve --realtime` puts the render thread on `SCHED_FIFO`, so when the
+Pi's cores are all busy it still gets its CPU on time. It needs
+`CAP_SYS_NICE`, so it's off by default. To turn it on, run
+`sudo systemctl edit df2-pi` and add:
+
+```ini
+[Service]
+AmbientCapabilities=CAP_SYS_NICE
+Environment=DF2_SERVE_ARGS=--realtime
+```
+
+Then `sudo systemctl restart df2-pi`. The journal should say
+`render thread scheduling: SCHED_FIFO`; a warning there means it did not
+take.
+
+The check that it pays off is
+`test_oversubscribed_burst_is_absorbed_by_realtime_priority`: 16 clients
+hammering the server, four per core. It only runs when it can actually
+get `SCHED_FIFO`, so on the Pi run it the way the unit runs, with the
+capability:
+
+```bash
+sudo systemd-run --quiet --pipe --wait --collect --uid=garth \
+  -p AmbientCapabilities=CAP_SYS_NICE -p WorkingDirectory=/home/garth/dance-floor \
+  -E DF2_SLOW_TESTS=1 /home/garth/dance-floor/venv/bin/pytest -q -s test/test_web_app.py -k burst
 ```

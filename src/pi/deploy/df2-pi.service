@@ -1,0 +1,31 @@
+# The floor and its admin UI, started on boot and restarted if it exits.
+# Installed by deploy/install.sh; see "Running as a service" in README.md.
+
+[Unit]
+Description=Dance Floor v2 driver and admin UI
+# Not network-online.target: the floor has to light with no network at all,
+# and uvicorn and the Art-Net/sACN sockets bind 0.0.0.0, which needs none.
+After=network.target
+
+[Service]
+User=garth
+WorkingDirectory=/home/garth/dance-floor
+# DF2_SERVE_ARGS is for a drop-in (`sudo systemctl edit df2-pi`), e.g. --realtime.
+ExecStart=/home/garth/dance-floor/venv/bin/df2-pi serve --host 0.0.0.0 --port 8000 $DF2_SERVE_ARGS
+Environment=DF2_SERVE_ARGS=
+Environment=DF2_DB=/home/garth/.local/share/df2/df2.sqlite3
+Environment=PYTHONUNBUFFERED=1
+# A restart leaves the floor dark for RestartSec, never frozen on a stale frame:
+# the app's shutdown hook blacks it out before the process exits.
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+# Must exceed the app's SHUTDOWN_TIMEOUT_S (blackout + latch + join).
+TimeoutStopSec=10
+# Realtime priority for the render thread needs this and --realtime; off by
+# default. Grant both in a drop-in rather than here:
+#   AmbientCapabilities=CAP_SYS_NICE
+#   Environment=DF2_SERVE_ARGS=--realtime
+
+[Install]
+WantedBy=multi-user.target

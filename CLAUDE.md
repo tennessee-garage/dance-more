@@ -65,6 +65,11 @@ dependency means `./venv/bin/pip install -e ".[dev]"` there before tests will
 collect — otherwise the failure is a `ModuleNotFoundError` at import time that
 looks like a broken test rather than a stale environment.
 
+The floor can run as the `df2-pi` systemd service (`src/pi/deploy/`,
+README "Running as a service"). While it runs it holds the serial ports and
+port 8000: check `systemctl is-active df2-pi` and stop it before running
+`df2-pi play`/`scan`/`serve` or hardware tests by hand.
+
 **The bench pi-hat is the old single-chain revision** — one transceiver, XDIR
 on GPIO23. Host code defaults to the two-chain board (GPIO17/GPIO7), so bench
 runs need `--chain /dev/ttyAMA0:23`. See the `bench-hardware-bodges` memory.
