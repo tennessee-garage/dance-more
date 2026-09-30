@@ -219,8 +219,11 @@ main {
   min-height: 0;
 }
 
+/* Sized to the floor, not stretched to the row: a long tab would otherwise
+   centre the floor in the extra height and push the controls off-screen. */
 .preview {
   position: relative;
+  align-self: start;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -228,6 +231,7 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--gap);
+  padding-bottom: 44px; /* the strip the rotation picker and status sit in */
   min-height: 0;
 }
 
@@ -332,7 +336,7 @@ main {
 @media (max-width: 800px) {
   main { grid-template-columns: minmax(0, 1fr); align-content: start; }
   .preview .floor-frame { width: 100%; }
-  .preview { flex-direction: column; gap: 8px; }
+  .preview { flex-direction: column; gap: 8px; padding-bottom: var(--gap); }
   .rotation { position: static; align-self: flex-start; }
 }
 
