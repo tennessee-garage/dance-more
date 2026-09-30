@@ -222,6 +222,6 @@ and, by default, watches for local changes and re-syncs automatically
 tools/sync-to-pi.sh              # sync once, then watch and auto-resync
 tools/sync-to-pi.sh --once       # sync once and exit
 
-# override the default target (garth@testing-pi:/home/garth/dance-floor)
+# override the default target (garth@dancefloor.local:/home/garth/dance-floor)
 PI_HOST=user@host PI_DEST=/path/on/pi tools/sync-to-pi.sh
 ```

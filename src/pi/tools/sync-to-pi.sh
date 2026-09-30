@@ -11,12 +11,12 @@
 #   tools/sync-to-pi.sh --once       # sync once and exit, no watching
 #
 # Override the target with env vars:
-#   PI_HOST=garth@testing-pi PI_DEST=/home/garth/dance-floor tools/sync-to-pi.sh
+#   PI_HOST=garth@dancefloor.local PI_DEST=/home/garth/dance-floor tools/sync-to-pi.sh
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"  # src/pi
-PI_HOST="${PI_HOST:-garth@testing-pi}"
+PI_HOST="${PI_HOST:-garth@dancefloor.local}"
 PI_DEST="${PI_DEST:-/home/garth/dance-floor}"
 
 RSYNC_EXCLUDES=(
