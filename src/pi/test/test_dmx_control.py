@@ -149,11 +149,15 @@ def test_the_receiver_hands_over_the_block_and_ignores_short_packets():
     assert receiver.latest() is not None  # the same universe still carried the tile pixels
 
 
-def test_the_qlc_fixture_matches_the_table_and_the_shipped_file():
+def test_the_qlc_fixture_matches_the_table():
     xml = qlc_fixture()
     ns = {"q": "http://www.qlcplus.org/FixtureDefinition"}
     root = ElementTree.fromstring(xml)
     mode = root.find("q:Mode", ns)
     assert [c.text for c in mode.findall("q:Channel", ns)] == [c.name for c in CHANNELS]
     assert len(root.findall("q:Channel", ns)) == WIDTH
-    assert FIXTURE.read_text() == xml, "regenerate docs/fixtures/dance-floor-v2.qxf with `df2-pi fixture`"
+
+
+@pytest.mark.skipif(not FIXTURE.exists(), reason="no repo docs/ beside the package (e.g. the Pi's synced tree)")
+def test_the_qlc_fixture_matches_the_shipped_file():
+    assert FIXTURE.read_text() == qlc_fixture(), "regenerate docs/fixtures/dance-floor-v2.qxf with `df2-pi fixture`"
