@@ -32,6 +32,7 @@ one part of the API:
 | [`vortex.py`](../src/pi/animations/vortex.py) | pixel | Building your own rings from `geo.edge`; a little physics carried in `ctx.state` |
 | [`twin_peaks.py`](../src/pi/animations/twin_peaks.py) | pixel | A whole-floor texture from `led_positions`: shading a surface, not drawing lines |
 | [`spiral.py`](../src/pi/animations/spiral.py) | tile | A v1 processor ported: per-frame state in `ctx.state`, steps clocked by `ctx.t` |
+| [`stardust.py`](../src/pi/animations/stardust.py) | pixel | Two scales in one frame: a per-tile field broadcast to its 60 LEDs, with single-LED stars and drifting dust on top |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract

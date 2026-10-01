@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust"}
 
 
 @pytest.fixture(scope="module")
@@ -167,6 +167,21 @@ def test_checkerboard_flips_on_the_beat_when_there_is_one(registry):
         tiles.append(run.render(beat=beat).frame[0, 0].tolist())
     changes = [i for i in range(1, 12) if tiles[i] != tiles[i - 1]]
     assert changes == [3, 6, 9]  # a flip on each new beat, and only then
+
+
+def test_stardust_never_goes_dark_and_a_nova_glows_then_scatters(registry):
+    geo = default_geometry()
+    run = registry["stardust"].start(seed=4, params={"novae": 12.0, "stars": 0})
+    glowed = scattered = False
+    for _ in range(600):
+        level = run.render().frame.data.max(axis=-1)  # (64, 60)
+        assert level.min() > 0  # the floor shows black poorly: the sky is always there
+        whole = [t for t in range(geo.tiles) if level[t].min() > 100]  # a tile glowing edge to edge
+        glowed = glowed or bool(whole)
+        bright = level > 100
+        partial = [t for t in range(geo.tiles) if 0 < bright[t].sum() < geo.leds_per_tile]
+        scattered = scattered or (glowed and bool(partial))  # specks: some of a tile's LEDs, not all
+    assert glowed and scattered
 
 
 def test_lightning_bolts_run_along_edges(registry):
