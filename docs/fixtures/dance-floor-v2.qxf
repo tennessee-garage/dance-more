@@ -81,7 +81,12 @@
   <Group Byte="0">Intensity</Group>
   <Capability Min="0" Max="255">A flash of value/255 each time it rises</Capability>
  </Channel>
- <Mode Name="Control 16ch">
+ <Channel Name="Hold">
+  <Group Byte="0">Maintenance</Group>
+  <Capability Min="0" Max="127">Run (the playlist advances)</Capability>
+  <Capability Min="128" Max="255">Hold (the playing entry plays on)</Capability>
+ </Channel>
+ <Mode Name="Control 17ch">
   <Channel Number="0">Master dimmer</Channel>
   <Channel Number="1">Strobe</Channel>
   <Channel Number="2">Source</Channel>
@@ -98,6 +103,7 @@
   <Channel Number="13">Tint blue</Channel>
   <Channel Number="14">Tint amount</Channel>
   <Channel Number="15">Bump</Channel>
+  <Channel Number="16">Hold</Channel>
  </Mode>
  <Physical>
   <Bulb Type="LED" Lumens="0" ColourTemperature="0"/>

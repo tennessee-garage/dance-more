@@ -30,7 +30,7 @@ class ExternalSettings(BaseModel):
     source: Literal["internal", "external", "mix"] = Field(description="What the floor shows while there is signal.")
     mix: float = Field(description="External's amount over the playlist in mix.")
     timeout_s: float = Field(description="Seconds without a frame before the floor takes its own show back.")
-    dmx_enabled: bool = Field(description="Listen for the 16-channel DMX control block.")
+    dmx_enabled: bool = Field(description="Listen for the 17-channel DMX control block.")
     dmx_artnet_universe: int = Field(description="The control block's Art-Net universe (0-based).")
     dmx_sacn_universe: int = Field(description="The control block's sACN universe (1-based).")
     dmx_address: int = Field(description="The control block's first channel (1-based).")

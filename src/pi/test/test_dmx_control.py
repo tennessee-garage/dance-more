@@ -25,7 +25,7 @@ def block(**values) -> bytes:
     """A control block: every channel at 0 except those named (by offset)."""
     data = bytearray(WIDTH)
     names = {"dimmer": 0, "strobe": 1, "source": 2, "mix": 3, "bank": 4, "program": 5, "speed": 6,
-             "macro1": 7, "macro2": 8, "red": 11, "green": 12, "blue": 13, "tint": 14, "bump": 15}
+             "macro1": 7, "macro2": 8, "red": 11, "green": 12, "blue": 13, "tint": 14, "bump": 15, "hold": 16}
     for name, value in values.items():
         data[names[name]] = value
     return bytes(data)
@@ -87,6 +87,35 @@ def test_bump_fires_when_it_rises(rig):
     assert [c.args for c in runner.bump.call_args_list] == [(1.0, 0.25), (128 / 255, 0.25)]
 
 
+def test_hold_follows_the_channel_across_128(rig):
+    control, runner, _, _, _ = rig
+    control.handle(block(hold=0))  # connecting with it down leaves a web UI hold alone
+    control.handle(block(hold=127))
+    control.handle(block(hold=128))
+    control.handle(block(hold=255))
+    control.handle(block(hold=40))
+    assert [c.args for c in runner.hold.call_args_list] == [(True,), (False,)]
+
+
+def test_a_first_packet_with_hold_up_holds(rig):
+    control, runner, _, _, _ = rig
+    control.handle(block(hold=200))
+    runner.hold.assert_called_once_with(True)
+
+
+def test_silence_releases_a_hold_the_desk_applied_but_not_one_it_did_not(rig):
+    control, runner, _, _, clock = rig
+    control.handle(block(hold=255))
+    clock.t += 3.0
+    control.poll()
+    assert [c.args for c in runner.hold.call_args_list] == [(True,), (False,)]
+    runner.reset_mock()
+    control.handle(block(hold=0))
+    clock.t += 3.0
+    control.poll()
+    runner.hold.assert_not_called()
+
+
 def test_bank_and_program_load_a_playlist_by_name_order_and_go_to_an_entry(rig):
     control, runner, _, store, _ = rig
     playlists = [MagicMock(id=7, entries=[1, 2, 3]), MagicMock(id=3, entries=[1])]
@@ -138,14 +167,14 @@ def test_the_receiver_hands_over_the_block_and_ignores_short_packets():
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.sendto(artdmx(0, bytes(192)), ("127.0.0.1", port))  # stops short of channel 201
             data = bytearray(512)
-            data[200:216] = bytes(range(1, 17))
+            data[200 : 200 + WIDTH] = bytes(range(1, WIDTH + 1))
             s.sendto(artdmx(0, bytes(data)), ("127.0.0.1", port))
         end = time.monotonic() + 2.0
         while not received and time.monotonic() < end:
             time.sleep(0.01)
     finally:
         receiver.stop()
-    assert received == [bytes(range(1, 17))]
+    assert received == [bytes(range(1, WIDTH + 1))]
     assert receiver.latest() is not None  # the same universe still carried the tile pixels
 
 

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from df2_pi import cli
 from df2_pi.animation import AnimationRegistry
 from df2_pi.engine import Runner
+from df2_pi.interfacing.dmx_control import WIDTH
 from df2_pi.interfacing.external import EXTERNAL_ID
 from df2_pi.interfacing.service import ExternalInput
 from df2_pi.output import FanOut, NullSink, PreviewSink
@@ -46,7 +47,7 @@ def test_settings_and_status_are_served(registry, store):
     }
     dmx = body["status"]["dmx"]
     assert (dmx["live"], dmx["packets"], dmx["values"]) == (False, 0, None)
-    assert dmx["channels"][0] == "Master dimmer" and len(dmx["channels"]) == 16
+    assert dmx["channels"][0] == "Master dimmer" and len(dmx["channels"]) == WIDTH
     status = body["status"]
     assert (status["live"], status["applied"], status["universes"], status["frames"]) == (False, "internal", 1, 0)
 
