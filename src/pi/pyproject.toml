@@ -21,12 +21,18 @@ dev = [
     "pytest>=8",
     "httpx2>=2.9",  # FastAPI's TestClient (starlette 1.x deprecates plain httpx there)
     "df2-pi[web]",
+    "df2-pi[beat]",
 ]
 # `df2-pi play --window` and `--record out.gif|.mp4`; the terminal sink needs nothing.
 preview = [
     "pygame>=2.5",
     "imageio>=2.31",
     "imageio-ffmpeg>=0.4",
+]
+# Beat sync's Ableton Link source (interfacing/beat.py). Without it Link
+# reports itself unavailable; tap tempo and MIDI clock need nothing.
+beat = [
+    "aalink>=0.2.3",
 ]
 # `df2-pi serve`: the admin UI. Only df2_pi.web imports these.
 web = [
