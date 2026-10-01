@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes"}
 
 
 @pytest.fixture(scope="module")
@@ -182,6 +182,21 @@ def test_stardust_never_goes_dark_and_a_nova_glows_then_scatters(registry):
         partial = [t for t in range(geo.tiles) if 0 < bright[t].sum() < geo.leds_per_tile]
         scattered = scattered or (glowed and bool(partial))  # specks: some of a tile's LEDs, not all
     assert glowed and scattered
+
+
+def test_stripes_fade_as_one_over_n_in_light_either_side_of_the_peak(registry):
+    from df2_pi.gamma import to_linear
+
+    run = registry["stripes"].start(seed=2, params={"palette": "rygw", "length": 20})
+    checked = 0
+    for _ in range(600):
+        light = to_linear(run.render().frame.data).max(axis=-1)  # (8, 8) linear light, brightest channel
+        for row in light:
+            peak = int(row.argmax())
+            if row[peak] > 0.98 and 1 <= peak <= 6:  # the peak itself is on the row, with tiles both sides
+                assert row[peak - 1] == pytest.approx(0.5, abs=0.02) and row[peak + 1] == pytest.approx(0.5, abs=0.02)
+                checked += 1
+    assert checked > 10
 
 
 def test_lightning_bolts_run_along_edges(registry):
