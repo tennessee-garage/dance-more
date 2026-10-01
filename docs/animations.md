@@ -31,6 +31,7 @@ one part of the API:
 | [`comet_squares.py`](../src/pi/animations/comet_squares.py) | pixel | `rails` and `edges_at` together; objects with phases in `ctx.state` |
 | [`vortex.py`](../src/pi/animations/vortex.py) | pixel | Building your own rings from `geo.edge`; a little physics carried in `ctx.state` |
 | [`twin_peaks.py`](../src/pi/animations/twin_peaks.py) | pixel | A whole-floor texture from `led_positions`: shading a surface, not drawing lines |
+| [`spiral.py`](../src/pi/animations/spiral.py) | tile | A v1 processor ported: per-frame state in `ctx.state`, steps clocked by `ctx.t` |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
