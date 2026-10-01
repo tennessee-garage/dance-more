@@ -157,6 +157,18 @@ def test_spiral_moves_each_colour_one_tile_outward_per_step(registry):
             assert frames[n][path[k]].tolist() == frames[n - k][path[0]].tolist()
 
 
+def test_checkerboard_flips_on_the_beat_when_there_is_one(registry):
+    from df2_pi.animation import BeatInfo
+
+    run = registry["checkerboard"].start(seed=0, params={"interval": 4.0})  # far slower than the beat
+    tiles = []
+    for frame in range(12):
+        beat = BeatInfo(tempo=120.0, phase=0.0, beat=frame // 3, bar_phase=0.0, beats_per_bar=4, downbeat=False)
+        tiles.append(run.render(beat=beat).frame[0, 0].tolist())
+    changes = [i for i in range(1, 12) if tiles[i] != tiles[i - 1]]
+    assert changes == [3, 6, 9]  # a flip on each new beat, and only then
+
+
 def test_lightning_bolts_run_along_edges(registry):
     geo = default_geometry()
     run = registry["lightning"].start(seed=3, params={"rate": 5.0, "decay": 0.3})

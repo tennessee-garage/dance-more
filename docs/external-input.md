@@ -125,6 +125,41 @@ For QLC+, import [fixtures/dance-floor-v2.qxf](fixtures/dance-floor-v2.qxf)
 (`df2-pi fixture` regenerates it from the code). For other desks, build a
 17-channel generic fixture from the table above.
 
+## Beat sync
+
+The floor can follow the music's tempo: animations get `ctx.beat` (see
+[animations.md](animations.md#4-framecontext)), and launches can wait for the
+beat. Set it up in the External tab's **Beat sync** section; it is off by
+default.
+
+- **Ableton Link** is the one to use with Resolume, TouchDesigner, Ableton or
+  DJ software: turn on Link in the other app, on the same network, and pick
+  Ableton Link here. It carries tempo, beat and bar with no extra hardware.
+  The section shows the tempo and how many peers it sees; with no peers there
+  is no beat (Link alone would just run at its own 120 BPM). *Beats per bar*
+  is Link's quantum.
+- **Tap tempo**: tap along, from the section or the Tap button that appears in
+  the transport bar. The tempo is the mean of the last four taps and the last
+  tap is beat 1 of a bar. A single tap after a pause re-phases at the same
+  tempo.
+- **MIDI clock** is in the code (24 PPQN, Start / Continue / Stop / Song
+  Position) and arrives as a choice here with MIDI input (#131).
+
+Live controls: **Resync** makes the next beat a downbeat, **−10 / +10 ms**
+nudge the beat earlier or later on the floor, and **½× / 1× / 2×** halve or
+double the tempo for animations.
+
+**Latency offset.** Each frame's beat is worked out for the moment the frame
+is latched; the offset adds the rest of the way to the LEDs. Play something
+with a hard kick, watch the floor, and raise the offset until the lights land
+on the kick rather than after it.
+
+**Quantize launches** (off / beat / bar). With a beat, Next, Previous, going
+to an entry, loading a playlist and one-offs wait for the next beat or bar
+line and land on the frame that crosses it; the transport bar says when one
+is waiting. Entry durations are not quantized. With no beat they happen at
+once, and *bar* falls back to the beat until the bar is known.
+
 ## Checking it works
 
 The External tab shows **Live** with the sender's address and frame rate,
