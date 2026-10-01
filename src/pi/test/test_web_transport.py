@@ -136,6 +136,8 @@ def mocked(registry, store):
         ("brightness", {"value": 200}, "set_brightness", (200,)),
         ("blackout", {"on": True}, "blackout", ()),
         ("blackout", {"on": False}, "unblackout", ()),
+        ("hold", {"on": True}, "hold", (True,)),
+        ("hold", {"on": False}, "hold", (False,)),
         ("speed", {"value": 2.5}, "set_speed", (2.5,)),
         ("freeze", {"on": True}, "freeze", (True,)),
         ("bump", {"level": 0.5, "decay_s": 1.0}, "bump", (0.5, 1.0)),
@@ -407,7 +409,7 @@ def test_openapi_documents_that_commands_are_asynchronous(mocked):
     schema = client.get("/openapi.json").json()
     assert "next frame boundary" in schema["info"]["description"]
     commands = {path: ops["post"] for path, ops in schema["paths"].items() if path.startswith("/api/transport/")}
-    assert len(commands) == 23  # 12 transport + 8 show controls + 3 layer
+    assert len(commands) == 24  # 13 transport + 8 show controls + 3 layer
     for path, op in commands.items():
         assert "next frame boundary" in op["description"], path
     assert {"RunnerState", "TelemetrySnapshot", "Percentiles", "ShowState", "LayerState"} <= set(schema["components"]["schemas"])

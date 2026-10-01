@@ -176,7 +176,7 @@ export function ExternalPanel() {
     </div>`;
 }
 
-/** The 16-channel lighting-desk control block: where it is, and what it last said. */
+/** The 17-channel lighting-desk control block: where it is, and what it last said. */
 function DmxSection({ s, dmx, change }) {
   return html`
     <section class="diag-section">
@@ -207,8 +207,9 @@ function DmxSection({ s, dmx, change }) {
             </table>`
           : html`<p class="ext-note">No control data${dmx.packets ? " (released after the timeout)" : " received yet"}.</p>`}
         <p class="ext-note">
-          Bank picks a playlist in name order and program an entry, both from 0. When the desk goes quiet for the
-          timeout, dimmer, strobe, speed, tint and source return to their settings.
+          Bank picks a playlist in name order and program an entry, both from 0; hold at 128 and up stops the
+          countdown. When the desk goes quiet for the timeout, dimmer, strobe, speed, tint and source return to
+          their settings, and a hold it applied is released.
           QLC+: <a href="https://github.com/tennessee-garage/dance-more/blob/main/docs/fixtures/dance-floor-v2.qxf">fixture definition</a>.
         </p>`}
     </section>`;

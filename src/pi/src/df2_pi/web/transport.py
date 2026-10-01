@@ -74,6 +74,10 @@ class Blackout(BaseModel):
     on: bool
 
 
+class Hold(BaseModel):
+    on: bool
+
+
 # ---- show controls ----
 
 
@@ -156,6 +160,12 @@ def transport_router(ctx: AppContext) -> APIRouter:
     simple("next", runner.next, "Skip to the next entry, or end a one-off")
     simple("previous", runner.previous, "Back to the previous entry")
     simple("restart", runner.restart, "Restart the current entry from its first frame")
+
+    @router.post("/transport/hold", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
+    def hold(body: Hold) -> Queued:
+        """Stop the countdown so what is playing plays until released, or let
+        it run on from where it stood: at zero it moves on as usual."""
+        return queued(lambda: runner.hold(body.on))
 
     @router.post("/transport/goto", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
     def goto(body: Goto) -> Queued:

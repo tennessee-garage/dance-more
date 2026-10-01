@@ -75,7 +75,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "dmx_enabled": False,
     "dmx_artnet_universe": 0,
     "dmx_sacn_universe": 1,
-    "dmx_address": 201,  # 1-based start channel of the 16-channel block
+    "dmx_address": 201,  # 1-based start channel of the control block
     "strobe_max_hz": 10.0,  # the strobe show control's cap
     "enabled": True,
     "fps": 30.0,

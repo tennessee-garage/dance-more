@@ -1,4 +1,4 @@
-"""The floor as a lighting-desk fixture: a 16-channel control block.
+"""The floor as a lighting-desk fixture: a 17-channel control block.
 
     control = DmxControl(runner, external_source, store)
     control.handle(channels, now)     # every DMX packet for the control universe
@@ -19,6 +19,7 @@ floor as a fixture at a start address and drives it like any other:
     12-14 tint red, green, blue      Runner.set_tint
     15  tint amount                  Runner.set_tint
     16  bump                         a flash of value/255 when it rises
+    17  hold                         Runner.hold: 0-127 the countdown runs, 128-255 it is held
 
 (`CHANNELS` is the table; the QLC+ fixture in docs/fixtures/ is generated
 from it, so the two cannot drift.)
@@ -28,13 +29,17 @@ only when its value changes. Continuous controls (dimmer, strobe, source,
 mix, speed, tint) also act on the first packet after silence - a fixture
 follows its faders from the moment it is patched. Triggers (bank/program,
 macros, bump) never do: a desk that connects with them at 0 must not
-reload the playlist or flash the floor.
+reload the playlist or flash the floor. Hold is between the two: it acts
+on a first packet only to hold, so a desk that connects with it down
+does not release a hold set from the web UI, and after that whenever it
+crosses 128.
 
 Release. When the control universe has been silent for the timeout, every
 continuous control goes back to its non-DMX value: brightness to the
 stored setting (what the web UI last set), strobe off, speed 1, tint off,
-source and mix to their stored settings. What bank/program loaded, and
-macro values, stay.
+source and mix to their stored settings, and a hold the desk was
+applying is released, so a dropped desk cannot leave the show stuck on
+one entry. What bank/program loaded, and macro values, stay.
 
 Off by default. A media server driving tile mode usually sends the whole
 512-channel universe with the unused channels at 0; a control block in
@@ -86,11 +91,14 @@ CHANNELS: tuple[Channel, ...] = (
     Channel("Tint blue", "Intensity", "Tint colour", colour="Blue"),
     Channel("Tint amount", "Intensity", "0 off .. 255 fully the tint"),
     Channel("Bump", "Intensity", "A flash of value/255 each time it rises", trigger=True),
+    Channel("Hold", "Maintenance", "0-127 the countdown runs, 128-255 the playing entry is held"),
 )
 WIDTH = len(CHANNELS)
 DIMMER, STROBE, SOURCE, MIX, BANK, PROGRAM, SPEED, MACRO1 = 0, 1, 2, 3, 4, 5, 6, 7
 TINT = (11, 12, 13, 14)
 BUMP = 15
+HOLD = 16
+HOLD_THRESHOLD = 128
 BUMP_DECAY_S = 0.25
 
 
@@ -142,9 +150,9 @@ class DmxControl:
         with self._lock:
             if self._last is None or self._last_at is None or self._now() - self._last_at < self.timeout_s:
                 return
-            self._last = None
+            last, self._last = self._last, None
         log.info("DMX control released after %.1f s of silence", self.timeout_s)
-        self._release()
+        self._release(last)
 
     def live(self) -> bool:
         return self._last is not None
@@ -205,6 +213,9 @@ class DmxControl:
             runner.set_tint(r, g, b, amount / 255)
         if previous is not None and block[BUMP] > previous[BUMP]:
             runner.bump(block[BUMP] / 255, BUMP_DECAY_S)
+        held = block[HOLD] >= HOLD_THRESHOLD
+        if (held and previous is None) or (previous is not None and held != (previous[HOLD] >= HOLD_THRESHOLD)):
+            runner.hold(held)
         if changed(BANK) or changed(PROGRAM):
             self._program(block[BANK], block[PROGRAM], bank_changed=previous is None or previous[BANK] != block[BANK])
 
@@ -224,13 +235,15 @@ class DmxControl:
             self.runner.load_playlist(self.store.resolve(playlist.id))
         self.runner.goto(program)
 
-    def _release(self) -> None:
+    def _release(self, last: bytes) -> None:
         runner = self.runner
         brightness = self.store.get_int("brightness") if self.store is not None else 255
         runner.set_brightness(255 if brightness is None else brightness)
         runner.set_strobe(0.0)
         runner.set_speed(1.0)
         runner.set_tint(255, 255, 255, 0.0)
+        if last[HOLD] >= HOLD_THRESHOLD:
+            runner.hold(False)
         if self.source is not None and self.store is not None:
             self.source.set_source(self.store.get_str("external_source") or "external")
             self.source.set_mix(self.store.get_float("external_mix") or 0.0)
@@ -288,6 +301,11 @@ def _capabilities(ch: Channel) -> list[str]:
             '  <Capability Min="0" Max="84">Internal (playlist only)</Capability>',
             '  <Capability Min="85" Max="169">External (Art-Net takes over)</Capability>',
             '  <Capability Min="170" Max="255">Mix (Art-Net over the playlist)</Capability>',
+        ]
+    if ch.name == "Hold":
+        return [
+            '  <Capability Min="0" Max="127">Run (the playlist advances)</Capability>',
+            '  <Capability Min="128" Max="255">Hold (the playing entry plays on)</Capability>',
         ]
     if ch.name == "Speed":
         return [

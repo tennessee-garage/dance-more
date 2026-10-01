@@ -83,7 +83,7 @@ Use a **DMX Out CHOP** (Art-Net or sACN) at the floor's IP.
 
 ## Lighting desk control
 
-The floor can also be patched as a **16-channel fixture**, so a desk (grandMA,
+The floor can also be patched as a **17-channel fixture**, so a desk (grandMA,
 Chamsys, QLC+) or a media server's DMX output can dim it, strobe it and pick
 programs. It is **off by default**: turn it on in the External tab's DMX
 control section and set its universe (Art-Net and sACN separately) and start
@@ -102,6 +102,7 @@ address (default 201).
 | 12–14 | Tint red, green, blue | the tint colour |
 | 15 | Tint amount | 0 off .. 255 fully the tint |
 | 16 | Bump | a white flash of value/255 each time it rises |
+| 17 | Hold | 0–127 the countdown runs, 128–255 the playing entry plays on (the web UI's Hold) |
 
 - **Continuous controls follow the faders.** Dimmer, strobe, source, mix,
   speed and tint take effect on the first packet, then on every change.
@@ -109,16 +110,20 @@ address (default 201).
   the first packet, so a desk that connects with them at 0 doesn't reload the
   playlist or flash the floor. Changing either bank or program goes to that
   entry.
+- **Hold acts on crossing 128.** On the first packet it acts only if it is
+  up, so a desk connecting with it down doesn't release a hold set from the
+  web UI. Released, the entry finishes what was left of its countdown.
 - **When the desk goes quiet for the timeout** (the same one as the pixels),
-  dimmer, strobe, speed, tint, source and mix return to their settings. What
-  bank and program loaded stays loaded.
+  dimmer, strobe, speed, tint, source and mix return to their settings, and
+  a hold the desk applied is released. What bank and program loaded stays
+  loaded.
 - **Keep it out of a pixel universe.** A media server sending tile mode
   usually sends all 512 channels, zeros included, and zero on channel 1
   blacks out the floor. The External tab warns when the two share a universe.
 
 For QLC+, import [fixtures/dance-floor-v2.qxf](fixtures/dance-floor-v2.qxf)
 (`df2-pi fixture` regenerates it from the code). For other desks, build a
-16-channel generic fixture from the table above.
+17-channel generic fixture from the table above.
 
 ## Checking it works
 
