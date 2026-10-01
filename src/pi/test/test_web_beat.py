@@ -59,10 +59,21 @@ def build(registry, store, link_factory=fake_link, with_beat=True):
 def test_defaults_attach_the_clock_and_leave_launches_alone(registry, store):
     client, beat, runner, _ = build(registry, store)
     body = client.get("/api/beat").json()
-    assert body["settings"] == {"source": "off", "beats_per_bar": 4, "multiplier": 1.0, "offset_ms": 0.0, "launch_quantum": "off"}
+    assert body["settings"] == {
+        "source": "off", "beats_per_bar": 4, "multiplier": 1.0, "offset_ms": 0.0, "launch_quantum": "off", "fallback_bpm": 120.0,
+    }
     assert body["status"]["active"] is False
     runner.attach_beat.assert_called_once_with(beat.clock)
     runner.set_launch_quantum.assert_called_once_with("off")
+    runner.set_fallback_bpm.assert_called_once_with(120.0)
+
+
+def test_the_fallback_tempo_is_applied_and_stored(registry, store):
+    client, _, runner, _ = build(registry, store)
+    assert client.patch("/api/beat", json={"fallback_bpm": 128}).status_code == 200
+    runner.set_fallback_bpm.assert_called_with(128.0)
+    assert store.get_float("fallback_bpm") == 128.0
+    assert client.patch("/api/beat", json={"fallback_bpm": 10}).status_code == 422
 
 
 def test_a_change_is_applied_now_and_stored(registry, store):

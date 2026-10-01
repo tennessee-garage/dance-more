@@ -39,6 +39,7 @@ KEYS = {
     "multiplier": "beat_multiplier",
     "offset_ms": "beat_offset_ms",
     "launch_quantum": "launch_quantum",
+    "fallback_bpm": "fallback_bpm",
 }
 
 
@@ -65,6 +66,7 @@ class BeatService:
         self._error: str | None = None
         runner.attach_beat(self.clock)
         runner.set_launch_quantum(s["launch_quantum"])
+        runner.set_fallback_bpm(s["fallback_bpm"])
 
     def start(self) -> None:
         self._activate(self._settings["source"])
@@ -108,6 +110,8 @@ class BeatService:
                     self._link.set_quantum(merged["beats_per_bar"])
             if "launch_quantum" in changes:
                 self.runner.set_launch_quantum(merged["launch_quantum"])
+            if "fallback_bpm" in changes:
+                self.runner.set_fallback_bpm(merged["fallback_bpm"])
             self._settings = merged
             if "source" in changes:
                 self._activate(merged["source"])
@@ -192,3 +196,5 @@ def _validate(s: dict[str, Any]) -> None:
         raise ValueError("offset_ms must be -500..500")
     if s["launch_quantum"] not in LAUNCH_QUANTA:
         raise ValueError(f"launch_quantum must be one of {LAUNCH_QUANTA}")
+    if not 20.0 <= float(s["fallback_bpm"]) <= 300.0:
+        raise ValueError("fallback_bpm must be 20..300")

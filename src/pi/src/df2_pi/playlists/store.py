@@ -83,6 +83,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "beat_multiplier": 1.0,  # 0.5 | 1 | 2
     "beat_offset_ms": 0.0,  # the rest of the way to the LEDs, tuned by eye
     "launch_quantum": "off",  # off | beat | bar
+    "fallback_bpm": 120.0,  # ctx.t_beats' tempo while there is no beat source
     "enabled": True,
     "fps": 30.0,
     "default_entry_duration": 60.0,
