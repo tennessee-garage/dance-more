@@ -730,6 +730,73 @@ def test_speed_scales_the_animations_clock_without_a_jump(registry, store):
     assert probe.states[-1].show.speed == 2.0
 
 
+def test_hold_stops_the_countdown_while_the_animation_plays_on(registry, store):
+    def until(runner, n):
+        if n == 1:
+            runner.hold()
+        if n == 8:
+            runner.hold(False)
+        return n >= 11
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("a", 3 * PERIOD), ("b", 3 * PERIOD)))
+    runner.run()
+    greens = [int(f.data[0, 0, 1]) for _, f in probe.frames]
+    assert probe.levels()[:10] == [10] * 9 + [20]  # A's 3 periods: 1 before the hold, 2 after it
+    assert greens[:9] == list(range(9))  # A rendered every frame while held
+    held = probe.states[1:8]
+    assert all(s.timer_held for s in held) and not probe.states[8].timer_held
+    assert [s.remaining_s for s in held] == pytest.approx([2 * PERIOD] * 7)
+
+
+def test_a_hold_carries_over_a_skip_and_the_next_entry_waits_whole(registry, store):
+    def until(runner, n):
+        if n == 1:
+            runner.hold()
+        if n == 3:
+            runner.next()
+        return n >= 8
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("a", 3 * PERIOD), ("b", 3 * PERIOD)))
+    runner.run()
+    assert probe.levels()[3:] == [20] * 5
+    assert [s.remaining_s for s in probe.states[3:]] == pytest.approx([3 * PERIOD] * 5)
+
+
+def test_a_held_countdown_stands_still_through_a_pause(registry, store):
+    def until(runner, n):
+        if n == 1:
+            runner.hold()
+        if n == 3:
+            runner.pause()
+        if n == 6:
+            runner.resume()
+        if n == 8:
+            runner.hold(False)
+        return n >= 11
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("a", 3 * PERIOD), ("b", 3 * PERIOD)))
+    runner.run()
+    assert [s.remaining_s for s in probe.states[1:8]] == pytest.approx([2 * PERIOD] * 7)
+    assert probe.levels()[:10] == [10] * 9 + [20]
+
+
+def test_a_paused_countdown_reads_as_it_stood(registry, store):
+    def until(runner, n):
+        if n == 2:
+            runner.pause()
+        if n == 6:
+            runner.resume()
+        return n >= 8
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("a", 5 * PERIOD)))
+    runner.run()
+    assert [s.remaining_s for s in probe.states[:8]] == pytest.approx([5 * PERIOD, 4 * PERIOD] + [3 * PERIOD] * 5 + [2 * PERIOD])
+
+
 def test_speed_zero_stops_the_clock_and_a_pause_does_not_advance_it(registry, store):
     def script(runner, n):
         if n == 2:

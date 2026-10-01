@@ -56,10 +56,12 @@ const ICONS = {
   next: "M16 5h2v14h-2zM4 5v14l11-7z",
   play: "M7 4v16l13-8z",
   pause: "M6 5h4v14H6zM14 5h4v14h-4z",
+  // A stopwatch with pause bars in its face: the countdown, stopped.
+  hold: "M10 1h4v2h-4zM12 5a8 8 0 1 1 0 16a8 8 0 1 1 0-16zM12 7a6 6 0 1 0 0 12a6 6 0 1 0 0-12zM9.5 10h2v6h-2zM12.5 10h2v6h-2z",
 };
 
 function Icon({ name }) {
-  return html`<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d=${ICONS[name]} fill="currentColor" /></svg>`;
+  return html`<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d=${ICONS[name]} fill="currentColor" fill-rule="evenodd" /></svg>`;
 }
 
 function PlaybackButtons({ state, live }) {
@@ -77,7 +79,23 @@ function PlaybackButtons({ state, live }) {
       <button class="icon" onClick=${() => command("next")} disabled=${!live} aria-label="Next" title="Next">
         <${Icon} name="next" />
       </button>
+      <${HoldButton} state=${state} live=${live} />
     </div>`;
+}
+
+/** Stops the entry's countdown: the animation plays on until released, then
+ *  the playlist moves on when what was left of it runs out. */
+function HoldButton({ state, live }) {
+  const held = !!state?.timer_held;
+  return html`
+    <button
+      class=${held ? "icon hold active" : "icon hold"}
+      aria-pressed=${held}
+      aria-label="Hold"
+      disabled=${!live}
+      onClick=${() => command("hold", { on: !held })}
+      title=${held ? "Held: this plays until released. Click to let the countdown run on" : "Hold: stop the countdown so this keeps playing"}
+    ><${Icon} name="hold" /></button>`;
 }
 
 /** Posts on release, not on every step of a drag. While dragging, and after
@@ -158,7 +176,7 @@ function Progress({ state }) {
   const total = elapsed + remaining;
   const fraction = total > 0 ? Math.min(1, elapsed / total) : 0;
   return html`
-    <div class="progress" role="progressbar" aria-label="Current entry" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(fraction * 100)}>
+    <div class=${state.timer_held ? "progress held" : "progress"} role="progressbar" aria-label="Current entry" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${Math.round(fraction * 100)}>
       <div class="progress-fill" style=${{ width: `${fraction * 100}%` }}></div>
     </div>`;
 }
@@ -180,7 +198,7 @@ function TransportBar() {
           <${Field} label="Entry"><span class="num">${position}</span><//>
           <${Field} label="Animation" wide>${animation}${state?.one_off ? html` <span class="tag">one-off</span>` : ""}<//>
           <${Field} label="Elapsed"><span class="num">${clock(state?.elapsed_s)}</span><//>
-          <${Field} label="Remaining"><span class="num">${clock(state?.remaining_s)}</span><//>
+          <${Field} label="Remaining"><span class="num">${clock(state?.remaining_s)}</span>${state?.timer_held ? html` <span class="tag">held</span>` : ""}<//>
           <${Field} label="Frame"><span class="num">${state?.frame ?? DASH}</span><//>
         </div>
         <${BrightnessSlider} state=${state} live=${live} />

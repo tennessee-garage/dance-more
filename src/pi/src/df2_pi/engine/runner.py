@@ -39,6 +39,14 @@ failures disable that entry for the session and flag it in the state.
 An overrun is not an error - the clock drops the frame and counts it -
 but persistent dropping shows up in `state.warnings`.
 
+Hold. `hold()` stops the countdown of whatever is playing - the
+current entry, or a one-off with a hold time - while the animation plays
+on: its elapsed and remaining stand still until `hold(False)`, and then
+it advances when its remaining reaches zero as usual. A crossfade already
+under way finishes first, so a hold never leaves two animations blended.
+The hold belongs to the runner, not the entry: skipping while held starts
+the next entry with its whole duration, waiting.
+
 Show controls. Speed, freeze, bump, strobe, tint and colour correction
 (`overlays.py`) act on whatever is playing, for an operator who does not
 know what that is. All but speed transform the output frame, after any
@@ -163,6 +171,7 @@ class RunnerState:
     disabled_entries: tuple[int, ...] = ()
     warnings: tuple[str, ...] = ()
     one_off: bool = False
+    timer_held: bool = False  # the countdown is stopped; what plays, plays until released
     # The playing entry's id: stable when the entries are reordered, which
     # its index (a position in the runner's loaded copy) is not.
     entry_id: int | None = None
@@ -266,6 +275,8 @@ class Runner:
         self._playing = False
         self._ended = False  # a non-looping playlist ran out: hold the last frame
         self._paused_at: float | None = None
+        self._timer_held = False
+        self._timer_t = 0.0  # while held: the wall time the countdown was last held up to
         self._blacked_out = False
         self._brightness = brightness
         self._quarter_turns = quarter_turns(rotation)
@@ -297,6 +308,12 @@ class Runner:
 
     def resume(self) -> None:
         self._enqueue(self._do_resume)
+
+    def hold(self, on: bool = True) -> None:
+        """Stop the countdown, so what is playing plays until released (on),
+        or let it run on from where it stood (off)."""
+        on = bool(on)
+        self._enqueue(lambda: self._do_hold(on))
 
     def next(self) -> None:
         self._enqueue(lambda: self._do_skip(+1))
@@ -547,6 +564,7 @@ class Runner:
     def _produce_base(self, tick: FrameInfo) -> tuple[Frame, dict[int, Effect]]:
         """What is playing, before any layer: `_held` is only ever this."""
         t = tick.t
+        self._hold_countdown(t)
         if self._one_off is not None:
             remaining = self._one_off.remaining(t)
             if remaining is not None and remaining <= EPSILON:
@@ -571,6 +589,18 @@ class Runner:
 
         self._held = frame
         return frame, effects
+
+    def _hold_countdown(self, t: float) -> None:
+        """While held, move the start of the running countdown along with
+        the clock, so its elapsed and remaining stand still. Not while a
+        crossfade is under way: that finishes, and the hold takes over after."""
+        if not self._timer_held:
+            return
+        gap, self._timer_t = t - self._timer_t, t
+        held = self._one_off if self._one_off is not None else self._current if self._outgoing is None else None
+        if held is not None:
+            # never past now: an entry started this tick has elapsed nothing yet, not less than nothing
+            held.started_t = min(held.started_t + gap, t)
 
     def _with_layer(self, base: Frame, t: float) -> Frame:
         layer = self._layer
@@ -816,6 +846,7 @@ class Runner:
 
     def _do_pause(self) -> None:
         if self._paused_at is None:
+            self._hold_countdown(self._last_t)  # bring a held countdown up to the moment it stops
             self._paused_at = self._last_t
 
     def _do_resume(self) -> None:
@@ -823,12 +854,18 @@ class Runner:
             return
         gap = self._last_t - self._paused_at
         self._paused_at = None
+        self._timer_t += gap  # the pause has already been made up below
         layered = self._layer.playing if self._layer is not None else None
         for playing in (self._current, self._outgoing, self._one_off, layered):
             if playing is not None:
                 playing.started_t += gap
                 if playing.last_t is not None:
                     playing.last_t += gap
+
+    def _do_hold(self, on: bool) -> None:
+        if on and not self._timer_held:
+            self._timer_t = self._last_t
+        self._timer_held = on
 
     def _do_skip(self, direction: int) -> None:
         if self._one_off is not None:
@@ -1002,7 +1039,9 @@ class Runner:
         if self._current is not None and self._current.entry is not None and self._playlist is not None:
             entry_index = self._playlist.entries.index(self._current.entry)
             entry_id = self._current.entry.entry.id
-        remaining = playing.remaining(t) if playing else None
+        # A paused countdown reads as it stood when the pause began; resuming shifts it on to match.
+        counted_t = self._paused_at if self._paused_at is not None else t
+        remaining = playing.remaining(counted_t) if playing else None
         warnings: list[str] = []
         if tick is not None:
             self._drops_at.append((tick.n, self.clock.dropped))
@@ -1026,7 +1065,7 @@ class Runner:
             entry_count=len(self._playlist.entries) if self._playlist else 0,
             animation=(playing.definition.id, playing.definition.meta.name) if playing else None,
             params=dict(playing.run.params) if playing else {},
-            elapsed_s=max(0.0, playing.elapsed(t)) if playing else 0.0,
+            elapsed_s=max(0.0, playing.elapsed(counted_t)) if playing else 0.0,
             remaining_s=None if remaining is None else max(0.0, remaining),
             frame=tick.n if tick is not None else 0,
             fps=self.fps,
@@ -1036,6 +1075,7 @@ class Runner:
             disabled_entries=tuple(sorted(self._disabled)),
             warnings=tuple(warnings),
             one_off=self._one_off is not None,
+            timer_held=self._timer_held,
             entry_id=entry_id,
             rotation=ROTATIONS[self._quarter_turns],
             show=self.overlays.state(),

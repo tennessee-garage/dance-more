@@ -248,7 +248,7 @@ function EntryParams({ playlistId, entry }) {
 function EntryProgress() {
   const state = runnerState.value;
   if (!state) return null;
-  const remaining = state.remaining_s == null ? "" : ` \u00b7 ${clock(state.remaining_s)} left`;
+  const remaining = state.remaining_s == null ? "" : ` \u00b7 ${clock(state.remaining_s)} left${state.timer_held ? ", held" : ""}`;
   return html`<span class="entry-progress num">${clock(state.elapsed_s)}${remaining}</span>`;
 }
 
