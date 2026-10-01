@@ -10,6 +10,13 @@ many LEDs there are.
 
 Also the ownership idiom: `previous` is read-only, so a fading trail is
 `previous.copy().gain(k)` and this frame's content on top.
+
+And triggers: `ctx.triggers` holds the hits (pads, notes, the web UI's
+trigger buttons) that arrived since the last frame, each delivered once.
+Here every hit drops a ring - its slot picks the spot on a 4x4 grid over
+the floor, its velocity how bright - on top of the random drops, which a
+low Drops per second all but turns off. `triggers=True` in the decorator
+tells the UI to show trigger pads while it plays.
 """
 
 import numpy as np
@@ -24,6 +31,7 @@ from df2_pi.pixels import PixelFrame
     author="df2",
     format="pixel",
     tags=["ambient", "geometric"],
+    triggers=True,
     params={
         "rate": Param(float, default=1.5, min=0.1, max=10.0, label="Drops per second", role="density", curve="log"),
         "speed": Param(float, default=40.0, min=5.0, max=150.0, label="Ring speed (cells/s)"),
@@ -39,6 +47,13 @@ def render(previous: PixelFrame, ctx) -> PixelFrame:
     if ctx.rng.random() < ctx.params["rate"] * ctx.dt:
         colour = np.array([ctx.rng.randrange(80, 256) for _ in range(3)], dtype=np.float32)
         drops.append((ctx.t, ctx.rng.uniform(0, geo.height), ctx.rng.uniform(0, geo.width), colour))
+    # hits: a drop at the slot's place on a 4x4 grid, as bright as it was hit
+    for hit in ctx.triggers:
+        row, col = divmod(hit.slot, 4)
+        level = 80 + 175 * hit.velocity
+        colour = np.array([ctx.rng.randrange(80, 256) for _ in range(3)], dtype=np.float32)
+        colour = colour / colour.max() * level
+        drops.append((ctx.t, (row + 0.5) * geo.height / 4, (col + 0.5) * geo.width / 4, colour))
     # forget rings that have left the floor
     max_r = np.hypot(geo.height, geo.width)
     drops[:] = [d for d in drops if (ctx.t - d[0]) * ctx.params["speed"] < max_r]

@@ -21,10 +21,10 @@ one part of the API:
 | File | Format | Shows |
 | --- | --- | --- |
 | [`solid.py`](../src/pi/animations/solid.py) | tile | The minimum: one colour, one param. Copy this one. |
-| [`rainbow_sweep.py`](../src/pi/animations/rainbow_sweep.py) | tile | Position and time: `ctx.t`, a param-driven speed |
+| [`rainbow_sweep.py`](../src/pi/animations/rainbow_sweep.py) | tile | Position and beat time: `ctx.t_beats`, a `pulse()` on every beat |
 | [`checkerboard.py`](../src/pi/animations/checkerboard.py) | tile | `ctx.state` — keeping data between frames without a class |
 | [`plasma.py`](../src/pi/animations/plasma.py) | pixel | `PixelFrame.from_grid()` — "just hand me a 136×136 image" |
-| [`ripple.py`](../src/pi/animations/ripple.py) | pixel | Continuous coordinates: `led_positions`, `splat()`, fading trails |
+| [`ripple.py`](../src/pi/animations/ripple.py) | pixel | Continuous coordinates: `led_positions`, `splat()`, fading trails; `ctx.triggers` |
 | [`lightning.py`](../src/pi/animations/lightning.py) | pixel | **The edge graph**: bolts that walk the floor along tile edges |
 | [`chase.py`](../src/pi/animations/chase.py) | pixel | `floor_ring` — the outer boundary as one 480-LED loop |
 | [`seams.py`](../src/pi/animations/seams.py) | pixel | `seams` — the facing pairs of edges between tiles |
@@ -139,6 +139,8 @@ is the image path `plasma.py` uses.
 | `ctx.rng` | `random.Random` | Seeded per run: a recording reproduces exactly |
 | `ctx.np_rng` | `numpy.random.Generator` | Same seed, for numpy-shaped APIs (`EdgeGraph.walk` takes it) |
 | `ctx.beat` | `BeatInfo \| None` | Where the music is, when a beat source is running (below); else `None` |
+| `ctx.t_beats` | `float` | Beat time: the music's position, or `ctx.t` at the fallback tempo. **Use this for anything on the beat** (below) |
+| `ctx.triggers` | `tuple[Trigger, ...]` | Hits since the last frame - pads, notes, the web UI's trigger buttons. Usually `()` (below) |
 | `ctx.send_effect(tile, effect)` | | Write a tile's effect register (see below) |
 
 There is deliberately no "time remaining". Fading out is the runner's job.
@@ -176,11 +178,40 @@ music is at the moment your frame is *seen*, latency included:
 | `downbeat` | `True` on exactly one frame per bar: the one that crossed the bar line |
 
 It is `None` whenever there is no tempo - no source, no Link peers, the
-MIDI clock stopped - so always keep a fallback on `ctx.t`.
-[`checkerboard.py`](../src/pi/animations/checkerboard.py) flips on each new
-`ctx.beat.beat` and on a timer otherwise. Declare `sync="beat"` when you
-follow it. A pulse is `1 - ctx.beat.phase`; a bar-long sweep is
-`ctx.beat.bar_phase`.
+MIDI clock stopped.
+
+**Beat time.** Most of the time you want `ctx.t_beats` instead: the music's
+position (`beat + phase`) when there is a beat, and your own `ctx.t` at the
+fallback tempo (a setting, default 120 BPM) when there is not. Anything
+written against it locks to the music when there is music and runs
+sensibly on its own when there is not - no `None` check. Shape it with the
+waveforms in `df2_pi.tempo`, which all return 0..1 and take arrays as well
+as numbers, so one call can light every tile at its own offset:
+
+```python
+from df2_pi.tempo import lfo, pulse
+
+level = lfo(ctx.t_beats, rate=0.5)              # a swell every two beats
+pump = pulse(ctx.t_beats, decay=0.3)            # 1 on each beat, dying away
+wave = lfo(ctx.t_beats - offsets, rate=0.25)    # offsets: an array, one per tile
+```
+
+`rate` is cycles per beat (0.25 is once a bar in 4/4); `lfo` shapes are
+`sine`, `tri`, `saw`, `ramp_down` and `square`.
+[`rainbow_sweep.py`](../src/pi/animations/rainbow_sweep.py) sweeps once per
+two bars of beat time and pumps with `pulse()`;
+[`checkerboard.py`](../src/pi/animations/checkerboard.py) reads `ctx.beat`
+directly. Declare `sync="beat"` when you follow the beat.
+
+**Triggers.** `ctx.triggers` is a tuple of `Trigger(slot, velocity, age_s)`
+for the hits that arrived since the last frame: pads on the web UI,
+notes, the API's `POST /api/transport/trigger`. Each is delivered to
+exactly one frame - every animation rendered on it, so a crossfade's
+incoming animation sees it too - and `age_s` says how long before that
+frame is seen it arrived. `slot` is 0..15 and what it means is yours:
+[`ripple.py`](../src/pi/animations/ripple.py) drops a ring at the slot's
+place on a 4×4 grid, as bright as the velocity. Declare `triggers=True` and
+the web UI shows trigger pads while your animation plays.
 
 ## 5. Structural access — the floor is 256 line segments
 

@@ -199,6 +199,26 @@ def test_stripes_fade_as_one_over_n_in_light_either_side_of_the_peak(registry):
     assert checked > 10
 
 
+def test_ripple_drops_a_ring_where_a_trigger_says(registry):
+    from df2_pi.animation import Trigger
+
+    run = registry["ripple"].start(seed=0, params={"rate": 0.1})
+    run.render()
+    frame = run.render(triggers=(Trigger(slot=15, velocity=1.0, age_s=0.0),)).frame  # slot 15: the far corner of the grid
+    lit = frame.grid.max(axis=-1) > 120
+    ys, xs = np.nonzero(lit)
+    assert len(ys) and ys.mean() > 136 * 0.6 and xs.mean() > 136 * 0.6
+
+
+def test_rainbow_sweep_pumps_on_the_beat_and_follows_beat_time(registry):
+    from df2_pi.animation import BeatInfo
+
+    run = registry["rainbow_sweep"].start(params={"pump": 0.5})
+    on = run.render(beat=BeatInfo(tempo=120.0, phase=0.0, beat=4, bar_phase=0.0, beats_per_bar=4, downbeat=True)).frame
+    off = run.render(beat=BeatInfo(tempo=120.0, phase=0.9, beat=4, bar_phase=0.225, beats_per_bar=4, downbeat=False)).frame
+    assert on.data.max() == 255 and off.data.max() < 160  # full on the beat, dipped by pump just before the next
+
+
 def test_lightning_bolts_run_along_edges(registry):
     geo = default_geometry()
     run = registry["lightning"].start(seed=3, params={"rate": 5.0, "decay": 0.3})
