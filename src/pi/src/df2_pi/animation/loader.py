@@ -35,7 +35,7 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from df2_pi.animation.context import BeatInfo, FrameContext
+from df2_pi.animation.context import BeatInfo, FrameContext, Trigger
 from df2_pi.animation.meta import META_ATTR, AnimationMeta
 from df2_pi.effects import Effect
 from df2_pi.geometry import FloorGeometry
@@ -141,15 +141,25 @@ class AnimationRun:
     def set_params(self, params: Mapping[str, Any]) -> None:
         self.params = self.definition.meta.resolve_params(params)
 
-    def render(self, t: float | None = None, beat: BeatInfo | None = None, dt: float | None = None) -> Rendered:
+    def render(
+        self,
+        t: float | None = None,
+        beat: BeatInfo | None = None,
+        dt: float | None = None,
+        triggers: tuple[Trigger, ...] = (),
+        fallback_bpm: float = 120.0,
+    ) -> Rendered:
         """Render the next frame. `dt` defaults to one frame period; the
-        runner passes a scaled one when the show speed is not 1. Raises
+        runner passes a scaled one when the show speed is not 1. `t_beats`
+        is the beat's position when there is a beat, else `t` at
+        `fallback_bpm`. Raises
         `AnimationError` if the animation returns the wrong format, hands
         back `previous`, or raises."""
         definition = self.definition
+        t = self.frame * self.dt if t is None else float(t)
         ctx = FrameContext(
             frame=self.frame,
-            t=self.frame * self.dt if t is None else float(t),
+            t=t,
             dt=self.dt if dt is None else float(dt),
             fps=self.fps,
             params=self.params,
@@ -158,6 +168,8 @@ class AnimationRun:
             rng=self.rng,
             np_rng=self.np_rng,
             beat=beat,
+            t_beats=beat.beat + beat.phase if beat is not None else t * fallback_bpm / 60.0,
+            triggers=triggers,
         )
         if self.frame == 0 and definition.meta.effect is not None:
             effect = definition.meta.effect

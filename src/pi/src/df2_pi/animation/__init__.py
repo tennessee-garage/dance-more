@@ -7,7 +7,7 @@
         ...
 """
 
-from df2_pi.animation.context import BeatInfo, FrameContext
+from df2_pi.animation.context import TRIGGER_SLOTS, BeatInfo, FrameContext, Trigger
 from df2_pi.animation.loader import (
     AnimationDef,
     AnimationError,
@@ -27,6 +27,8 @@ __all__ = [
     "AnimationRegistry",
     "AnimationRun",
     "BeatInfo",
+    "TRIGGER_SLOTS",
+    "Trigger",
     "CHASE",
     "Effect",
     "FADE",

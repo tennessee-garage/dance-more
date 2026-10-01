@@ -14,6 +14,9 @@ seeded random sources:
     ctx.np_rng     numpy Generator from the same seed, for the array-shaped
                    APIs (EdgeGraph.walk takes one)
     ctx.beat       a BeatInfo when a beat source has a tempo (beat sync); else None
+    ctx.t_beats    beat time: the source's position, else ctx.t at the fallback
+                   tempo - what df2_pi.tempo's waveforms take
+    ctx.triggers   Triggers that arrived since the previous frame; usually ()
 
 `ctx.state` is how a stateful animation (particles, cellular automata)
 keeps data across frames without anyone having to write a class.
@@ -68,6 +71,21 @@ class BeatInfo:
     downbeat: bool  # this frame crossed a bar line
 
 
+@dataclass(frozen=True)
+class Trigger:
+    """A hit from outside - a pad, a note, a button - raised with
+    `Runner.trigger(slot, velocity)`. What a slot means is the animation's
+    choice (a ripple's origin, a burst's colour). Each is delivered to
+    exactly one frame: the first rendered after it arrived."""
+
+    slot: int  # 0..TRIGGER_SLOTS-1
+    velocity: float  # 0..1
+    age_s: float  # how long before this frame is seen it arrived
+
+
+TRIGGER_SLOTS = 16
+
+
 class FrameContext:
     """Per-frame view onto a running animation. Built by `AnimationRun`;
     animations only read it and call the two `send_effect` methods."""
@@ -85,6 +103,8 @@ class FrameContext:
         rng: random.Random,
         np_rng: np.random.Generator,
         beat: BeatInfo | None = None,
+        t_beats: float | None = None,
+        triggers: tuple[Trigger, ...] = (),
     ) -> None:
         self.frame = frame
         self.t = t
@@ -96,6 +116,8 @@ class FrameContext:
         self.rng = rng
         self.np_rng = np_rng
         self.beat = beat
+        self.t_beats = t if t_beats is None else t_beats
+        self.triggers = triggers
         self.effects: dict[int, Effect] = {}
 
     def send_effect(self, tile: int, effect: Effect) -> None:
