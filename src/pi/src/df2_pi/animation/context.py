@@ -13,7 +13,7 @@ seeded random sources:
     ctx.rng        random.Random, seeded per run so a recording reproduces
     ctx.np_rng     numpy Generator from the same seed, for the array-shaped
                    APIs (EdgeGraph.walk takes one)
-    ctx.beat       reserved for the interfacing epic; None until then
+    ctx.beat       a BeatInfo when a beat source has a tempo (beat sync); else None
 
 `ctx.state` is how a stateful animation (particles, cellular automata)
 keeps data across frames without anyone having to write a class.
@@ -50,12 +50,22 @@ from df2_pi.geometry import FloorGeometry
 
 @dataclass(frozen=True)
 class BeatInfo:
-    """Tempo information from external gear. Reserved for the interfacing
-    epic; nothing produces one yet."""
+    """Where the music is at the moment this frame is seen, from the beat
+    source chosen in settings (Ableton Link, MIDI clock or tap tempo; see
+    interfacing/beat.py). `ctx.beat` is None while no source has a tempo.
 
-    tempo: float  # beats per minute
+    `beat` counts up by one per beat and `phase` runs 0..1 between them, so
+    `beat + phase` is a continuous position. `downbeat` is True on exactly
+    one frame per bar - the one that crossed the bar line - and is never set
+    while the source does not know where the bar is (MIDI clock before a
+    Start or Song Position, until a resync)."""
+
+    tempo: float  # beats per minute, after the 1/2x / 1x / 2x multiplier
     phase: float  # 0..1 within the current beat
-    downbeat: bool  # True on the first beat of a bar
+    beat: int  # beats counted by the source
+    bar_phase: float  # 0..1 within the current bar
+    beats_per_bar: int
+    downbeat: bool  # this frame crossed a bar line
 
 
 class FrameContext:

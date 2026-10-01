@@ -335,7 +335,10 @@ def build_app(args: argparse.Namespace):
         from .interfacing.service import ExternalInput
 
         external = ExternalInput(runner, registry, store)  # sockets open when the app starts
-    return create_app(AppContext(registry, store, fanout, runner, preview, external))
+    from .interfacing.beat_service import BeatService
+
+    beat = BeatService(runner, store)  # the source (Link) starts with the app
+    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat))
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:

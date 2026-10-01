@@ -136,7 +136,7 @@ is the image path `plasma.py` uses.
 | `ctx.state` | `dict` | `{}` on frame 0, then yours until the animation is stopped. Particle lists, phase, anything |
 | `ctx.rng` | `random.Random` | Seeded per run: a recording reproduces exactly |
 | `ctx.np_rng` | `numpy.random.Generator` | Same seed, for numpy-shaped APIs (`EdgeGraph.walk` takes it) |
-| `ctx.beat` | `BeatInfo \| None` | Reserved for external gear; `None` for now |
+| `ctx.beat` | `BeatInfo \| None` | Where the music is, when a beat source is running (below); else `None` |
 | `ctx.send_effect(tile, effect)` | | Write a tile's effect register (see below) |
 
 There is deliberately no "time remaining". Fading out is the runner's job.
@@ -161,6 +161,24 @@ being defined in the tile firmware, so treat this as plumbing for now.
 (the Layer button in the Animations tab), composited with add, max, multiply
 or mix. Nothing changes for the author, with one exception: tile effects
 belong to the base animation, so a layer's `send_effect` writes are dropped.
+
+**The beat.** With a beat source running (Ableton Link, tap tempo; see
+[external-input.md](external-input.md#beat-sync)) `ctx.beat` says where the
+music is at the moment your frame is *seen*, latency included:
+
+| Field | Meaning |
+| --- | --- |
+| `tempo` | BPM, after the operator's ½× / 1× / 2× |
+| `beat`, `phase` | a beat count and 0..1 within the beat; `beat + phase` is a continuous position |
+| `bar_phase`, `beats_per_bar` | 0..1 within the bar, and its length |
+| `downbeat` | `True` on exactly one frame per bar: the one that crossed the bar line |
+
+It is `None` whenever there is no tempo - no source, no Link peers, the
+MIDI clock stopped - so always keep a fallback on `ctx.t`.
+[`checkerboard.py`](../src/pi/animations/checkerboard.py) flips on each new
+`ctx.beat.beat` and on a timer otherwise. Declare `sync="beat"` when you
+follow it. A pulse is `1 - ctx.beat.phase`; a bar-long sweep is
+`ctx.beat.bar_phase`.
 
 ## 5. Structural access — the floor is 256 line segments
 

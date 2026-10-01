@@ -77,6 +77,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "dmx_sacn_universe": 1,
     "dmx_address": 201,  # 1-based start channel of the control block
     "strobe_max_hz": 10.0,  # the strobe show control's cap
+    # Beat sync (interfacing/beat_service.py)
+    "beat_source": "off",  # off | link | tap
+    "beats_per_bar": 4,  # also Ableton Link's quantum
+    "beat_multiplier": 1.0,  # 0.5 | 1 | 2
+    "beat_offset_ms": 0.0,  # the rest of the way to the LEDs, tuned by eye
+    "launch_quantum": "off",  # off | beat | bar
     "enabled": True,
     "fps": 30.0,
     "default_entry_duration": 60.0,

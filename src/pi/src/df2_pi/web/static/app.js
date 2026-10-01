@@ -3,6 +3,7 @@
 import { html, render } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { AnimationsPanel } from "./animations.js";
+import { BeatIndicator, startBeatPolling } from "./beat.js";
 import { DiagnosticsPanel } from "./diagnostics.js";
 import { ExternalPanel } from "./external.js";
 import { createPreview } from "./preview.js";
@@ -201,6 +202,7 @@ function TransportBar() {
           <${Field} label="Remaining"><span class="num">${clock(state?.remaining_s)}</span>${state?.timer_held ? html` <span class="tag">held</span>` : ""}<//>
           <${Field} label="Frame"><span class="num">${state?.frame ?? DASH}</span><//>
         </div>
+        <${BeatIndicator} live=${live} />
         <${BrightnessSlider} state=${state} live=${live} />
         <${BlackoutButton} state=${state} live=${live} />
         <${ConnectionBadge} />
@@ -368,3 +370,4 @@ function App() {
 
 render(html`<${App} />`, document.getElementById("app"));
 startPolling();
+startBeatPolling();
