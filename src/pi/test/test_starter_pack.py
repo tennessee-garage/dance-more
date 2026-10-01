@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral"}
 
 
 @pytest.fixture(scope="module")
@@ -144,6 +144,17 @@ def test_twin_peaks_curtains_are_red_and_never_black(registry):
         data = run.render().frame.data.astype(int)
         assert data[..., 0].min() > 0  # every LED lit: the floor shows black poorly
         assert (data[..., 0] > data[..., 1]).all() and (data[..., 0] > data[..., 2]).all()
+
+
+def test_spiral_moves_each_colour_one_tile_outward_per_step(registry):
+    spiral = sys.modules[MODULE_PREFIX + "spiral"]
+    path = list(zip(spiral.PATH_ROWS, spiral.PATH_COLS))
+    assert len(set(path)) == 64 and path[0] == (4, 3)  # every tile once, from the middle
+    run = registry["spiral"].start(params={"speed": 30.0})  # one step per frame at 30 fps
+    frames = [run.render().frame for _ in range(80)]
+    for n in range(64, 80):
+        for k in range(64):
+            assert frames[n][path[k]].tolist() == frames[n - k][path[0]].tolist()
 
 
 def test_lightning_bolts_run_along_edges(registry):
