@@ -4,7 +4,8 @@
 
 import { html } from "htm/preact";
 import { useEffect, useState } from "preact/hooks";
-import { useDraft } from "./params.js";
+import { BeatSection } from "./beat.js";
+import { NumberField, useDraft } from "./params.js";
 import { activeTab } from "./state.js";
 
 const POLL_MS = 1000;
@@ -40,19 +41,6 @@ function Signal({ status }) {
   }
   const since = status.age_s != null ? `last frame ${status.age_s.toFixed(1)} s ago` : "nothing received yet";
   return html`<div class="health idle">No signal (${since})</div>`;
-}
-
-function NumberField({ label, value, min, max, step = 1, onCommit, disabled }) {
-  const [shown, edit, release] = useDraft(value);
-  return html`
-    <label class="ext-field">
-      <span class="label">${label}</span>
-      <input
-        type="number" min=${min} max=${max} step=${step} value=${String(shown)} disabled=${disabled}
-        onInput=${(e) => edit(e.currentTarget.value)}
-        onChange=${(e) => { const v = Number(e.currentTarget.value); release(); if (!Number.isNaN(v)) onCommit(v); }}
-      />
-    </label>`;
 }
 
 export function ExternalPanel() {
@@ -92,7 +80,11 @@ export function ExternalPanel() {
 
   if (info == null) return html`<p class="muted">Loading…</p>`;
   if (info.unavailable) {
-    return html`<p class="muted">Art-Net / sACN input is not running (the server was started with <code>--no-external</code>).</p>`;
+    return html`
+      <div class="diagnostics external">
+        <p class="muted">Art-Net / sACN input is not running (the server was started with <code>--no-external</code>).</p>
+        <${BeatSection} />
+      </div>`;
   }
   const { settings: s, status } = info;
   const listening = status.listening.map((p) => `${p === "sacn" ? "sACN" : "Art-Net"} :${status.ports[p]}`).join(", ") || "nothing";
@@ -173,6 +165,8 @@ export function ExternalPanel() {
       </section>
       <${DmxSection} s=${s} dmx=${status.dmx} change=${change} />
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
+
+      <${BeatSection} />
     </div>`;
 }
 

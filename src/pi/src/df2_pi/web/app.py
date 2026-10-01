@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from df2_pi.web.animations import animations_router
+from df2_pi.web.beat import beat_router
 from df2_pi.web.external import external_router
 from df2_pi.web.floor import floor_router
 from df2_pi.web.playlists import playlists_router
@@ -42,6 +43,7 @@ from df2_pi.web.transport import mark_percentiles_nullable, transport_router
 if TYPE_CHECKING:
     from df2_pi.animation import AnimationRegistry
     from df2_pi.engine import Runner
+    from df2_pi.interfacing.beat_service import BeatService
     from df2_pi.interfacing.service import ExternalInput
     from df2_pi.output import FanOut, PreviewSink
     from df2_pi.playlists import PlaylistStore
@@ -63,6 +65,7 @@ class AppContext:
     runner: Runner
     preview: PreviewSink
     external: ExternalInput | None = None  # Art-Net / sACN input; None when not running
+    beat: BeatService | None = None  # beat sync; None when not running
 
 
 class _RevalidatedStaticFiles(StaticFiles):
@@ -85,7 +88,7 @@ def load_startup_playlist(ctx: AppContext) -> None:
     if ctx.store.seed_default(ctx.registry) is not None:
         log.info("seeded a Default playlist")
     startup = ctx.store.startup_playlist()
-    ctx.runner.load_playlist(ctx.store.resolve(startup, ctx.registry) if startup is not None else None)
+    ctx.runner.load_playlist(ctx.store.resolve(startup, ctx.registry) if startup is not None else None, quantize=False)
 
 
 def create_app(ctx: AppContext) -> FastAPI:
@@ -95,9 +98,13 @@ def create_app(ctx: AppContext) -> FastAPI:
         ctx.runner.start()
         if ctx.external is not None:
             ctx.external.start()
+        if ctx.beat is not None:
+            ctx.beat.start()
         try:
             yield
         finally:
+            if ctx.beat is not None:
+                ctx.beat.stop()
             if ctx.external is not None:
                 ctx.external.stop()
             ctx.runner.stop()
@@ -120,6 +127,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     app.include_router(playlists_router(ctx))
     app.include_router(floor_router(ctx))
     app.include_router(external_router(ctx))
+    app.include_router(beat_router(ctx))
     app.include_router(preview_router(ctx))
 
     default_openapi = app.openapi

@@ -218,3 +218,17 @@ export function ParamControls({ specs, values = {}, errors = {}, onChange }) {
         />`)}
     </div>`;
 }
+
+/** A number input that keeps its draft while edited and commits on change. */
+export function NumberField({ label, value, min, max, step = 1, onCommit, disabled }) {
+  const [shown, edit, release] = useDraft(value);
+  return html`
+    <label class="ext-field">
+      <span class="label">${label}</span>
+      <input
+        type="number" min=${min} max=${max} step=${step} value=${String(shown)} disabled=${disabled}
+        onInput=${(e) => edit(e.currentTarget.value)}
+        onChange=${(e) => { const v = Number(e.currentTarget.value); release(); if (!Number.isNaN(v)) onCommit(v); }}
+      />
+    </label>`;
+}
