@@ -56,6 +56,13 @@ bar line and take effect on the frame that crosses it, in the order they
 were asked for. Entry durations are not quantized. With no beat (no
 source, or it has lost its tempo) they take effect at once, as without;
 "bar" falls back to the beat while the source does not know the bar.
+Without a beat, `ctx.t_beats` runs on each animation's own clock at the
+`fallback_bpm` setting.
+
+Triggers. `trigger(slot, velocity)` may be called from any thread; the
+hit is delivered as `ctx.triggers` to every animation rendered on the next
+frame that renders - current, outgoing, layer - and to no frame after it.
+A pause holds them until the frame after it ends.
 
 Show controls. Speed, freeze, bump, strobe, tint and colour correction
 (`overlays.py`) act on whatever is playing, for an operator who does not
@@ -105,7 +112,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, TypeVar
 
-from df2_pi.animation.context import BeatInfo
+from df2_pi.animation.context import TRIGGER_SLOTS, BeatInfo, Trigger
 from df2_pi.animation.loader import AnimationDef, AnimationError, AnimationRun
 from df2_pi.animation.meta import AnimationMeta, check_control_target
 from df2_pi.animation.registry import AnimationRegistry
@@ -297,6 +304,9 @@ class Runner:
         self._prev_beat_info: BeatInfo | None = None
         self._launch_quantum = "off"
         self._pending_launches: list[Callable[[], None]] = []
+        self._fallback_bpm = 120.0
+        self._trigger_inbox: queue.SimpleQueue[tuple[int, float, float]] = queue.SimpleQueue()
+        self._tick_triggers: tuple[Trigger, ...] = ()  # this frame's
         self._timer_t = 0.0  # while held: the wall time the countdown was last held up to
         self._blacked_out = False
         self._brightness = brightness
@@ -380,6 +390,19 @@ class Runner:
             self._beat_clock = clock
         else:
             self._enqueue(lambda: setattr(self, "_beat_clock", clock))
+
+    def trigger(self, slot: int, velocity: float = 1.0) -> None:
+        """A hit for the playing animations: `ctx.triggers` on the next frame
+        rendered. `slot` 0..15, `velocity` 0..1."""
+        if isinstance(slot, bool) or not isinstance(slot, int) or not 0 <= slot < TRIGGER_SLOTS:
+            raise ValueError(f"trigger slot must be 0..{TRIGGER_SLOTS - 1}, got {slot!r}")
+        velocity = _checked(velocity, 0.0, 1.0, "trigger velocity")
+        self._trigger_inbox.put((slot, velocity, self.clock.now()))
+
+    def set_fallback_bpm(self, bpm: float) -> None:
+        """The tempo `ctx.t_beats` runs at while there is no beat source."""
+        bpm = _checked(bpm, 20.0, 300.0, "fallback bpm")
+        self._enqueue(lambda: setattr(self, "_fallback_bpm", bpm))
 
     def set_launch_quantum(self, quantum: str) -> None:
         """off, beat or bar: where launches (goto, next, previous, loads,
@@ -594,6 +617,15 @@ class Runner:
             log.exception("beat source failed; no beat this frame")
             return None
 
+    def _take_triggers(self, tick: FrameInfo) -> tuple[Trigger, ...]:
+        hits = []
+        while True:
+            try:
+                slot, velocity, arrived = self._trigger_inbox.get_nowait()
+            except queue.Empty:
+                return tuple(hits)
+            hits.append(Trigger(slot, velocity, max(0.0, tick.deadline - arrived)))
+
     def _launch(self, fn: Callable[[], None]) -> None:
         """Run a launch now, or hold it for the next beat or bar line."""
         if self._launch_quantum == "off" or self._beat_info is None:
@@ -644,6 +676,7 @@ class Runner:
     def _produce_base(self, tick: FrameInfo) -> tuple[Frame, dict[int, Effect]]:
         """What is playing, before any layer: `_held` is only ever this."""
         t = tick.t
+        self._tick_triggers = self._take_triggers(tick)
         self._hold_countdown(t)
         if self._one_off is not None:
             remaining = self._one_off.remaining(t)
@@ -689,7 +722,13 @@ class Runner:
         speed = self.overlays.speed
         playing = layer.playing
         try:
-            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed, beat=self._beat_info)
+            rendered = playing.run.render(
+                t=playing.advance(t, speed),
+                dt=playing.run.dt * speed,
+                beat=self._beat_info,
+                triggers=self._tick_triggers,
+                fallback_bpm=self._fallback_bpm,
+            )
         except AnimationError as exc:
             log.error("layer %s failed and was removed:\n%s", playing.definition.id, "".join(traceback.format_exception(exc)))
             self._layer = None
@@ -741,7 +780,13 @@ class Runner:
         failure has been handled)."""
         speed = self.overlays.speed
         try:
-            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed, beat=self._beat_info)
+            rendered = playing.run.render(
+                t=playing.advance(t, speed),
+                dt=playing.run.dt * speed,
+                beat=self._beat_info,
+                triggers=self._tick_triggers,
+                fallback_bpm=self._fallback_bpm,
+            )
         except AnimationError as exc:
             self._failed(playing, exc)
             return None
