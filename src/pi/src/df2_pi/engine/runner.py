@@ -47,6 +47,16 @@ under way finishes first, so a hold never leaves two animations blended.
 The hold belongs to the runner, not the entry: skipping while held starts
 the next entry with its whole duration, waiting.
 
+Beat sync. With a `BeatClock` attached (interfacing/beat.py), every
+tick reads it once, for the frame's latch moment (`tick.deadline`), and
+every animation rendered that tick - current, outgoing, layer - gets the
+same `ctx.beat`. With `launch_quantum` at "beat" or "bar", `goto`,
+`next`, `previous`, playlist loads and one-offs wait for the next beat or
+bar line and take effect on the frame that crosses it, in the order they
+were asked for. Entry durations are not quantized. With no beat (no
+source, or it has lost its tempo) they take effect at once, as without;
+"bar" falls back to the beat while the source does not know the bar.
+
 Show controls. Speed, freeze, bump, strobe, tint and colour correction
 (`overlays.py`) act on whatever is playing, for an operator who does not
 know what that is. All but speed transform the output frame, after any
@@ -95,6 +105,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, TypeVar
 
+from df2_pi.animation.context import BeatInfo
 from df2_pi.animation.loader import AnimationDef, AnimationError, AnimationRun
 from df2_pi.animation.meta import AnimationMeta, check_control_target
 from df2_pi.animation.registry import AnimationRegistry
@@ -112,6 +123,7 @@ from df2_pi.geometry import ROTATIONS, FloorGeometry, quarter_turns
 from df2_pi.pixels import BLEND_MODES, Frame, PixelFrame, TileFrame, blend, composite, default_geometry
 
 if TYPE_CHECKING:
+    from df2_pi.interfacing.beat import BeatClock
     from df2_pi.output.fanout import FanOut
     # annotation-only: playlists.store imports engine.overlays, and a runtime
     # import here closes a cycle through engine/__init__
@@ -124,6 +136,7 @@ T = TypeVar("T")
 MAX_STRIKES = 3
 EPSILON = 1e-6  # for "duration elapsed" tests; t accumulates float error
 DROP_WARNING_THRESHOLD = 3  # dropped frames within the telemetry window
+LAUNCH_QUANTA = ("off", "beat", "bar")
 
 
 # ---- the built-in idle animation -----------------------------------------------------------
@@ -178,6 +191,9 @@ class RunnerState:
     rotation: int = 0  # degrees clockwise: 0, 90, 180 or 270
     show: ShowState = ShowState()
     layer: LayerState | None = None
+    beat: BeatInfo | None = None  # what animations saw as ctx.beat this frame
+    launch_quantum: str = "off"  # off | beat | bar
+    launch_pending: bool = False  # a launch is waiting for its beat or bar line
 
 
 @dataclass(frozen=True)
@@ -276,6 +292,11 @@ class Runner:
         self._ended = False  # a non-looping playlist ran out: hold the last frame
         self._paused_at: float | None = None
         self._timer_held = False
+        self._beat_clock: BeatClock | None = None
+        self._beat_info: BeatInfo | None = None  # this tick's
+        self._prev_beat_info: BeatInfo | None = None
+        self._launch_quantum = "off"
+        self._pending_launches: list[Callable[[], None]] = []
         self._timer_t = 0.0  # while held: the wall time the countdown was last held up to
         self._blacked_out = False
         self._brightness = brightness
@@ -316,28 +337,33 @@ class Runner:
         self._enqueue(lambda: self._do_hold(on))
 
     def next(self) -> None:
-        self._enqueue(lambda: self._do_skip(+1))
+        self._enqueue(lambda: self._launch(lambda: self._do_skip(+1)))
 
     def previous(self) -> None:
-        self._enqueue(lambda: self._do_skip(-1))
+        self._enqueue(lambda: self._launch(lambda: self._do_skip(-1)))
 
     def goto(self, index: int) -> None:
         """Jump to playlist entry `index` (an index into the playlist's
         entries; an unplayable one moves on to the next playable)."""
-        self._enqueue(lambda: self._do_goto(index))
+        self._enqueue(lambda: self._launch(lambda: self._do_goto(index)))
 
     def restart(self) -> None:
         """Restart the current entry from its first frame."""
         self._enqueue(self._do_restart)
 
-    def load_playlist(self, playlist: ResolvedPlaylist | int | str | None) -> None:
+    def load_playlist(self, playlist: ResolvedPlaylist | int | str | None, *, quantize: bool = True) -> None:
         """Swap playlists without stopping the clock. An id or name needs
-        the store; None unloads (the idle animation plays)."""
+        the store; None unloads (the idle animation plays). `quantize=False`
+        loads at once whatever the launch quantum - for the startup load,
+        which is not an operator's launch."""
         if isinstance(playlist, (int, str)):
             if self.store is None:
                 raise ValueError("load_playlist by id/name needs a PlaylistStore")
             playlist = self.store.resolve(playlist, self.registry)
-        self._enqueue(lambda: self._do_load(playlist))
+        if quantize:
+            self._enqueue(lambda: self._launch(lambda: self._do_load(playlist)))
+        else:
+            self._enqueue(lambda: self._do_load(playlist))
 
     def play_animation(self, animation_id: str, params: Mapping[str, Any] | None = None, hold: float | None = None) -> None:
         """One-off preview of an animation, `hold` seconds (None: until
@@ -346,7 +372,21 @@ class Runner:
         if definition is None:
             raise KeyError(f"no animation {animation_id!r}")
         resolved = definition.meta.resolve_params(params)  # validate on the caller's thread
-        self._enqueue(lambda: self._do_play_animation(definition, resolved, hold))
+        self._enqueue(lambda: self._launch(lambda: self._do_play_animation(definition, resolved, hold)))
+
+    def attach_beat(self, clock: BeatClock | None) -> None:
+        """The beat every frame reads. Set before `start()`, or between frames."""
+        if self._thread is None:
+            self._beat_clock = clock
+        else:
+            self._enqueue(lambda: setattr(self, "_beat_clock", clock))
+
+    def set_launch_quantum(self, quantum: str) -> None:
+        """off, beat or bar: where launches (goto, next, previous, loads,
+        one-offs) wait for while there is a beat."""
+        if quantum not in LAUNCH_QUANTA:
+            raise ValueError(f"launch quantum must be one of {LAUNCH_QUANTA}, got {quantum!r}")
+        self._enqueue(lambda: setattr(self, "_launch_quantum", quantum))
 
     def set_layer(
         self,
@@ -502,7 +542,9 @@ class Runner:
         try:
             for tick in self.clock.run(latch=self.fanout.latch):
                 self._last_t = tick.t  # what control handlers see as "now"
+                self._beat_info = self._read_beat(tick)
                 self._drain_controls()
+                self._fire_launches()
                 if self._stopping:
                     self.clock.stop()
                     break
@@ -510,6 +552,7 @@ class Runner:
                 frame = self._show(frame, tick.t)
                 frame, effects = self._orient(frame, effects)
                 self._state = self._snapshot(tick)
+                self._prev_beat_info = self._beat_info
                 self.fanout.submit(frame, tick, effects)
                 self.clock.mark("submit")
         finally:
@@ -540,6 +583,43 @@ class Runner:
         self.stop()
 
     # ---- the loop body --------------------------------------------------------------------
+
+    def _read_beat(self, tick: FrameInfo) -> BeatInfo | None:
+        clock = self._beat_clock
+        if clock is None:
+            return None
+        try:
+            return clock.info(tick.deadline)
+        except Exception:
+            log.exception("beat source failed; no beat this frame")
+            return None
+
+    def _launch(self, fn: Callable[[], None]) -> None:
+        """Run a launch now, or hold it for the next beat or bar line."""
+        if self._launch_quantum == "off" or self._beat_info is None:
+            fn()
+        else:
+            self._pending_launches.append(fn)
+
+    def _fire_launches(self) -> None:
+        """On the frame that crosses the boundary, every waiting launch, in order."""
+        if not self._pending_launches:
+            return
+        info, prev = self._beat_info, self._prev_beat_info
+        if info is None or self._launch_quantum == "off":
+            due = True  # nothing to wait for any more
+        elif self._launch_quantum == "bar" and self._beat_clock is not None and self._beat_clock.bar_known:
+            due = info.downbeat
+        else:
+            due = prev is not None and info.beat > prev.beat
+        if not due:
+            return
+        pending, self._pending_launches = self._pending_launches, []
+        for fn in pending:
+            try:
+                fn()
+            except Exception:
+                log.exception("launch failed")
 
     def _drain_controls(self) -> None:
         while True:
@@ -609,7 +689,7 @@ class Runner:
         speed = self.overlays.speed
         playing = layer.playing
         try:
-            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed)
+            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed, beat=self._beat_info)
         except AnimationError as exc:
             log.error("layer %s failed and was removed:\n%s", playing.definition.id, "".join(traceback.format_exception(exc)))
             self._layer = None
@@ -661,7 +741,7 @@ class Runner:
         failure has been handled)."""
         speed = self.overlays.speed
         try:
-            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed)
+            rendered = playing.run.render(t=playing.advance(t, speed), dt=playing.run.dt * speed, beat=self._beat_info)
         except AnimationError as exc:
             self._failed(playing, exc)
             return None
@@ -1080,6 +1160,9 @@ class Runner:
             rotation=ROTATIONS[self._quarter_turns],
             show=self.overlays.state(),
             layer=self._layer_state(),
+            beat=self._beat_info,
+            launch_quantum=self._launch_quantum,
+            launch_pending=bool(self._pending_launches),
         )
 
     def _layer_state(self) -> LayerState | None:

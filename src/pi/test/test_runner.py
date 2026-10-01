@@ -1,3 +1,4 @@
+import math
 import signal
 import textwrap
 import threading
@@ -12,6 +13,7 @@ from df2_pi.effects import FADE, Effect
 from df2_pi.encode import FrameEncoder
 from df2_pi.engine import FrameClock
 from df2_pi.engine.runner import IDLE, Runner, RunnerState
+from df2_pi.interfacing.beat import BeatClock, Reading
 from df2_pi.output import FanOut, HardwareSink, NullSink
 from df2_pi.pixels import PixelFrame, TileFrame
 from df2_pi.playlists import PlaylistStore
@@ -1028,3 +1030,105 @@ def test_end_one_off_and_clear_layer_only_undo_the_named_animation(registry, sto
     states = probe.states
     assert (states[1].animation[0], states[1].layer.animation[0]) == ("a", "c")
     assert (states[2].animation[0], states[2].layer) == ("b", None)
+
+
+# ---- beat sync --------------------------------------------------------------------------------
+
+
+class Steady:
+    """A beat source at a fixed tempo on the fake clock, or none at all."""
+
+    name = "steady"
+
+    def __init__(self, tempo: float = 150.0, live: bool = True) -> None:  # 150 BPM: a beat every 4 frames at 10 fps
+        self.tempo, self.live = tempo, live
+
+    def read(self, t):
+        return Reading(t * self.tempo / 60.0, self.tempo, 0.0) if self.live else None
+
+    def status(self):
+        return {}
+
+    def stop(self):
+        pass
+
+
+def beat_runner(registry, store, quantum, until, source=None):
+    runner, probe, _ = make_runner(registry, store, until=until)
+    clock = BeatClock(beats_per_bar=4)
+    clock.set_source(source if source is not None else Steady())
+    runner.attach_beat(clock)
+    runner.load_playlist(playlist(store, ("a", 100.0), ("b", 100.0)), quantize=False)
+    runner.set_launch_quantum(quantum)
+    return runner, probe
+
+
+def first_crossing(states, after, bar=False):
+    for k in range(after, len(states)):
+        prev, info = states[k - 1].beat, states[k].beat
+        if (info.downbeat if bar else info.beat > prev.beat):
+            return k
+    raise AssertionError("no boundary")
+
+
+def test_every_render_sees_the_frames_beat(registry, store):
+    runner, probe = beat_runner(registry, store, "off", lambda r, n: n >= 5)
+    runner.run()
+    beats = [s.beat for s in probe.states]
+    assert all(b is not None and b.tempo == 150.0 for b in beats)
+    positions = [b.beat + b.phase for b in beats]
+    assert positions == pytest.approx([positions[0] + 0.25 * i for i in range(5)])  # 150 BPM at 10 fps
+
+
+@pytest.mark.parametrize("bar", [False, True])
+def test_a_quantized_launch_lands_on_the_boundary_frame(registry, store, bar):
+    def until(runner, n):
+        if n == 2:
+            runner.next()
+        return n >= 40
+
+    runner, probe = beat_runner(registry, store, "bar" if bar else "beat", until)
+    runner.run()
+    states = probe.states
+    boundary = first_crossing(states, after=3, bar=bar)
+    levels = probe.levels()
+    assert levels[:boundary] == [10] * boundary  # waited
+    assert levels[boundary] == 20  # and landed on the frame that crossed
+    assert all(s.launch_pending for s in states[2:boundary]) and not states[boundary].launch_pending
+    if bar:
+        assert boundary - 2 > 4  # further off than one beat
+
+
+def test_a_launch_on_the_boundary_frame_itself_goes_at_once(registry, store):
+    ref = {}
+
+    def until(runner, n):
+        state = runner.state  # the previous frame's snapshot
+        if "k" not in ref and n >= 3 and state.beat is not None:
+            # predict the boundary: 150 BPM at 10 fps moves 0.25 beat a frame
+            if math.floor(state.beat.beat + state.beat.phase + 0.25) > state.beat.beat:
+                ref["k"] = n
+                runner.next()
+        return n >= 20
+
+    runner, probe = beat_runner(registry, store, "beat", until)
+    runner.run()
+    assert probe.levels()[ref["k"]] == 20
+
+
+def test_launches_are_immediate_without_a_beat(registry, store):
+    def until(runner, n):
+        if n == 2:
+            runner.next()
+        return n >= 4
+
+    runner, probe = beat_runner(registry, store, "bar", until, source=Steady(live=False))
+    runner.run()
+    assert probe.levels()[:4] == [10, 10, 20, 20]
+    assert all(s.beat is None for s in probe.states)
+
+
+def test_the_launch_quantum_is_checked(registry):
+    runner = Runner(registry, FanOut([NullSink()]))
+    with pytest.raises(ValueError):
+        runner.set_launch_quantum("phrase")
