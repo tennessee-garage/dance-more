@@ -42,6 +42,8 @@ def test_arrays_in_arrays_out_scalars_in_floats_out():
     np.testing.assert_allclose(out, [[0.0, 0.75], [0.5, 0.25]])
     assert isinstance(lfo(0.3), float) and isinstance(pulse(0.3), float)
     assert pulse(np.array([0.0, 1.0, 2.5])).shape == (3,)
+    per_tile = lfo(2.0, shape="saw", offset=-np.array([0.0, 0.25, 0.5]))  # one time, an offset per tile
+    np.testing.assert_allclose(per_tile, [0.0, 0.75, 0.5])
 
 
 def test_pulse_is_one_on_the_beat_and_decays_by_its_time_constant():

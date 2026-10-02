@@ -34,6 +34,7 @@ one part of the API:
 | [`spiral.py`](../src/pi/animations/spiral.py) | tile | A v1 processor ported: per-frame state in `ctx.state`, steps clocked by `ctx.t` |
 | [`stardust.py`](../src/pi/animations/stardust.py) | pixel | Two scales in one frame: a per-tile field broadcast to its 60 LEDs, with single-LED stars and drifting dust on top |
 | [`stripes.py`](../src/pi/animations/stripes.py) | tile | A v1 port that keeps v1's look: a fade built in linear light and encoded with `gamma.from_linear()` |
+| [`waves.py`](../src/pi/animations/waves.py) | pixel | Phase maps: a `tempo` waveform run across `df2_pi.phase` offsets - the console-style effect in one line |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
@@ -202,6 +203,35 @@ wave = lfo(ctx.t_beats - offsets, rate=0.25)    # offsets: an array, one per til
 two bars of beat time and pumps with `pulse()`;
 [`checkerboard.py`](../src/pi/animations/checkerboard.py) reads `ctx.beat`
 directly. Declare `sync="beat"` when you follow the beat.
+
+**Phase maps.** Lighting desks build most effects from one idea: a waveform
+run across a group of fixtures, each offset in phase. `df2_pi.phase` gives
+you the offsets for the floor - an array in 0..1, `(rows, cols)` like a
+`TileFrame` or, with `resolution="led"`, `(tiles, 60)` like a `PixelFrame` -
+and the waveforms take them as an `offset`:
+
+```python
+from df2_pi import phase
+from df2_pi.tempo import lfo
+
+offsets = phase.radial(ctx.geometry, spread=1.0)                   # rings out from the middle
+level = lfo(ctx.t_beats, rate=0.5, shape="sine", offset=-offsets)  # one level per tile
+```
+
+| Map | Offset by |
+| --- | --- |
+| `rows`, `cols`, `diagonal` | row, column, row + column (0 at row 0, nearest the Pi, and the west edge) |
+| `radial` | distance from a point, `(x, y)` in cell units; the floor's centre by default |
+| `angle` | angle round a point: 0 due north (up as displayed), clockwise |
+| `checker` | alternating tiles, 0 and half a cycle |
+| `random` | a fixed shuffle; pass `ctx.np_rng` and it is the same all run |
+| `perimeter` | position round each tile's LED ring, in chain order (LED resolution only) |
+
+`spread` scales the offsets (0 in phase, 1 one cycle across the floor),
+`reverse` runs them the other way, and `mirror` makes them symmetric about
+the floor's centre - rows fold to fan in from both edges, angle matches
+east to west. `phase.by_name()` takes a map's name, for an animation that
+lets its user choose one, as [`waves.py`](../src/pi/animations/waves.py) does.
 
 **Triggers.** `ctx.triggers` is a tuple of `Trigger(slot, velocity, age_s)`
 for the hits that arrived since the last frame: pads on the web UI,

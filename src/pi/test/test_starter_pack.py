@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves"}
 
 
 @pytest.fixture(scope="module")
@@ -217,6 +217,21 @@ def test_rainbow_sweep_pumps_on_the_beat_and_follows_beat_time(registry):
     on = run.render(beat=BeatInfo(tempo=120.0, phase=0.0, beat=4, bar_phase=0.0, beats_per_bar=4, downbeat=True)).frame
     off = run.render(beat=BeatInfo(tempo=120.0, phase=0.9, beat=4, bar_phase=0.225, beats_per_bar=4, downbeat=False)).frame
     assert on.data.max() == 255 and off.data.max() < 160  # full on the beat, dipped by pump just before the next
+
+
+def test_waves_follow_their_phase_map(registry):
+    geo = default_geometry()
+    level = lambda frame: frame.data.max(axis=-1).astype(int)  # (64, 60)
+
+    rows = level(registry["waves"].start(params={"map": "rows", "shape": "saw"}).render().frame).reshape(8, 8, 60)
+    assert all(len(np.unique(row)) == 1 for row in rows)  # a row is one level...
+    assert len({int(row.flat[0]) for row in rows}) == 8  # ...and every row a different one
+
+    together = level(registry["waves"].start(params={"map": "radial", "spread": 0.0}).render().frame)
+    assert len(np.unique(together)) == 1  # spread 0: the whole floor in phase
+
+    ring = level(registry["waves"].start(params={"map": "perimeter", "shape": "saw"}).render().frame)
+    assert (ring == ring[0]).all() and len(np.unique(ring[0])) > 30  # every tile the same ring, varying round it
 
 
 def test_lightning_bolts_run_along_edges(registry):
