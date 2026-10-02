@@ -54,6 +54,10 @@ a playlist or run it as a layer by hand. It shows the last frame received.
 
 ## Resolume Arena
 
+**[resolume.md](resolume.md) is a step-by-step guide**: visuals on the floor,
+mixing with its show, Ableton Link and show control, with the settings to
+make. In short:
+
 Arena, not Avenue: only Arena has DMX output.
 
 1. In Arena's advanced output, add a DMX / Lumiverse output to the floor's IP
