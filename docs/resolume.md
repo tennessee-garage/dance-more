@@ -7,9 +7,9 @@ how the floor works inside.
 
 > **Status:** the floor's side of everything here is tested, and Ableton Link
 > has been run with Resolume (its tap tempo drives the floor). The DMX pixel
-> setup follows Resolume's documentation and has not yet been run against the
-> floor end to end - if a menu name doesn't match your version of Resolume,
-> the idea will still be right; please fix this page.
+> setup and the OSC output follow Resolume's documentation and have not yet
+> been run against the floor end to end - if a menu name doesn't match your
+> version of Resolume, the idea will still be right; please fix this page.
 
 ## What you can do from Resolume
 
@@ -17,13 +17,7 @@ how the floor works inside.
 | --- | --- | --- |
 | **Put Resolume's visuals on the floor**, replacing or mixing over the floor's own show | DMX output: a **Lumiverse** in Advanced Output, sending Art-Net | **Arena** - Avenue has no DMX output |
 | **Share the tempo**, so the floor's beat-locked animations and animation changes follow Resolume's BPM and bars | **Ableton Link** | Arena or Avenue |
-| **Run the floor's show controls** - dimmer, palette, tint, bump, switching animations | Not from Resolume itself yet - see [section 5](#5-show-controls-while-resolume-runs-the-visuals) | - |
-
-Resolume can't send the floor commands directly today: it has no way to
-make web requests, and the floor doesn't take OSC or MIDI yet (planned in
-[#132](https://github.com/tennessee-garage/dance-more/issues/132) and
-[#131](https://github.com/tennessee-garage/dance-more/issues/131)). Section 5
-covers what to use alongside it in the meantime.
+| **Run the floor's show controls** - switching animations, palette, tint, bump, brightness, mix | **OSC output**, with each clip or fader set to one of the floor's addresses - see [section 5](#5-show-controls-from-resolume-osc) | Arena or Avenue |
 
 The **Resolume demo** has every feature, DMX output and Link included. Its
 only limits are an occasional Resolume logo on the output and a voice
@@ -169,25 +163,56 @@ Now:
 Link finds peers by multicast on the local network, so Resolume and the floor
 must be on the same one.
 
-## 5. Show controls while Resolume runs the visuals
+## 5. Show controls from Resolume: OSC
 
-Until the floor takes OSC or MIDI, run its show controls from one of these,
-next to Resolume:
+The floor takes OSC on **UDP port 7000**, and Resolume can send OSC from
+anything in its interface. The trick is that Resolume lets you **choose the
+address** each thing sends, so you point a clip or a fader at one of the
+floor's addresses (the full list is in
+[external-input.md](external-input.md#osc)).
 
-- **The floor's web UI** on a phone, tablet or laptop browser at
-  **http://dancefloor.local:8000**: switch animations and playlists, change
-  the palette, tint, bump, strobe, speed, hold, the Mix amount, and more.
-- **A lighting desk, or QLC+ on a laptop,** on the floor's 18-channel DMX
-  control block: dimmer, strobe, mix, animations by bank and program, speed,
-  macros, tint, bump, hold and palette, on faders and buttons. See
-  [Lighting desk control](external-input.md#lighting-desk-control); a QLC+
-  fixture definition is provided.
-- **TouchDesigner**, if it is in the rig, can drive all of it - see
-  [touchdesigner.md](touchdesigner.md).
+### Point Resolume's OSC output at the floor
 
-When OSC arrives (#132), Resolume's **OSC Output** - which can send clip
-triggers and parameter changes - will be able to switch the floor's
-animations as you launch clips.
+In Resolume's **Preferences → OSC**: turn **OSC Output** on, set the target to
+the floor's IP (`192.168.1.50`) and the **outgoing port** to **7000**. Use a
+custom output preset rather than *Output All OSC Messages* - "all" includes
+every playhead position, which the floor would only ignore - and in it, set
+the address for each thing you want the floor to follow.
+
+### What to send
+
+Clips send a value when they launch, and the floor's addresses with the
+target in the path don't care what that value is:
+
+| In Resolume | Set its outgoing address to | Floor does |
+| --- | --- | --- |
+| A clip, launched | `/floor/play/lightning` | Plays the Lightning animation |
+| A clip, launched | `/floor/palette/fire` | Switches the floor palette to *fire* |
+| A clip, launched | `/floor/goto/2` | Goes to entry 2 of the playlist (counting from 0) |
+| A clip, launched | `/floor/bump` | A white flash |
+| A clip, launched | `/floor/next` | The next playlist entry |
+| A layer's opacity | `/floor/mix` | How much of Resolume's picture is over the floor's show (Source *Mix*) |
+| The composition master, or a dashboard fader | `/floor/brightness` | The floor's master brightness |
+| A dashboard knob | `/floor/macro/1` | The playing animation's main knob |
+| A dashboard knob | `/floor/speed` | Show speed: 0.5 is normal |
+
+Floats are 0..1, which is what Resolume sends for faders and knobs. With
+**Quantize launches** set to *Bar* on the floor, animation and entry changes
+from clips land on the next bar line.
+
+### Check what arrives
+
+The floor's **External** tab has an **OSC** section that lists the last 20
+messages it received, from where, and marks any it didn't understand (a
+misspelt address, an animation that doesn't exist). Launch a clip and watch
+it appear there.
+
+### Without OSC
+
+The floor's **web UI** on a phone, tablet or laptop (**http://dancefloor.local:8000**)
+runs everything too, and a **lighting desk or QLC+** can use the 18-channel
+DMX control block ([Lighting desk control](external-input.md#lighting-desk-control)).
+
 
 ## An example set
 
@@ -195,8 +220,10 @@ animations as you launch clips.
   Quantize launches on *Bar*, palette *ocean*, Source *Mix* at about 60%.
 - **Resolume Arena:** a Lumiverse with the 8×8 fixture over a soft, colourful
   part of the composition; Link on; the BPM tapped in from the music.
-- **A tablet** with the floor's web UI open for palette changes and the odd
-  bump on a drop.
+- **Resolume clips** set to `/floor/palette/<name>` for colour changes and
+  `/floor/play/<animation>` for the big moments; a layer's opacity on
+  `/floor/mix`.
+- **A tablet** with the floor's web UI open, just in case.
 
 The floor's own animations ride the beat underneath, Resolume's visuals sit
 on top, and changes land on the bar.
@@ -213,6 +240,7 @@ on top, and changes land on the bar.
 | The floor goes back to its own show after 2 s | Resolume has stopped sending - the Lumiverse switched off, or the composition stopped. The timeout is in the External tab |
 | A Resolume logo appears on the floor | The demo's watermark: it is in the output the floor samples |
 | Link shows no peers on the floor | Link switched on in Resolume (the toolbar button); both on the same network; Wi-Fi client isolation; the macOS firewall |
+| A clip set to a `/floor/...` address does nothing | The External tab's OSC monitor: nothing listed means Resolume's OSC output isn't reaching the floor (target IP, port 7000, OSC Output on); listed with an error means the address or animation name is wrong |
 | Floor changes land after Resolume's beat | Raise **Latency offset** in the floor's Beat sync section |
 
 For the floor side in more depth - modes, universes, orientation, the timeout
