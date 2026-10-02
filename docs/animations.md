@@ -25,7 +25,7 @@ one part of the API:
 | [`checkerboard.py`](../src/pi/animations/checkerboard.py) | tile | `ctx.state` — keeping data between frames without a class |
 | [`plasma.py`](../src/pi/animations/plasma.py) | pixel | `PixelFrame.from_grid()` — "just hand me a 136×136 image" |
 | [`ripple.py`](../src/pi/animations/ripple.py) | pixel | Continuous coordinates: `led_positions`, `splat()`, fading trails; `ctx.triggers` |
-| [`lightning.py`](../src/pi/animations/lightning.py) | pixel | **The edge graph**: bolts that walk the floor along tile edges |
+| [`lightning.py`](../src/pi/animations/lightning.py) | pixel | **The edge graph**: bolts stepped down the floor corner by corner along tile edges |
 | [`chase.py`](../src/pi/animations/chase.py) | pixel | `floor_ring` — the outer boundary as one 480-LED loop; the floor palette |
 | [`seams.py`](../src/pi/animations/seams.py) | pixel | `seams` — the facing pairs of edges between tiles |
 | [`comet_squares.py`](../src/pi/animations/comet_squares.py) | pixel | `rails` and `edges_at` together; objects with phases in `ctx.state` |
@@ -344,8 +344,13 @@ frame.flat[bolt.leds()] = colour          # LEDs in travel order, no duplicates
 bolt.positions()                          # (n, 2) float (x, y) of those LEDs
 ```
 
-`turn_bias` 0 runs straight whenever it can; 1 turns at every corner. See
-[`lightning.py`](../src/pi/animations/lightning.py).
+`turn_bias` 0 runs straight whenever it can; 1 turns at every corner.
+`walk()` goes wherever the graph allows. For a path with a direction to it,
+step corner by corner yourself: `g.edges_at(junction)` lists the edges
+meeting at a tile corner and each edge's `junctions` say where it leads, so
+you choose. [`lightning.py`](../src/pi/animations/lightning.py) does this so
+its bolts only ever go down or sideways, and weights its forks toward the
+ground.
 
 **Continuous coordinates.** For effects that think geometrically, everything is
 in cell units, `(x, y)`, 0–136 on both axes:
