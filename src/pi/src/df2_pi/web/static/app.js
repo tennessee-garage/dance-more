@@ -9,6 +9,7 @@ import { ExternalPanel } from "./external.js";
 import { createPreview } from "./preview.js";
 import { connectPreview, previewStatus } from "./preview-stream.js";
 import { ParamControls, useDraft } from "./params.js";
+import { PaletteBar, PalettesPanel, loadPalettes } from "./palettes.js";
 import { PlaylistsPanel } from "./playlists.js";
 import { LayerControls, ShowControls } from "./show.js";
 import {
@@ -226,6 +227,7 @@ function TransportBar() {
       <${LiveParams} />
       <${TriggerPads} live=${live} />
       <${LayerControls} state=${state} live=${live} />
+      <${PaletteBar} live=${live} />
       <${ShowControls} state=${state} live=${live} />
       <${Progress} state=${state} />
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
@@ -348,6 +350,7 @@ const TABS = [
   ["playlists", "Playlists", PlaylistsPanel],
   ["animations", "Animations", AnimationsPanel],
   ["external", "External", ExternalPanel],
+  ["palettes", "Palettes", PalettesPanel],
   ["diagnostics", "Diagnostics", DiagnosticsPanel],
 ];
 
@@ -388,3 +391,4 @@ function App() {
 render(html`<${App} />`, document.getElementById("app"));
 startPolling();
 startBeatPolling();
+loadPalettes();

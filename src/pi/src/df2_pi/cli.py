@@ -330,15 +330,18 @@ def build_app(args: argparse.Namespace):
         rotation=args.rotation,
         strobe_max_hz=store.get_strobe_max_hz(),
     )
+    from .palette import PaletteBook
+
+    palettes = PaletteBook(store, runner)  # sets the runner's active palette
     external = None
     if not args.no_external:
         from .interfacing.service import ExternalInput
 
-        external = ExternalInput(runner, registry, store)  # sockets open when the app starts
+        external = ExternalInput(runner, registry, store, palettes=palettes)  # sockets open when the app starts
     from .interfacing.beat_service import BeatService
 
     beat = BeatService(runner, store)  # the source (Link) starts with the app
-    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat))
+    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat, palettes))
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
