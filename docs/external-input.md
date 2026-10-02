@@ -2,8 +2,9 @@
 
 The floor listens for **Art-Net** (UDP 6454) and **sACN / E1.31** (UDP 5568,
 unicast or multicast), so Resolume Arena, TouchDesigner, a lighting desk or
-anything else that pixel-maps over DMX can send it pixels. Everything below is
-set in the web UI's **External** tab (`df2-pi serve`), and stored.
+anything else that pixel-maps over DMX can send it pixels; and for **OSC**
+(UDP 7000), so the same programs can run its show controls. Everything below
+is set in the web UI's **External** tab (`df2-pi serve`), and stored.
 
 ## Network
 
@@ -132,6 +133,66 @@ address (default 201).
 For QLC+, import [fixtures/dance-floor-v2.qxf](fixtures/dance-floor-v2.qxf)
 (`df2-pi fixture` regenerates it from the code). For other desks, build a
 18-channel generic fixture from the table above.
+
+## OSC
+
+The floor also takes **OSC** on **UDP port 7000** - TouchDesigner's native
+control protocol, something Resolume can send, and what phone apps like
+TouchOSC speak. It covers the floor's show controls and more: send a message
+to the floor's address and it acts. It is on by default; the External tab's
+**OSC** section turns it off, changes the port, and shows the last 20
+messages received - with any the floor didn't understand marked - which is
+the quickest way to see what a sender is actually sending.
+
+| Address | Values | Does |
+| --- | --- | --- |
+| `/floor/brightness` | f | Master brightness |
+| `/floor/blackout` | on | Black out, or lift it |
+| `/floor/speed` | f | 0 stopped, 0.5 normal, 1 four times |
+| `/floor/strobe` | f | 0 off … 1 the strobe cap |
+| `/floor/bump` | [f] | A flash toward white, as strong as f (1 if none) |
+| `/floor/tint` | r g b amount | Tint toward a colour, each 0..1 |
+| `/floor/hue` | f | Turn every hue, in turns |
+| `/floor/saturation` | f | 0 grey, 0.5 normal, 1 vivid |
+| `/floor/freeze` | on | Hold the picture while time runs on |
+| `/floor/hold` | on | Keep the playing animation until released |
+| `/floor/reset` | press | Show controls back to normal |
+| `/floor/source` | f or s | Thirds - internal, external, mix - or the name |
+| `/floor/mix` | f | How much external picture, in mix |
+| `/floor/next`, `/floor/previous`, `/floor/restart` | press | Move through the playlist |
+| `/floor/goto` | i | Go to playlist entry i (from 0) |
+| `/floor/goto/<entry>` | press | The same, with the entry in the address |
+| `/floor/playlist` | i or s | Load a playlist by id or name |
+| `/floor/playlist/<name>` | press | The same, by address |
+| `/floor/play` | s | Play an animation by id (`waves`, `lightning`, …) |
+| `/floor/play/<animation>` | press | The same, by address |
+| `/floor/palette` | i or s | The floor palette: its number in the Palettes tab, or its name |
+| `/floor/palette/<name>` | press | The same, by address |
+| `/floor/param/<name>` | f | The playing animation's parameter, 0..1 across its range |
+| `/floor/macro/<n>` | f | The playing animation's macro 1–4 |
+| `/floor/trigger` | i [f] | Trigger slot i, velocity f (1 if none; 0 is ignored) |
+| `/floor/trigger/<slot>` | [f] | The same, by address |
+| `/floor/tempo/tap`, `/floor/tempo/resync` | press | Tap tempo; make the next beat a downbeat |
+| `/floor/tempo/nudge` | f | Shift the beat by f milliseconds |
+
+- **f** is a float, 0..1 unless the table says otherwise; ints work too.
+  **on** is any number - on at 0.5 and up - or nothing, for on.
+- **press** addresses fire on a message with no value, or on a value of 0.5
+  or more: a rise from below 0.5, or one more than 0.3 s after the last. So
+  a button sending 1 then 0 fires once, a sender that only ever sends 1
+  fires on every press, and one repeating 1 every frame while held fires
+  once.
+- **The path forms** (`/floor/palette/ocean`) are for senders that choose
+  the address but not the value - a Resolume clip sends 1 when it launches,
+  whatever it is set to say.
+
+**Feedback.** Send `/floor/subscribe` with a port number and the floor sends
+its state back to your address on that port: every value at once, then each
+change - `/floor/state/animation` (s), `/floor/state/playlist` (s),
+`/floor/state/entry` (i), `/floor/state/palette` (s),
+`/floor/state/brightness` (f), `/floor/state/blackout` (i),
+`/floor/state/held` (i), `/floor/state/tempo` (f) and `/floor/state/beat`
+(i). Renew the subscription at least once a minute; it lapses after 60 s.
 
 ## Beat sync
 

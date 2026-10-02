@@ -13,19 +13,20 @@ music. You do not need to know how the floor works inside.
 ## What you can control
 
 The floor runs its own show - playlists of built-in animations - and
-TouchDesigner can join in at four levels. Use whichever you need; they work
-together.
+TouchDesigner can join in at several levels. Use whichever you need; they
+work together.
 
 | Level | What TouchDesigner does | Sent with | Section |
 | --- | --- | --- | --- |
 | **Pixels** | Draws its own picture on the floor, replacing or mixing over the floor's show | **DMX Out CHOP** (Art-Net or sACN) | [1](#1-send-a-picture-to-the-floor) |
-| **Show controls** | Dimmer, strobe, speed, tint, bump, palette, hold, and switching animations | **DMX Out CHOP**: the floor's 18-channel *control block* | [2](#2-run-the-show-with-the-control-block) |
-| **Everything else** | Play any animation by name, set its parameters, layers, triggers, hue, saturation - anything the web UI does | **Web Client DAT** (the floor's HTTP API) | [3](#3-anything-else-the-http-api) |
-| **Tempo** | Share one beat, so the floor's beat-locked animations and launches follow your timeline | **Ableton Link CHOP** | [4](#4-share-the-tempo) |
+| **Show controls** | Dimmer, strobe, speed, tint, bump, palette, hold, and switching animations, on 18 DMX channels | **DMX Out CHOP**: the floor's *control block* | [2](#2-run-the-show-with-the-control-block) |
+| **Show controls, by name** | All of the above and more - play any animation, parameters, triggers, tempo - as OSC messages, with the floor's state sent back | **OSC Out DAT** | [3](#3-show-controls-over-osc) |
+| **Everything else** | Layers, playlists, anything the web UI does | **Web Client DAT** (the floor's HTTP API) | [4](#4-anything-else-the-http-api) |
+| **Tempo** | Share one beat, so the floor's beat-locked animations and launches follow your timeline | **Ableton Link CHOP** | [5](#5-share-the-tempo) |
 
-OSC is planned ([#132](https://github.com/tennessee-garage/dance-more/issues/132))
-and will be the most natural fit for TouchDesigner when it lands; until then,
-the control block and the HTTP API cover everything.
+For show control, **OSC is the easiest**: one operator, addresses that say
+what they do, and feedback. The control block suits a patch that already
+thinks in DMX; the HTTP API covers the rest.
 
 ## Before you start
 
@@ -166,7 +167,7 @@ elsewhere in your network. A few recipes:
 - **Switch animations.** Make a playlist in the web UI - say *TD* - with
   the animations you want as its entries. Set **Bank** to its number
   (playlists count from 0 in name order, capitals first) and **Program** to
-  the entry. With *Quantize launches* on (see [section 4](#4-share-the-tempo))
+  the entry. With *Quantize launches* on (see [section 5](#5-share-the-tempo))
   the change lands on the next beat or bar.
 - **Change colour scheme.** Set **Palette** to a number from the Palettes
   tab's list (0 rainbow, 1 fire, 2 ice, 3 ocean, …). Animations that follow
@@ -179,7 +180,57 @@ elsewhere in your network. A few recipes:
 - **Fade the floor's show under your video.** Source 255 (mix), then ride
   **Mix**.
 
-## 3. Anything else: the HTTP API
+## 3. Show controls over OSC
+
+The floor listens for OSC on **UDP port 7000** (the External tab can change
+it, and shows the last messages it received). Every control has an address -
+`/floor/brightness`, `/floor/palette/ocean`, `/floor/play/lightning` - listed
+in full in [external-input.md](external-input.md#osc).
+
+### Setup
+
+1. Add an **OSC Out DAT** named `oscout1`: **Network Address**
+   `192.168.1.50`, **Network Port** 7000.
+2. Send from Python - a CHOP Execute DAT, a panel script - with `sendOSC`:
+
+```python
+# in a CHOP Execute DAT watching your buttons and faders
+def onValueChange(channel, sampleIndex, val, prev):
+    osc = op('oscout1')
+    if channel.name == 'master':
+        osc.sendOSC('/floor/brightness', [val])        # a 0..1 fader
+    elif channel.name == 'mix':
+        osc.sendOSC('/floor/mix', [val])
+
+def onOffToOn(channel, sampleIndex, val, prev):
+    osc = op('oscout1')
+    if channel.name == 'drop':
+        osc.sendOSC('/floor/play/lightning', [1])
+    elif channel.name == 'red':
+        osc.sendOSC('/floor/palette/fire', [1])
+    elif channel.name == 'kick':
+        osc.sendOSC('/floor/bump', [1.0])
+```
+
+Values are 0..1 floats for faders. Addresses that *do* something - next,
+play, palette, bump, tap - fire on each press.
+
+### Feedback
+
+To show what the floor is doing in your patch, add an **OSC In DAT** (or
+**OSC In CHOP**) listening on a port of your choice - say 9000 - and send
+`/floor/subscribe` with that port, at least once a minute (a **Timer CHOP**
+works):
+
+```python
+op('oscout1').sendOSC('/floor/subscribe', [9000])
+```
+
+The floor then sends `/floor/state/animation`, `/floor/state/palette`,
+`/floor/state/tempo`, `/floor/state/beat` and more to your machine on port
+9000 - all of them at once, then whenever one changes.
+
+## 4. Anything else: the HTTP API
 
 Everything the web UI does goes through a small web API, so TouchDesigner can
 do all of it - play any animation by name with your own parameter values,
@@ -258,7 +309,7 @@ called, open **http://dancefloor.local:8000/api/animations** in a browser;
 **http://dancefloor.local:8000/docs** is the complete, browsable reference
 with every option.
 
-## 4. Share the tempo
+## 5. Share the tempo
 
 The floor can follow an Ableton Link session, and so can TouchDesigner, so
 both run on the same beat - whichever app sets the tempo.
@@ -288,8 +339,9 @@ One way to put it together:
 - **Control block, universe 1:** a fader on **Mix**, the master **Dimmer** on
   another, **Bump** from the kick drum, and three buttons on **Program** for
   the verse, chorus and drop entries of the *TD* playlist.
-- **HTTP API:** a button that plays Lightning with extra forks for the big
-  moment, and palette buttons for the colour changes.
+- **OSC:** buttons that play Lightning for the big moment and switch
+  palettes for the colour changes, with the floor's state fed back to a
+  panel.
 - **Tempo:** an Ableton Link CHOP in your network and the floor on the same
   session.
 
@@ -303,6 +355,7 @@ One way to put it together:
 | The floor goes **dark** when the control block is on | Channel 1 is the master dimmer: start it at 255. Or the control block shares the pixel universe |
 | Bank, program, palette or a macro does nothing | They act only when the value **changes**; bank counts playlists in name order from 0; palette counts the Palettes tab list from 0 |
 | Bump flashes once and stops | It flashes on each **rise**: send it back to 0 between hits |
+| OSC messages do nothing | The External tab's OSC monitor: not listed means they aren't arriving (address, port 7000, firewall); listed with an error means the address or name is wrong |
 | HTTP commands do nothing | Open `http://<floor>:8000/api/state` in a browser from the same machine; check the Web Client DAT for errors (a `404` is a wrong path or animation id, a `422` a value out of range) |
 | Ableton Link shows no peers | The machines are on different networks, or Wi-Fi client isolation; allow TouchDesigner through the macOS firewall |
 

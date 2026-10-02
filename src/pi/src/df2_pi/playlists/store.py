@@ -84,6 +84,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "beat_offset_ms": 0.0,  # the rest of the way to the LEDs, tuned by eye
     "launch_quantum": "off",  # off | beat | bar
     "fallback_bpm": 120.0,  # ctx.t_beats' tempo while there is no beat source
+    # OSC control surface (interfacing/osc.py)
+    "osc_enabled": True,
+    "osc_port": 7000,
     "enabled": True,
     "fps": 30.0,
     "default_entry_duration": 60.0,

@@ -180,6 +180,9 @@ button.icon.hold.active {
 button.beat-tap { padding: 4px 14px; font-weight: 700; }
 .trigger-pads { align-items: center; gap: 6px; }
 .palette-bar { align-items: center; }
+.osc-recent { margin-top: 8px; font-size: 12px; }
+.osc-recent .osc-address { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+
 .palette-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 button.palette-chip {
   position: relative;
