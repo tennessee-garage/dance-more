@@ -89,7 +89,7 @@ def test_a_change_is_applied_now_and_stored(registry, store):
 
 def test_bad_values_change_nothing(registry, store):
     client, beat, _, _ = build(registry, store)
-    for body in ({"beats_per_bar": 0}, {"multiplier": 3}, {"offset_ms": 900}, {"source": "midi"}, {"launch_quantum": "phrase"}, {"tempo": 120}):
+    for body in ({"beats_per_bar": 0}, {"multiplier": 3}, {"offset_ms": 900}, {"source": "spotify"}, {"launch_quantum": "phrase"}, {"tempo": 120}):
         assert client.patch("/api/beat", json=body).status_code == 422, body
     assert beat.settings()["beats_per_bar"] == 4 and store.get_int("beats_per_bar") == 4
 
@@ -134,3 +134,9 @@ def test_without_beat_sync_the_routes_answer_503(registry, store):
     client = build(registry, store, with_beat=False)[0]
     assert client.get("/api/beat").status_code == 503
     assert client.post("/api/beat/tap").status_code == 503
+
+
+def test_midi_clock_is_a_source(registry, store):
+    client, beat, _, _ = build(registry, store)
+    assert client.patch("/api/beat", json={"source": "midi"}).json()["settings"]["source"] == "midi"
+    assert beat.clock.source is beat.midi

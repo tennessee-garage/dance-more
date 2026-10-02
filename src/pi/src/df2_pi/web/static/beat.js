@@ -14,6 +14,7 @@ const SOURCES = [
   ["off", "Off", "No beat: animations run on their own clocks"],
   ["link", "Ableton Link", "Tempo and bar from Resolume, Ableton, DJ software on this network"],
   ["tap", "Tap tempo", "Tap along: the mean of the last four taps, the last one beat 1"],
+  ["midi", "MIDI clock", "Clock, Start and Stop from a MIDI port: a DAW, a drum machine, Resolume"],
 ];
 const MULTIPLIERS = [[0.5, "½×"], [1.0, "1×"], [2.0, "2×"]];
 const QUANTA = [
@@ -73,7 +74,7 @@ function BeatHealth({ s, status }) {
     const bar = status.bar_known ? "" : " · bar unknown (resync to set it)";
     return html`<div class="health ok">${status.tempo.toFixed(1)} BPM${peers}${bar}</div>`;
   }
-  const waiting = s.source === "link" ? "No Link peers on the network" : `Tap at least twice (${status.taps} so far)`;
+  const waiting = s.source === "link" ? "No Link peers on the network" : s.source === "midi" ? "No MIDI clock arriving" : `Tap at least twice (${status.taps} so far)`;
   return html`<div class="health idle">${waiting}</div>`;
 }
 

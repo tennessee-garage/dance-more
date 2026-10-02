@@ -182,6 +182,13 @@ button.beat-tap { padding: 4px 14px; font-weight: 700; }
 .palette-bar { align-items: center; }
 .osc-recent { margin-top: 8px; font-size: 12px; }
 .osc-recent .osc-address { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.midi-learn { align-items: flex-end; margin-top: 8px; }
+.midi-learn .ext-field input[type="text"] { min-width: 14em; }
+.midi-value input { width: 5em; }
+.midi-learning { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.midi-map { margin-top: 10px; }
+.midi-map summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.midi-bindings { margin-top: 6px; font-size: 12px; }
 
 .palette-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 button.palette-chip {

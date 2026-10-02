@@ -34,6 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 from df2_pi.web.animations import animations_router
 from df2_pi.web.beat import beat_router
+from df2_pi.web.midi import midi_router
 from df2_pi.web.osc import osc_router
 from df2_pi.web.palettes import palettes_router
 from df2_pi.web.external import external_router
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
     from df2_pi.animation import AnimationRegistry
     from df2_pi.engine import Runner
     from df2_pi.interfacing.beat_service import BeatService
+    from df2_pi.interfacing.midi import MidiControl
     from df2_pi.interfacing.osc import OscControl
     from df2_pi.palette import PaletteBook
     from df2_pi.interfacing.service import ExternalInput
@@ -72,6 +74,7 @@ class AppContext:
     beat: BeatService | None = None  # beat sync; None when not running
     palettes: PaletteBook | None = None  # the floor palette (#128); None in a test app
     osc: OscControl | None = None  # the OSC control surface (#132); None in a test app
+    midi: MidiControl | None = None  # MIDI input (#131); None in a test app
 
 
 class _RevalidatedStaticFiles(StaticFiles):
@@ -108,9 +111,13 @@ def create_app(ctx: AppContext) -> FastAPI:
             ctx.beat.start()
         if ctx.osc is not None:
             ctx.osc.begin()
+        if ctx.midi is not None:
+            ctx.midi.begin()
         try:
             yield
         finally:
+            if ctx.midi is not None:
+                ctx.midi.stop()
             if ctx.osc is not None:
                 ctx.osc.stop()
             if ctx.beat is not None:
@@ -140,6 +147,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     app.include_router(beat_router(ctx))
     app.include_router(palettes_router(ctx))
     app.include_router(osc_router(ctx))
+    app.include_router(midi_router(ctx))
     app.include_router(preview_router(ctx))
 
     default_openapi = app.openapi

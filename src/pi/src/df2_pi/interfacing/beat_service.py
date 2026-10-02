@@ -10,8 +10,7 @@
 Settings live in the `setting` table under `KEYS`, like the external
 input's, and `update()` validates the whole change before applying any of
 it. The MIDI clock source exists (`self.midi`, fed through `midi_message()`)
-but is not offered as a setting until #131 gives the floor a MIDI input to
-feed it from.
+and is fed by the MIDI input (#131, interfacing/midi.py) from any port.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-SOURCES = ("off", "link", "tap")  # "midi" joins with #131's MIDI input
+SOURCES = ("off", "link", "tap", "midi")
 
 # update() field -> setting key
 KEYS = {
@@ -186,7 +185,7 @@ class BeatService:
 
 
 def _validate(s: dict[str, Any]) -> None:
-    if s["source"] not in SOURCES and s["source"] != "midi":
+    if s["source"] not in SOURCES:
         raise ValueError(f"source must be one of {SOURCES}")
     if not isinstance(s["beats_per_bar"], int) or isinstance(s["beats_per_bar"], bool) or not 1 <= s["beats_per_bar"] <= 16:
         raise ValueError("beats_per_bar must be 1..16")
