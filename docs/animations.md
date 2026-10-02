@@ -35,6 +35,7 @@ one part of the API:
 | [`stardust.py`](../src/pi/animations/stardust.py) | pixel | Two scales in one frame: a per-tile field broadcast to its 60 LEDs, with single-LED stars and drifting dust on top |
 | [`stripes.py`](../src/pi/animations/stripes.py) | tile | A v1 port that keeps v1's look: a fade built in linear light and encoded with `gamma.from_linear()` |
 | [`waves.py`](../src/pi/animations/waves.py) | pixel | Phase maps: a `tempo` waveform run across `df2_pi.phase` offsets - the console-style effect in one line |
+| [`video.py`](../src/pi/animations/video.py) | pixel | Real footage: clips from `df2-pi video import`, blended frame to frame (below) |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
@@ -268,6 +269,32 @@ frame is seen it arrived. `slot` is 0..15 and what it means is yours:
 [`ripple.py`](../src/pi/animations/ripple.py) drops a ring at the slot's
 place on a 4×4 grid, as bright as the velocity. Declare `triggers=True` and
 the web UI shows trigger pads while your animation plays.
+
+### Video clips
+
+Real footage - surf, fire, drifting cloud - plays through the **Video**
+animation. Import a clip on a laptop (it needs the `[preview]` extra, for
+ffmpeg):
+
+```bash
+df2-pi video import surf.mp4 --name surf --start 4 --duration 30   # --crop 0.5,0.4,0.8 to frame it
+df2-pi video list
+```
+
+The import crops the video square, averages each frame down to the floor's
+136×136 cells in linear light and keeps the 3,840 that are LEDs, at 15 frames
+a second (`--fps`). The top of the video is the top of the floor as
+displayed. Clips land in `src/pi/media/` (or `$DF2_MEDIA`), which
+`sync-to-pi.sh` copies to the Pi and git ignores - they are large, and
+usually someone else's footage, so check its licence. Reload animations
+for Video to list a new clip.
+
+The picture is seen through the lattice of tile edges, so big, soft
+movement reads best: surf shot from above, flames, cloud. Video blends
+between stored frames in linear light, so slowed right down it still moves
+smoothly, crossfades its end into its start (Loop fade) so the seam does not
+show, and has Contrast, Black level - dark footage usually wants a little,
+since the floor shows black poorly - Brightness and Rotation.
 
 ## 5. Structural access — the floor is 256 line segments
 
