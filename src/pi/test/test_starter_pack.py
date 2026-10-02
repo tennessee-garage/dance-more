@@ -291,6 +291,29 @@ def test_lightning_bolts_run_along_edges(registry):
     assert struck
 
 
+def test_lightning_comes_down_and_forks_late(registry):
+    import random
+
+    lightning = sys.modules[MODULE_PREFIX + "lightning"]
+    geo = default_geometry()
+    rng = random.Random(11)
+    fork_points = []
+    for _ in range(300):
+        trunk, forks = lightning.strike(geo, rng, {"length": 14, "turn_bias": 0.35, "forks": 2})
+        rows = [geo.tile_rows] + [end[0] for _, end in trunk]
+        assert all(b <= a for a, b in zip(rows, rows[1:]))  # never climbs
+        assert rows[1] == geo.tile_rows - 1  # leaves the top wall heading straight down
+        corners = [end for _, end in trunk]
+        for fork in forks:
+            (edge, forward), _ = fork[0]
+            origin = edge.junctions[0] if forward else edge.junctions[1]
+            fork_points.append((corners.index(origin) + 1) / len(trunk))
+            fork_rows = [origin[0]] + [end[0] for _, end in fork]
+            assert all(b <= a for a, b in zip(fork_rows, fork_rows[1:]))
+    assert min(fork_points) > 0.2  # nothing forks in the top fifth of a bolt
+    assert np.median(fork_points) > 0.65  # and most fork in its last third
+
+
 def test_seeding_a_fresh_database_gets_the_whole_pack(registry):
     store = PlaylistStore(":memory:", registry=registry)
     pl = store.seed_default()
