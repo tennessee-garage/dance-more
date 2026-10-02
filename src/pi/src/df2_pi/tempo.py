@@ -10,7 +10,7 @@
 (`ctx.beat.beat + ctx.beat.phase`), otherwise the animation's own time at
 the fallback tempo, so anything written against it runs sensibly either
 way. Everything here returns 0..1 and takes scalars or numpy arrays
-(returning a float or an array to match), so it composes with per-tile and
+(returning a float, or an array when any input is one), so it composes with per-tile and
 per-LED phase offsets.
 
 `rate` is cycles per beat: 1 is every beat, 0.25 once a bar in 4/4, 2
@@ -32,8 +32,9 @@ import numpy as np
 SHAPES = ("sine", "tri", "saw", "square", "ramp_down")
 
 
-def _out(value: np.ndarray, like) -> float | np.ndarray:
-    return float(value) if np.ndim(like) == 0 else value
+def _out(value: np.ndarray) -> float | np.ndarray:
+    """A float when every input was a number; an array when any was an array."""
+    return float(value) if np.ndim(value) == 0 else value
 
 
 def lfo(t_beats, rate: float = 1.0, shape: str = "sine", offset: float = 0.0):
@@ -51,7 +52,7 @@ def lfo(t_beats, rate: float = 1.0, shape: str = "sine", offset: float = 0.0):
         value = 1.0 - phase
     else:
         value = (phase < 0.5).astype(np.float64)
-    return _out(value, t_beats)
+    return _out(value)
 
 
 def pulse(t_beats, rate: float = 1.0, decay: float = 0.25):
@@ -62,4 +63,4 @@ def pulse(t_beats, rate: float = 1.0, decay: float = 0.25):
     if rate <= 0:
         raise ValueError(f"rate must be positive, got {rate}")
     since = np.mod(np.asarray(t_beats, dtype=np.float64) * rate, 1.0) / rate  # beats since the last pulse
-    return _out(np.exp(-since / decay), t_beats)
+    return _out(np.exp(-since / decay))
