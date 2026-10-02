@@ -343,7 +343,10 @@ def build_app(args: argparse.Namespace):
     from .interfacing.beat_service import BeatService
 
     beat = BeatService(runner, store)  # the source (Link) starts with the app
-    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat, palettes))
+    from .interfacing.osc import OscControl
+
+    osc = OscControl(runner, registry, store=store, beat=beat, palettes=palettes, external=external)  # listens when the app starts
+    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat, palettes, osc))
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:

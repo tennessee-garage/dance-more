@@ -38,6 +38,7 @@ beat = [
 web = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
+    "python-osc>=1.8",  # the OSC control surface serve runs alongside the UI
 ]
 
 [project.scripts]
