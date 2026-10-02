@@ -5,6 +5,7 @@
 import { html } from "htm/preact";
 import { useEffect, useState } from "preact/hooks";
 import { BeatSection } from "./beat.js";
+import { MidiSection } from "./midi.js";
 import { OscSection } from "./osc.js";
 import { NumberField, useDraft } from "./params.js";
 import { activeTab } from "./state.js";
@@ -85,6 +86,7 @@ export function ExternalPanel() {
       <div class="diagnostics external">
         <p class="muted">Art-Net / sACN input is not running (the server was started with <code>--no-external</code>).</p>
         <${OscSection} />
+        <${MidiSection} />
         <${BeatSection} />
       </div>`;
   }
@@ -169,6 +171,8 @@ export function ExternalPanel() {
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
 
       <${OscSection} />
+
+      <${MidiSection} />
 
       <${BeatSection} />
     </div>`;

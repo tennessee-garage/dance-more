@@ -87,6 +87,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # OSC control surface (interfacing/osc.py)
     "osc_enabled": True,
     "osc_port": 7000,
+    # MIDI input (interfacing/midi.py); the mapping itself is midi.yaml beside the database
+    "midi_enabled": True,
     "enabled": True,
     "fps": 30.0,
     "default_entry_duration": 60.0,

@@ -3,8 +3,9 @@
 The floor listens for **Art-Net** (UDP 6454) and **sACN / E1.31** (UDP 5568,
 unicast or multicast), so Resolume Arena, TouchDesigner, a lighting desk or
 anything else that pixel-maps over DMX can send it pixels; and for **OSC**
-(UDP 7000), so the same programs can run its show controls. Everything below
-is set in the web UI's **External** tab (`df2-pi serve`), and stored.
+(UDP 7000) and **MIDI**, so the same programs - and hardware controllers -
+can run its show controls. Everything below is set in the web UI's
+**External** tab (`df2-pi serve`), and stored.
 
 ## Network
 
@@ -193,6 +194,90 @@ change - `/floor/state/animation` (s), `/floor/state/playlist` (s),
 `/floor/state/brightness` (f), `/floor/state/blackout` (i),
 `/floor/state/held` (i), `/floor/state/tempo` (f) and `/floor/state/beat`
 (i). Renew the subscription at least once a minute; it lapses after 60 s.
+
+## MIDI
+
+The floor takes **MIDI** from any controller plugged into the Pi's USB, and
+from anything else that reaches it as a MIDI port. Each control is bound to
+one of the [OSC addresses](#osc) - a fader on `/floor/brightness` does exactly
+what the OSC message would - and the External tab's **MIDI** section shows
+the devices it is listening to, the last messages and what each one did, the
+bindings, and **MIDI learn**. Devices are picked up as they are plugged in
+and let go when they are unplugged.
+
+### The APC mini, out of the box
+
+The first time the floor runs it writes a mapping for the **Akai APC mini**
+(mk1 or mk2):
+
+| Control | Does |
+| --- | --- |
+| Pad rows 1–2 (bottom) | Go to playlist entries 0–15 |
+| Pad row 3 | Palettes: rainbow, fire, ice, ocean, sunset, forest, neon, candy |
+| Pad row 4 | Triggers 0–7, as hard as the pad is hit |
+| Pad row 5 | Play Lightning, Ripple, Waves, Stardust, Comet Squares, Vortex, Chase, Twin Peaks |
+| Pad rows 6–8 | Free, for MIDI learn |
+| Faders 1–4 | The playing animation's macros 1–4 |
+| Faders 5–8 | Speed (halfway is normal), strobe, mix, hue |
+| Master fader | Brightness |
+| Track buttons | Previous, next, restart, bump, blackout (toggle), freeze (toggle), hold (toggle), reset |
+| Scene buttons | Tap tempo, resync, nudge −10 ms, nudge +10 ms, half speed, normal speed, double speed, strobe off |
+
+Any other controller works too: bind its controls with MIDI learn, or edit
+the mapping file.
+
+### MIDI learn
+
+In the External tab's MIDI section, type the address a control should send to
+(suggestions appear as you type), tick **Toggle** for on/off things like
+blackout, or give a **Fixed value** to send on each press (a speed preset),
+and press **Learn**. Then move the knob or hit the pad: it is bound, replacing
+whatever that control did before, and saved.
+
+### The mapping file
+
+Bindings live in **`midi.yaml` beside the floor's database**
+(`~/.local/share/df2/midi.yaml` on the Pi; `$DF2_MIDI_MAP` overrides). It is
+kept out of `~/dance-floor` so syncing code to the Pi never wipes a mapping
+learned there. Edit it by hand and the floor picks the change up within a
+couple of seconds; a file that doesn't parse is reported in the External tab
+and the last good mapping stays in use.
+
+```yaml
+program_change: true   # Program Change + Bank Select: bank = playlist, program = entry
+clock: true            # MIDI clock to beat sync
+bindings:
+  - {note: 0, to: /floor/goto/0}                    # a pad: velocity 0..1 on press, 0 on release
+  - {cc: 48, to: /floor/macro/1}                    # a fader or knob: 0..127 as 0..1
+  - {cc: [7, 39], to: /floor/speed}                 # a 14-bit pair: MSB, LSB
+  - {note: 68, to: /floor/blackout, toggle: true}   # each press flips it
+  - {note: 86, to: /floor/speed, value: 0.25}       # each press sends this
+  - {note: 3, to: /floor/bump, channel: 10, port: launchpad}   # only channel 10, only a port named like that
+```
+
+**Program Change** loads playlist *bank* (from 0, in name order, set by Bank
+Select CC0/CC32 beforehand; 0 if never sent) if it isn't loaded, and goes to
+entry *program* - quantized to the beat or bar like any launch (see
+[Beat sync](#beat-sync)). **MIDI clock** feeds beat sync when its source is
+set to *MIDI clock*.
+
+### MIDI from a laptop
+
+For Resolume, TouchDesigner or a DAW on a laptop, [OSC](#osc) is simpler: it
+goes over the network with nothing to install. For MIDI, the laptop needs to
+appear on the Pi as a MIDI port:
+
+- **A USB-MIDI interface** on each end, joined by a MIDI cable, appears as a
+  device like any controller.
+- **Network MIDI (RTP-MIDI)** needs `rtpmidid` running on the Pi (its
+  releases on GitHub include Debian packages). On a Mac, open **Audio MIDI
+  Setup → MIDI Studio → Network**, create a session and connect it to the
+  Pi; the session then shows up as one of the floor's MIDI devices. *This
+  route hasn't been tried with the floor yet.*
+
+On a Mac running `df2-pi serve` itself, plug controllers in **before**
+starting it: macOS only tells a long-running program about devices that were
+there when it started. The Pi has no such limit.
 
 ## Beat sync
 

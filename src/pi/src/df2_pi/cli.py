@@ -346,7 +346,12 @@ def build_app(args: argparse.Namespace):
     from .interfacing.osc import OscControl
 
     osc = OscControl(runner, registry, store=store, beat=beat, palettes=palettes, external=external)  # listens when the app starts
-    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat, palettes, osc))
+    from .interfacing.controls import FloorControls
+    from .interfacing.midi import MidiControl
+
+    controls = FloorControls(runner, registry, store=store, beat=beat, palettes=palettes, external=external)
+    midi = MidiControl(controls, store=store, beat=beat)  # opens its ports when the app starts
+    return create_app(AppContext(registry, store, fanout, runner, preview, external, beat, palettes, osc, midi))
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:

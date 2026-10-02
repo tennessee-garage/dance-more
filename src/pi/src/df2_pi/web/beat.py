@@ -20,13 +20,13 @@ if TYPE_CHECKING:
     from df2_pi.interfacing.beat_service import BeatService
     from df2_pi.web.app import AppContext
 
-Source = Literal["off", "link", "tap"]
+Source = Literal["off", "link", "tap", "midi"]
 Quantum = Literal["off", "beat", "bar"]
 Multiplier = Literal[0.5, 1.0, 2.0]
 
 
 class BeatSettings(BaseModel):
-    source: Source = Field(description="off; link: Ableton Link on the local network; tap: tap tempo.")
+    source: Source = Field(description="off; link: Ableton Link on the local network; tap: tap tempo; midi: MIDI clock from any port.")
     beats_per_bar: int = Field(description="Bar length; also Ableton Link's quantum.")
     multiplier: Multiplier = Field(description="1/2x, 1x or 2x the source's tempo.")
     offset_ms: float = Field(description="Read the music this much later than each frame's latch: the rest of the way to the LEDs.")
