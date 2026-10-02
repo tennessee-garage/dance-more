@@ -209,6 +209,10 @@ it appear there.
 
 ### Without OSC
 
+A **MIDI controller** plugged into the Pi, such as an APC mini, runs the
+floor directly ([MIDI](external-input.md#midi)), alongside whatever controls
+Resolume.
+
 The floor's **web UI** on a phone, tablet or laptop (**http://dancefloor.local:8000**)
 runs everything too, and a **lighting desk or QLC+** can use the 18-channel
 DMX control block ([Lighting desk control](external-input.md#lighting-desk-control)).
