@@ -234,6 +234,21 @@ def test_waves_follow_their_phase_map(registry):
     assert (ring == ring[0]).all() and len(np.unique(ring[0])) > 30  # every tile the same ring, varying round it
 
 
+def test_palette_opt_ins_follow_the_floor_palette_or_a_named_one(registry):
+    from df2_pi.palette import BUILTIN, Palette
+
+    mine = Palette(["00ff00", "0000ff"], "mine")
+    heads = lambda frame: {tuple(c) for c in frame.flat[frame.flat.max(axis=-1) == 255].tolist()}
+
+    floor = registry["chase"].start(params={"comets": 2}).render(palette=mine).frame
+    assert heads(floor) == {(0, 255, 0), (0, 0, 255)}  # comet k of n at k/n round the floor's palette
+    named = registry["chase"].start(params={"comets": 2, "palette": "fire"}).render(palette=mine).frame
+    assert heads(named) == {tuple(BUILTIN["fire"].at(0.0).tolist()), tuple(BUILTIN["fire"].at(0.5).tolist())}
+
+    waves = registry["waves"].start(params={"spread": 0.0, "hue_spread": 0.0, "hue": 0.0, "shape": "square"}).render(palette=mine).frame  # square: full at beat 0
+    assert {tuple(c) for c in waves.flat.tolist()} == {(0, 255, 0)}  # the floor palette's first stop, everywhere
+
+
 def test_lightning_bolts_run_along_edges(registry):
     geo = default_geometry()
     run = registry["lightning"].start(seed=3, params={"rate": 5.0, "decay": 0.3})

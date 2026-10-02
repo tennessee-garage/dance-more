@@ -34,6 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 from df2_pi.web.animations import animations_router
 from df2_pi.web.beat import beat_router
+from df2_pi.web.palettes import palettes_router
 from df2_pi.web.external import external_router
 from df2_pi.web.floor import floor_router
 from df2_pi.web.playlists import playlists_router
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
     from df2_pi.animation import AnimationRegistry
     from df2_pi.engine import Runner
     from df2_pi.interfacing.beat_service import BeatService
+    from df2_pi.palette import PaletteBook
     from df2_pi.interfacing.service import ExternalInput
     from df2_pi.output import FanOut, PreviewSink
     from df2_pi.playlists import PlaylistStore
@@ -66,6 +68,7 @@ class AppContext:
     preview: PreviewSink
     external: ExternalInput | None = None  # Art-Net / sACN input; None when not running
     beat: BeatService | None = None  # beat sync; None when not running
+    palettes: PaletteBook | None = None  # the floor palette (#128); None in a test app
 
 
 class _RevalidatedStaticFiles(StaticFiles):
@@ -128,6 +131,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     app.include_router(floor_router(ctx))
     app.include_router(external_router(ctx))
     app.include_router(beat_router(ctx))
+    app.include_router(palettes_router(ctx))
     app.include_router(preview_router(ctx))
 
     default_openapi = app.openapi

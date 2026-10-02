@@ -31,6 +31,7 @@ from df2_pi.interfacing.receiver import MODES, Layout, Receiver
 if TYPE_CHECKING:
     from df2_pi.animation import AnimationRegistry
     from df2_pi.engine.runner import Runner
+    from df2_pi.palette import PaletteBook
     from df2_pi.playlists import PlaylistStore
 
 log = logging.getLogger(__name__)
@@ -59,7 +60,15 @@ SACN_UNIVERSE_MAX = 63999
 
 
 class ExternalInput:
-    def __init__(self, runner: Runner, registry: AnimationRegistry, store: PlaylistStore | None, **receiver_kwargs: Any) -> None:
+    def __init__(
+        self,
+        runner: Runner,
+        registry: AnimationRegistry,
+        store: PlaylistStore | None,
+        *,
+        palettes: PaletteBook | None = None,
+        **receiver_kwargs: Any,
+    ) -> None:
         self.runner = runner
         self.store = store
         self._settings = self._load()
@@ -74,7 +83,7 @@ class ExternalInput:
         )
         self.source = ExternalSource(runner, self.receiver, source=s["source"], mix=s["mix"], timeout_s=s["timeout_s"])
         registry.add_builtin(external_animation(self.receiver))
-        self.dmx = DmxControl(runner, self.source, store, timeout_s=s["timeout_s"])
+        self.dmx = DmxControl(runner, self.source, store, palettes=palettes, timeout_s=s["timeout_s"])
         self.receiver.on_control = self.dmx.handle
         self._configure_dmx(s)
         self._frame_times: deque[tuple[float, int]] = deque(maxlen=64)

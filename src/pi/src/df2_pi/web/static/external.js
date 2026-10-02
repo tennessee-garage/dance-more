@@ -170,7 +170,7 @@ export function ExternalPanel() {
     </div>`;
 }
 
-/** The 17-channel lighting-desk control block: where it is, and what it last said. */
+/** The lighting-desk control block: where it is, and what it last said. */
 function DmxSection({ s, dmx, change }) {
   return html`
     <section class="diag-section">

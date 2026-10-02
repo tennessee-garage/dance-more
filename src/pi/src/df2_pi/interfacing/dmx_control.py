@@ -1,4 +1,4 @@
-"""The floor as a lighting-desk fixture: a 17-channel control block.
+"""The floor as a lighting-desk fixture: an 18-channel control block.
 
     control = DmxControl(runner, external_source, store)
     control.handle(channels, now)     # every DMX packet for the control universe
@@ -20,6 +20,7 @@ floor as a fixture at a start address and drives it like any other:
     15  tint amount                  Runner.set_tint
     16  bump                         a flash of value/255 when it rises
     17  hold                         Runner.hold: 0-127 the countdown runs, 128-255 it is held
+    18  palette                      PaletteBook.activate: palette N, built-ins then the user's
 
 (`CHANNELS` is the table; the QLC+ fixture in docs/fixtures/ is generated
 from it, so the two cannot drift.)
@@ -28,7 +29,7 @@ Change detection. DMX resends every channel continuously; a control acts
 only when its value changes. Continuous controls (dimmer, strobe, source,
 mix, speed, tint) also act on the first packet after silence - a fixture
 follows its faders from the moment it is patched. Triggers (bank/program,
-macros, bump) never do: a desk that connects with them at 0 must not
+macros, bump, palette) never do: a desk that connects with them at 0 must not
 reload the playlist or flash the floor. Hold is between the two: it acts
 on a first packet only to hold, so a desk that connects with it down
 does not release a hold set from the web UI, and after that whenever it
@@ -57,6 +58,7 @@ from xml.sax.saxutils import escape
 
 if TYPE_CHECKING:
     from df2_pi.engine.runner import Runner
+    from df2_pi.palette import PaletteBook
     from df2_pi.interfacing.external import ExternalSource
     from df2_pi.playlists import PlaylistStore
 
@@ -92,12 +94,14 @@ CHANNELS: tuple[Channel, ...] = (
     Channel("Tint amount", "Intensity", "0 off .. 255 fully the tint"),
     Channel("Bump", "Intensity", "A flash of value/255 each time it rises", trigger=True),
     Channel("Hold", "Maintenance", "0-127 the countdown runs, 128-255 the playing entry is held"),
+    Channel("Palette", "Colour", "Palette N: the built-ins in order, then the user's by name", trigger=True),
 )
 WIDTH = len(CHANNELS)
 DIMMER, STROBE, SOURCE, MIX, BANK, PROGRAM, SPEED, MACRO1 = 0, 1, 2, 3, 4, 5, 6, 7
 TINT = (11, 12, 13, 14)
 BUMP = 15
 HOLD = 16
+PALETTE = 17
 HOLD_THRESHOLD = 128
 BUMP_DECAY_S = 0.25
 
@@ -118,12 +122,14 @@ class DmxControl:
         source: ExternalSource | None,
         store: PlaylistStore | None,
         *,
+        palettes: PaletteBook | None = None,
         timeout_s: float = 2.0,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
         self.runner = runner
         self.source = source
         self.store = store
+        self.palettes = palettes
         self.timeout_s = timeout_s
         self._now = now
         self._lock = threading.Lock()
@@ -216,6 +222,12 @@ class DmxControl:
         held = block[HOLD] >= HOLD_THRESHOLD
         if (held and previous is None) or (previous is not None and held != (previous[HOLD] >= HOLD_THRESHOLD)):
             runner.hold(held)
+        if changed(PALETTE) and self.palettes is not None:
+            names = self.palettes.names()
+            if block[PALETTE] < len(names):
+                self.palettes.activate(names[block[PALETTE]])
+            else:
+                log.info("DMX palette %d: there are only %d palettes", block[PALETTE], len(names))
         if changed(BANK) or changed(PROGRAM):
             self._program(block[BANK], block[PROGRAM], bank_changed=previous is None or previous[BANK] != block[BANK])
 
@@ -302,6 +314,12 @@ def _capabilities(ch: Channel) -> list[str]:
             '  <Capability Min="85" Max="169">External (Art-Net takes over)</Capability>',
             '  <Capability Min="170" Max="255">Mix (Art-Net over the playlist)</Capability>',
         ]
+    if ch.name == "Palette":
+        from df2_pi.palette import LIBRARY
+
+        names = list(LIBRARY)
+        lines = [f'  <Capability Min="{i}" Max="{i}">{escape(name)}</Capability>' for i, name in enumerate(names)]
+        return lines + [f'  <Capability Min="{len(names)}" Max="255">User palettes, by name</Capability>']
     if ch.name == "Hold":
         return [
             '  <Capability Min="0" Max="127">Run (the playlist advances)</Capability>',

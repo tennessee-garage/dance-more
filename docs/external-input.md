@@ -83,7 +83,7 @@ Use a **DMX Out CHOP** (Art-Net or sACN) at the floor's IP.
 
 ## Lighting desk control
 
-The floor can also be patched as a **17-channel fixture**, so a desk (grandMA,
+The floor can also be patched as an **18-channel fixture**, so a desk (grandMA,
 Chamsys, QLC+) or a media server's DMX output can dim it, strobe it and pick
 programs. It is **off by default**: turn it on in the External tab's DMX
 control section and set its universe (Art-Net and sACN separately) and start
@@ -103,10 +103,11 @@ address (default 201).
 | 15 | Tint amount | 0 off .. 255 fully the tint |
 | 16 | Bump | a white flash of value/255 each time it rises |
 | 17 | Hold | 0–127 the countdown runs, 128–255 the playing entry plays on (the web UI's Hold) |
+| 18 | Palette | the floor palette: N counts the built-ins in order (rainbow, fire, ice, ocean, sunset, forest, neon, candy, night), then your own by name |
 
 - **Continuous controls follow the faders.** Dimmer, strobe, source, mix,
   speed and tint take effect on the first packet, then on every change.
-- **Triggers act only on change.** Bank, program, macros and bump never act on
+- **Triggers act only on change.** Bank, program, macros, bump and palette never act on
   the first packet, so a desk that connects with them at 0 doesn't reload the
   playlist or flash the floor. Changing either bank or program goes to that
   entry.
@@ -123,7 +124,7 @@ address (default 201).
 
 For QLC+, import [fixtures/dance-floor-v2.qxf](fixtures/dance-floor-v2.qxf)
 (`df2-pi fixture` regenerates it from the code). For other desks, build a
-17-channel generic fixture from the table above.
+18-channel generic fixture from the table above.
 
 ## Beat sync
 

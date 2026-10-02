@@ -6,13 +6,15 @@ you look down on the floor. An index into it is a position around the
 edge, so a chase is `ring[(head - i) % 480]` for a tail of `i`. The
 indices are FLAT - `tile * 60 + led` - and go straight into
 `frame.flat`, the `(3840, 3)` view of every LED.
-"""
 
-import colorsys
+Colours come from a palette (`df2_pi.palette`), the floor's by default:
+comet k of n takes the colour k/n of the way round it.
+"""
 
 import numpy as np
 
 from df2_pi.animation import Param, animation
+from df2_pi.palette import choice, palette_param
 from df2_pi.pixels import PixelFrame
 
 
@@ -26,6 +28,7 @@ from df2_pi.pixels import PixelFrame
         "comets": Param(int, default=3, min=1, max=12, label="Comets", role="density"),
         "speed": Param(float, default=120.0, min=10.0, max=480.0, label="LEDs per second", curve="log"),
         "tail": Param(int, default=40, min=2, max=200, label="Tail length", macro=1),
+        "palette": palette_param(),
     },
     period=4.0,  # one lap at the default speed: 480 / 120
 )
@@ -36,10 +39,11 @@ def render(previous: PixelFrame, ctx) -> PixelFrame:
     tail = ctx.params["tail"]
     fade = np.linspace(1.0, 0.0, tail, endpoint=False)  # bright head, dark tail
 
+    pal = choice(ctx, ctx.params["palette"])
     frame = PixelFrame.black(ctx.geometry)
     head = int(ctx.t * ctx.params["speed"])
     for c in range(comets):
-        colour = np.array(colorsys.hsv_to_rgb(c / comets, 1.0, 1.0)) * 255
+        colour = pal.at(c / comets).astype(np.float32)
         offset = head + c * n // comets  # spread evenly around the ring
         positions = ring[(offset - np.arange(tail)) % n]  # head first
         frame.flat[positions] = np.maximum(frame.flat[positions], (fade[:, None] * colour).astype(np.uint8))
