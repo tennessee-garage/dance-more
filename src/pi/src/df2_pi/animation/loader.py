@@ -148,6 +148,7 @@ class AnimationRun:
         dt: float | None = None,
         triggers: tuple[Trigger, ...] = (),
         fallback_bpm: float = 120.0,
+        palette: Any = None,
     ) -> Rendered:
         """Render the next frame. `dt` defaults to one frame period; the
         runner passes a scaled one when the show speed is not 1. `t_beats`
@@ -170,6 +171,7 @@ class AnimationRun:
             beat=beat,
             t_beats=beat.beat + beat.phase if beat is not None else t * fallback_bpm / 60.0,
             triggers=triggers,
+            palette=palette,
         )
         if self.frame == 0 and definition.meta.effect is not None:
             effect = definition.meta.effect

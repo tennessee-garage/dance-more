@@ -59,6 +59,10 @@ source, or it has lost its tempo) they take effect at once, as without;
 Without a beat, `ctx.t_beats` runs on each animation's own clock at the
 `fallback_bpm` setting.
 
+Palette. `set_palette()` sets the floor's active palette (#128), which
+every animation rendered after the next frame boundary sees as
+`ctx.palette`; `PaletteBook` (palette.py) owns which one that is.
+
 Triggers. `trigger(slot, velocity)` may be called from any thread; the
 hit is delivered as `ctx.triggers` to every animation rendered on the next
 frame that renders - current, outgoing, layer - and to no frame after it.
@@ -201,6 +205,7 @@ class RunnerState:
     beat: BeatInfo | None = None  # what animations saw as ctx.beat this frame
     launch_quantum: str = "off"  # off | beat | bar
     launch_pending: bool = False  # a launch is waiting for its beat or bar line
+    palette: str | None = None  # the active palette's name
 
 
 @dataclass(frozen=True)
@@ -307,6 +312,7 @@ class Runner:
         self._fallback_bpm = 120.0
         self._trigger_inbox: queue.SimpleQueue[tuple[int, float, float]] = queue.SimpleQueue()
         self._tick_triggers: tuple[Trigger, ...] = ()  # this frame's
+        self._palette: Any = None  # a df2_pi.palette.Palette; None: the default
         self._timer_t = 0.0  # while held: the wall time the countdown was last held up to
         self._blacked_out = False
         self._brightness = brightness
@@ -398,6 +404,11 @@ class Runner:
             raise ValueError(f"trigger slot must be 0..{TRIGGER_SLOTS - 1}, got {slot!r}")
         velocity = _checked(velocity, 0.0, 1.0, "trigger velocity")
         self._trigger_inbox.put((slot, velocity, self.clock.now()))
+
+    def set_palette(self, palette: Any) -> None:
+        """The floor's active palette (a `df2_pi.palette.Palette`), seen by
+        animations as `ctx.palette` from the next frame."""
+        self._enqueue(lambda: setattr(self, "_palette", palette))
 
     def set_fallback_bpm(self, bpm: float) -> None:
         """The tempo `ctx.t_beats` runs at while there is no beat source."""
@@ -728,6 +739,7 @@ class Runner:
                 beat=self._beat_info,
                 triggers=self._tick_triggers,
                 fallback_bpm=self._fallback_bpm,
+                palette=self._palette,
             )
         except AnimationError as exc:
             log.error("layer %s failed and was removed:\n%s", playing.definition.id, "".join(traceback.format_exception(exc)))
@@ -786,6 +798,7 @@ class Runner:
                 beat=self._beat_info,
                 triggers=self._tick_triggers,
                 fallback_bpm=self._fallback_bpm,
+                palette=self._palette,
             )
         except AnimationError as exc:
             self._failed(playing, exc)
@@ -1208,6 +1221,7 @@ class Runner:
             beat=self._beat_info,
             launch_quantum=self._launch_quantum,
             launch_pending=bool(self._pending_launches),
+            palette=getattr(self._palette, "name", None),
         )
 
     def _layer_state(self) -> LayerState | None:

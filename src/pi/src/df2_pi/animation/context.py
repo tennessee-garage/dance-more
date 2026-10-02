@@ -17,6 +17,7 @@ seeded random sources:
     ctx.t_beats    beat time: the source's position, else ctx.t at the fallback
                    tempo - what df2_pi.tempo's waveforms take
     ctx.triggers   Triggers that arrived since the previous frame; usually ()
+    ctx.palette    the floor's active Palette (df2_pi.palette); see palette_param()
 
 `ctx.state` is how a stateful animation (particles, cellular automata)
 keeps data across frames without anyone having to write a class.
@@ -49,6 +50,7 @@ import numpy as np
 
 from df2_pi.effects import Effect
 from df2_pi.geometry import FloorGeometry
+from df2_pi.palette import BUILTIN, DEFAULT_ACTIVE, Palette
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,7 @@ class FrameContext:
         beat: BeatInfo | None = None,
         t_beats: float | None = None,
         triggers: tuple[Trigger, ...] = (),
+        palette: Palette | None = None,
     ) -> None:
         self.frame = frame
         self.t = t
@@ -118,6 +121,7 @@ class FrameContext:
         self.beat = beat
         self.t_beats = t if t_beats is None else t_beats
         self.triggers = triggers
+        self.palette = palette if palette is not None else BUILTIN[DEFAULT_ACTIVE]
         self.effects: dict[int, Effect] = {}
 
     def send_effect(self, tile: int, effect: Effect) -> None:

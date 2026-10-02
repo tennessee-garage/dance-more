@@ -106,6 +106,18 @@ def render(previous, ctx):
 '''
 
 
+PALETTED = """
+from df2_pi.animation import animation
+from df2_pi.pixels import TileFrame
+
+@animation(name="Paletted")
+def render(previous, ctx):
+    frame = TileFrame.black(ctx.geometry)
+    frame.data[:] = ctx.palette.at(0.0)
+    return frame
+"""
+
+
 CONTROLLED = '''
 from df2_pi.animation import animation, Param
 from df2_pi.pixels import TileFrame
@@ -182,6 +194,7 @@ def registry(tmp_path: Path) -> AnimationRegistry:
     (d / "clocked.py").write_text(textwrap.dedent(CLOCKED))
     (d / "controlled.py").write_text(textwrap.dedent(CONTROLLED))
     (d / "triggered.py").write_text(textwrap.dedent(TRIGGERED))
+    (d / "paletted.py").write_text(textwrap.dedent(PALETTED))
     (d / "triggered2.py").write_text(textwrap.dedent(TRIGGERED).replace('"Triggered"', '"Triggered 2"'))
     (d / "broken.py").write_text("def render(:\n")
     return AnimationRegistry.discover(d)
@@ -1253,3 +1266,20 @@ def test_trigger_and_fallback_bpm_are_checked(registry):
         runner.trigger(0, 1.5)
     with pytest.raises(ValueError):
         runner.set_fallback_bpm(5.0)
+
+
+def test_animations_see_the_active_palette_from_the_next_frame(registry, store):
+    from df2_pi.palette import Palette
+
+    def until(runner, n):
+        if n == 2:
+            runner.set_palette(Palette(["00ff00", "0000ff"], "mine"))
+        return n >= 4
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("paletted", 100.0)))
+    runner.run()
+    colours = [f.data[0, 0].tolist() for _, f in probe.frames]
+    assert colours[:2] == [[255, 0, 0], [255, 0, 0]]  # the default: rainbow, red first
+    assert colours[2:] == [[0, 255, 0]] * 2  # from the frame after it was set
+    assert probe.states[1].palette is None and probe.states[2].palette == "mine"
