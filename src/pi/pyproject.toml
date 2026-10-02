@@ -22,6 +22,7 @@ dev = [
     "httpx2>=2.9",  # FastAPI's TestClient (starlette 1.x deprecates plain httpx there)
     "df2-pi[web]",
     "df2-pi[beat]",
+    "df2-pi[midi]",
 ]
 # `df2-pi play --window` and `--record out.gif|.mp4`; the terminal sink needs nothing.
 preview = [
@@ -33,6 +34,13 @@ preview = [
 # reports itself unavailable; tap tempo and MIDI clock need nothing.
 beat = [
     "aalink>=0.2.3",
+]
+# MIDI input (interfacing/midi.py): controllers over ALSA / CoreMIDI, and the
+# YAML mapping file. Without them serve runs and MIDI reports itself missing.
+midi = [
+    "mido>=1.3",
+    "python-rtmidi>=1.5",
+    "PyYAML>=6.0",
 ]
 # `df2-pi serve`: the admin UI. Only df2_pi.web imports these.
 web = [
@@ -50,6 +58,7 @@ where = ["src"]
 # The admin UI's page shell and vendored libraries, served from the package.
 [tool.setuptools.package-data]
 "df2_pi.web" = ["static/*", "static/vendor/*"]
+"df2_pi.interfacing" = ["*.yaml"]  # the default MIDI mapping
 
 [tool.pytest.ini_options]
 markers = [

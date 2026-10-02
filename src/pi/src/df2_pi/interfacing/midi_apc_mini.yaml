@@ -1,0 +1,101 @@
+# Dance floor MIDI mapping: the Akai APC mini default (mk1 and mk2).
+# Copied to the data directory (beside df2.sqlite3) the first time the floor
+# starts with no mapping; that copy is the one to edit, by hand or with MIDI
+# learn in the web UI's External tab. Addresses: docs/external-input.md#osc.
+#
+# The 8x8 pads are notes 0-63 from the bottom-left (both models), the faders
+# CC 48-55 and the master CC 56. The buttons differ: mk1 track buttons are
+# notes 64-71 and scene buttons 82-89; mk2 track buttons are notes 100-107
+# and scene buttons 112-119. Both sets are bound below, so either works.
+program_change: true   # Program Change + Bank Select: bank = playlist, program = entry
+clock: true            # MIDI clock to beat sync (beat source: MIDI clock)
+bindings:
+  # Pad rows 1-2 (bottom): go to playlist entries 0-15
+  - {note: 0, to: /floor/goto/0}
+  - {note: 1, to: /floor/goto/1}
+  - {note: 2, to: /floor/goto/2}
+  - {note: 3, to: /floor/goto/3}
+  - {note: 4, to: /floor/goto/4}
+  - {note: 5, to: /floor/goto/5}
+  - {note: 6, to: /floor/goto/6}
+  - {note: 7, to: /floor/goto/7}
+  - {note: 8, to: /floor/goto/8}
+  - {note: 9, to: /floor/goto/9}
+  - {note: 10, to: /floor/goto/10}
+  - {note: 11, to: /floor/goto/11}
+  - {note: 12, to: /floor/goto/12}
+  - {note: 13, to: /floor/goto/13}
+  - {note: 14, to: /floor/goto/14}
+  - {note: 15, to: /floor/goto/15}
+  # Pad row 3: the floor palette
+  - {note: 16, to: /floor/palette/rainbow}
+  - {note: 17, to: /floor/palette/fire}
+  - {note: 18, to: /floor/palette/ice}
+  - {note: 19, to: /floor/palette/ocean}
+  - {note: 20, to: /floor/palette/sunset}
+  - {note: 21, to: /floor/palette/forest}
+  - {note: 22, to: /floor/palette/neon}
+  - {note: 23, to: /floor/palette/candy}
+  # Pad row 4: triggers 0-7, as hard as the pad is hit (Ripple drops a ring)
+  - {note: 24, to: /floor/trigger/0}
+  - {note: 25, to: /floor/trigger/1}
+  - {note: 26, to: /floor/trigger/2}
+  - {note: 27, to: /floor/trigger/3}
+  - {note: 28, to: /floor/trigger/4}
+  - {note: 29, to: /floor/trigger/5}
+  - {note: 30, to: /floor/trigger/6}
+  - {note: 31, to: /floor/trigger/7}
+  # Pad row 5: one-shots - play an animation until "next"
+  - {note: 32, to: /floor/play/lightning}
+  - {note: 33, to: /floor/play/ripple}
+  - {note: 34, to: /floor/play/waves}
+  - {note: 35, to: /floor/play/stardust}
+  - {note: 36, to: /floor/play/comet_squares}
+  - {note: 37, to: /floor/play/vortex}
+  - {note: 38, to: /floor/play/chase}
+  - {note: 39, to: /floor/play/twin_peaks}
+  # Pad rows 6-8 (notes 40-63) are left free for MIDI learn.
+  # Faders
+  - {cc: 48, to: /floor/macro/1}
+  - {cc: 49, to: /floor/macro/2}
+  - {cc: 50, to: /floor/macro/3}
+  - {cc: 51, to: /floor/macro/4}
+  - {cc: 52, to: /floor/speed}        # halfway is normal speed
+  - {cc: 53, to: /floor/strobe}
+  - {cc: 54, to: /floor/mix}          # external picture over the floor's show
+  - {cc: 55, to: /floor/hue}
+  - {cc: 56, to: /floor/brightness}   # the master fader
+  # Track buttons (mk1 notes 64-71, mk2 notes 100-107)
+  - {note: 64, to: /floor/previous}
+  - {note: 65, to: /floor/next}
+  - {note: 66, to: /floor/restart}
+  - {note: 67, to: /floor/bump}
+  - {note: 68, to: /floor/blackout, toggle: true}
+  - {note: 69, to: /floor/freeze, toggle: true}
+  - {note: 70, to: /floor/hold, toggle: true}
+  - {note: 71, to: /floor/reset}
+  - {note: 100, to: /floor/previous}
+  - {note: 101, to: /floor/next}
+  - {note: 102, to: /floor/restart}
+  - {note: 103, to: /floor/bump}
+  - {note: 104, to: /floor/blackout, toggle: true}
+  - {note: 105, to: /floor/freeze, toggle: true}
+  - {note: 106, to: /floor/hold, toggle: true}
+  - {note: 107, to: /floor/reset}
+  # Scene buttons (mk1 notes 82-89, mk2 notes 112-119): tempo and speed
+  - {note: 82, to: /floor/tempo/tap}
+  - {note: 83, to: /floor/tempo/resync}
+  - {note: 84, to: /floor/tempo/nudge, value: -10}
+  - {note: 85, to: /floor/tempo/nudge, value: 10}
+  - {note: 86, to: /floor/speed, value: 0.25}     # half speed
+  - {note: 87, to: /floor/speed, value: 0.5}      # normal
+  - {note: 88, to: /floor/speed, value: 0.6667}   # double
+  - {note: 89, to: /floor/strobe, value: 0}       # strobe off
+  - {note: 112, to: /floor/tempo/tap}
+  - {note: 113, to: /floor/tempo/resync}
+  - {note: 114, to: /floor/tempo/nudge, value: -10}
+  - {note: 115, to: /floor/tempo/nudge, value: 10}
+  - {note: 116, to: /floor/speed, value: 0.25}
+  - {note: 117, to: /floor/speed, value: 0.5}
+  - {note: 118, to: /floor/speed, value: 0.6667}
+  - {note: 119, to: /floor/strobe, value: 0}
