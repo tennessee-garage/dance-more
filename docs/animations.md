@@ -26,7 +26,7 @@ one part of the API:
 | [`plasma.py`](../src/pi/animations/plasma.py) | pixel | `PixelFrame.from_grid()` — "just hand me a 136×136 image" |
 | [`ripple.py`](../src/pi/animations/ripple.py) | pixel | Continuous coordinates: `led_positions`, `splat()`, fading trails; `ctx.triggers` |
 | [`lightning.py`](../src/pi/animations/lightning.py) | pixel | **The edge graph**: bolts that walk the floor along tile edges |
-| [`chase.py`](../src/pi/animations/chase.py) | pixel | `floor_ring` — the outer boundary as one 480-LED loop |
+| [`chase.py`](../src/pi/animations/chase.py) | pixel | `floor_ring` — the outer boundary as one 480-LED loop; the floor palette |
 | [`seams.py`](../src/pi/animations/seams.py) | pixel | `seams` — the facing pairs of edges between tiles |
 | [`comet_squares.py`](../src/pi/animations/comet_squares.py) | pixel | `rails` and `edges_at` together; objects with phases in `ctx.state` |
 | [`vortex.py`](../src/pi/animations/vortex.py) | pixel | Building your own rings from `geo.edge`; a little physics carried in `ctx.state` |
@@ -142,6 +142,7 @@ is the image path `plasma.py` uses.
 | `ctx.beat` | `BeatInfo \| None` | Where the music is, when a beat source is running (below); else `None` |
 | `ctx.t_beats` | `float` | Beat time: the music's position, or `ctx.t` at the fallback tempo. **Use this for anything on the beat** (below) |
 | `ctx.triggers` | `tuple[Trigger, ...]` | Hits since the last frame - pads, notes, the web UI's trigger buttons. Usually `()` (below) |
+| `ctx.palette` | `Palette` | The floor's active palette; follow it with `palette_param()` (below) |
 | `ctx.send_effect(tile, effect)` | | Write a tile's effect register (see below) |
 
 There is deliberately no "time remaining". Fading out is the runner's job.
@@ -232,6 +233,31 @@ level = lfo(ctx.t_beats, rate=0.5, shape="sine", offset=-offsets)  # one level p
 the floor's centre - rows fold to fan in from both edges, angle matches
 east to west. `phase.by_name()` takes a map's name, for an animation that
 lets its user choose one, as [`waves.py`](../src/pi/animations/waves.py) does.
+
+**Palette.** The floor has an active palette, chosen in the web UI's Palettes
+tab and transport bar or by a desk (DMX control channel 18), so a lighting
+designer can set the room's colours and every animation that follows it
+falls in line. To follow it, declare a `palette` param with
+`palette_param()` - its choices are `"floor"` (the default: whatever the
+floor is set to) and the built-in library - and resolve it with `choice()`:
+
+```python
+from df2_pi.palette import choice, palette_param
+
+params={"palette": palette_param()}
+...
+pal = choice(ctx, ctx.params["palette"])   # ctx.palette for "floor", else the named one
+colour = pal.at(0.25)                      # (3,) uint8
+colours = pal.at(offsets)                  # (..., 3) uint8: one per tile or LED
+```
+
+A palette is 2–8 colour stops spaced evenly round a loop: `at(0)` is the
+first, and past the last it blends back to the first, so a value that keeps
+rising cycles through the scheme without a jump. Blending is in linear light,
+so the middle of red and green is a bright yellow. A palette change lands at
+the next frame; [`chase.py`](../src/pi/animations/chase.py) and
+[`waves.py`](../src/pi/animations/waves.py) follow it. Animations without a
+`palette` param are unaffected.
 
 **Triggers.** `ctx.triggers` is a tuple of `Trigger(slot, velocity, age_s)`
 for the hits that arrived since the last frame: pads on the web UI,

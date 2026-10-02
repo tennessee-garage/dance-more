@@ -12,6 +12,11 @@ sweeps, square snaps. Spread is how much of the cycle the floor covers (0
 all together, 1 one whole cycle across it), Mirror folds it about the
 centre so it fans in from the edges, Reverse runs it the other way.
 
+Colours come from a palette (`df2_pi.palette`): the floor's, by default,
+so a desk or the web UI sets the scheme and the wave moves through it -
+Place in palette picks where, and Colour across the wave how far the
+level carries it.
+
 On beat time (`ctx.t_beats`), so it locks to the music with a beat source
 running and runs at the fallback tempo without. At tile resolution every
 tile is one colour, which is cheap on the wire; LED resolution - which
@@ -22,6 +27,7 @@ import numpy as np
 
 from df2_pi import phase
 from df2_pi.animation import Param, animation
+from df2_pi.palette import choice, palette_param
 from df2_pi.pixels import PixelFrame
 from df2_pi.tempo import SHAPES, lfo
 
@@ -41,8 +47,9 @@ from df2_pi.tempo import SHAPES, lfo
         "mirror": Param(bool, default=False, label="Mirror"),
         "reverse": Param(bool, default=False, label="Reverse"),
         "resolution": Param(str, default="tile", choices=["tile", "led"], label="Resolution"),
-        "hue": Param(float, default=0.6, min=0.0, max=1.0, label="Hue"),
-        "hue_spread": Param(float, default=0.15, min=0.0, max=0.5, label="Hue across the wave", role="variation"),
+        "palette": palette_param(),
+        "hue": Param(float, default=0.6, min=0.0, max=1.0, label="Place in palette"),
+        "hue_spread": Param(float, default=0.15, min=0.0, max=1.0, label="Colour across the wave", role="variation"),
         "floor": Param(float, default=0.06, min=0.0, max=0.5, label="Floor", help="Brightness at the bottom of the wave"),
     },
 )
@@ -57,14 +64,9 @@ def render(previous: PixelFrame, ctx) -> PixelFrame:
         offsets = offsets.reshape(-1, 1)  # one per tile, broadcast across its LEDs
     level = lfo(ctx.t_beats, rate=p["rate"], shape=p["shape"], offset=-offsets)
 
-    rgb = _hue_to_rgb(p["hue"] + p["hue_spread"] * level)
+    rgb = choice(ctx, p["palette"]).at(p["hue"] + p["hue_spread"] * level).astype(np.float32) / 255.0
     brightness = p["floor"] + (1.0 - p["floor"]) * level
     frame = PixelFrame.black(geo)
     frame.data[...] = np.broadcast_to(rgb * (brightness * 255.0)[..., None], frame.data.shape).astype(np.uint8)
     return frame
 
-
-def _hue_to_rgb(hue: np.ndarray) -> np.ndarray:
-    """Fully saturated colours for an array of hues, vectorised: (..., 3) in 0..1."""
-    h6 = np.mod(hue, 1.0)[..., None] * 6.0
-    return np.clip(np.abs(h6 - np.array([3.0, 2.0, 4.0])) * np.array([1.0, -1.0, -1.0]) + np.array([-1.0, 2.0, 2.0]), 0.0, 1.0)
