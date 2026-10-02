@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video"}
 
 
 @pytest.fixture(scope="module")

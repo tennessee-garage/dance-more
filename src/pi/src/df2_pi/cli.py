@@ -16,6 +16,8 @@
     df2-pi playlists [list|show|create|add|move|remove|set-startup|delete]
     df2-pi leds > leds.csv                    # every LED's position and raw-mode Art-Net address
     df2-pi fixture > dance-floor-v2.qxf       # the QLC+ fixture for the DMX control block
+    df2-pi video import waves.mp4 --duration 30   # a clip for the Video animation (pip install -e ".[preview]")
+    df2-pi video list
     df2-pi ledwalk --row 0 --slot 0           # one LED at a time: verify LED 0 and the winding
     df2-pi tilewalk                           # one tile at a time: verify the install wiring
 
@@ -376,6 +378,54 @@ def _cmd_leds(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_crop(text: str) -> tuple[float, float, float]:
+    parts = text.split(",")
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError(f"--crop needs CX,CY,SIZE, got {text!r}")
+    try:
+        return tuple(float(p) for p in parts)  # type: ignore[return-value]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"--crop values must be numbers, got {text!r}") from None
+
+
+def _cmd_video(args: argparse.Namespace) -> int:
+    from .video import Clip, clip_path, default_media_dir, import_clip, list_clips, load_clip
+
+    media = Path(args.media) if args.media else default_media_dir()
+    if args.video_cmd == "list":
+        names = list_clips(media)
+        if not names:
+            print(f"no clips in {media}")
+        for name in names:
+            clip: Clip | None = load_clip(name, media)
+            size = clip_path(name, media).stat().st_size / 1e6
+            print(f"{name:24} {len(clip.frames):5} frames  {clip.fps:4.1f} fps  {clip.duration:6.1f} s  {size:5.1f} MB  from {clip.source}")
+        return 0
+
+    def progress(n: int) -> None:
+        if n % 30 == 0:
+            print(f"  {n} frames", file=sys.stderr)
+
+    try:
+        path = import_clip(
+            args.source,
+            args.name,
+            media_dir=media,
+            fps=args.fps,
+            start=args.start,
+            duration=args.duration,
+            crop=args.crop,
+            progress=progress,
+        )
+    except (ImportError, ValueError, OSError) as exc:
+        print(f"video import: {exc}", file=sys.stderr)
+        return 1
+    clip = load_clip(path.name[: -len(".clip.npz")], media)
+    print(f"wrote {path}: {len(clip.frames)} frames at {clip.fps:g} fps ({clip.duration:.1f} s), {path.stat().st_size / 1e6:.1f} MB")
+    print("reload animations (the Animations tab, or restart) for Video to list it")
+    return 0
+
+
 def _cmd_fixture(args: argparse.Namespace) -> int:
     from .interfacing.dmx_control import qlc_fixture
 
@@ -723,6 +773,22 @@ def build_parser() -> argparse.ArgumentParser:
     leds.set_defaults(func=_cmd_leds)
     fixture = sub.add_parser("fixture", help="the QLC+ fixture definition for the DMX control block")
     fixture.set_defaults(func=_cmd_fixture)
+
+    video = sub.add_parser("video", help="import and list clips for the Video animation")
+    video.add_argument("--media", metavar="DIR", help="the media directory (default: $DF2_MEDIA or media/ beside the package)")
+    video_sub = video.add_subparsers(dest="video_cmd", required=True)
+    video_import = video_sub.add_parser("import", help="decode a video and store it as a floor clip")
+    video_import.add_argument("source", help="the video: mp4, mov, gif - anything imageio reads")
+    video_import.add_argument("--name", help="the clip's name (default: the file's)")
+    video_import.add_argument("--fps", type=float, default=15.0, help="frames kept per second (default 15; playback blends between them)")
+    video_import.add_argument("--start", type=float, default=0.0, metavar="S", help="seconds into the source to begin")
+    video_import.add_argument("--duration", type=float, metavar="S", help="seconds to keep (default: to the end)")
+    video_import.add_argument(
+        "--crop", type=_parse_crop, default=(0.5, 0.5, 1.0), metavar="CX,CY,SIZE",
+        help="the square to take: centre x, centre y and size, as fractions (default 0.5,0.5,1 - the middle, as big as fits)",
+    )
+    video_sub.add_parser("list", help="the clips in the media directory")
+    video.set_defaults(func=_cmd_video)
 
     return parser
 

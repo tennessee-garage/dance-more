@@ -10,3 +10,7 @@ __pycache__
 digital.csv
 analog.csv
 *.sal
+
+# Video clips (df2-pi video import): large, and usually licensed footage
+src/pi/media/*
+!src/pi/media/README.md
