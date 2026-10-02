@@ -93,6 +93,19 @@ def render(previous, ctx):
 '''
 
 
+TRIGGERED = '''
+from df2_pi.animation import animation
+from df2_pi.pixels import TileFrame
+
+@animation(name="Triggered", triggers=True)
+def render(previous, ctx):
+    frame = TileFrame.black(ctx.geometry)
+    first = ctx.triggers[0] if ctx.triggers else None
+    frame.data[:] = (min(255, 200 * len(ctx.triggers)), 0 if first is None else first.slot, min(255, round(ctx.t_beats * 10)))
+    return frame
+'''
+
+
 CONTROLLED = '''
 from df2_pi.animation import animation, Param
 from df2_pi.pixels import TileFrame
@@ -168,6 +181,8 @@ def registry(tmp_path: Path) -> AnimationRegistry:
     (d / "trail.py").write_text(textwrap.dedent(WITH_EFFECT))
     (d / "clocked.py").write_text(textwrap.dedent(CLOCKED))
     (d / "controlled.py").write_text(textwrap.dedent(CONTROLLED))
+    (d / "triggered.py").write_text(textwrap.dedent(TRIGGERED))
+    (d / "triggered2.py").write_text(textwrap.dedent(TRIGGERED).replace('"Triggered"', '"Triggered 2"'))
     (d / "broken.py").write_text("def render(:\n")
     return AnimationRegistry.discover(d)
 
@@ -1132,3 +1147,109 @@ def test_the_launch_quantum_is_checked(registry):
     runner = Runner(registry, FanOut([NullSink()]))
     with pytest.raises(ValueError):
         runner.set_launch_quantum("phrase")
+
+
+# ---- triggers and beat time -------------------------------------------------------------------
+
+
+def reds(probe):
+    return [int(f.data[0, 0, 0]) for _, f in probe.frames]
+
+
+def test_a_trigger_reaches_exactly_one_frame(registry, store):
+    def until(runner, n):
+        if n == 3:
+            runner.trigger(5, 0.8)
+        return n >= 8
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("triggered", 100.0)))
+    runner.run()
+    assert reds(probe) == [0, 0, 0, 200, 0, 0, 0, 0]  # raised after frame 2: on frame 3, and only there
+    assert int(probe.frames[3][1].data[0, 0, 1]) == 5
+
+
+def test_several_triggers_in_one_frame_arrive_together_with_their_ages(registry, store):
+    seen = []
+
+    def until(runner, n):
+        if n == 2:
+            runner.trigger(1)
+            runner.trigger(2, 0.5)
+        return n >= 4
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("triggered", 100.0)))
+    original = Runner._take_triggers
+
+    def spy(self, tick):
+        hits = original(self, tick)
+        if hits:
+            seen.append(hits)
+        return hits
+
+    Runner._take_triggers = spy
+    try:
+        runner.run()
+    finally:
+        Runner._take_triggers = original
+    assert reds(probe)[2] == 255  # two hits, capped
+    [(a, b)] = seen
+    assert (a.slot, a.velocity, b.slot, b.velocity) == (1, 1.0, 2, 0.5)
+    assert 0.0 < a.age_s <= PERIOD * 2.5  # to when the frame is seen: its latch, a period after it renders
+
+
+def test_a_trigger_reaches_both_sides_of_a_crossfade(registry, store):
+    def until(runner, n):
+        if n == 3:
+            runner.trigger(3)
+        return n >= 6
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("triggered", 4 * PERIOD), ("triggered2", 10 * PERIOD), crossfade_s=2 * PERIOD))
+    runner.run()
+    assert probe.states[3].animation == ("triggered2", "Triggered 2")  # mid-fade: the incoming is current
+    assert reds(probe)[3] == 200  # both halves saw it; one alone would blend toward black
+
+
+def test_a_pause_holds_triggers_for_the_frame_after_it(registry, store):
+    def until(runner, n):
+        if n == 1:
+            runner.pause()
+        if n == 2:
+            runner.trigger(0)
+        if n == 4:
+            runner.resume()
+        return n >= 7
+
+    runner, probe, _ = make_runner(registry, store, until=until)
+    runner.load_playlist(playlist(store, ("triggered", 100.0)))
+    runner.run()
+    assert reds(probe) == [0, 0, 0, 0, 200, 0, 0]  # raised mid-pause, delivered on the first frame after
+
+
+def test_beat_time_runs_at_the_fallback_tempo_without_a_beat(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=5)
+    runner.load_playlist(playlist(store, ("triggered", 100.0)))
+    runner.set_fallback_bpm(60.0)  # one beat a second: t_beats == t
+    runner.run()
+    assert [int(f.data[0, 0, 2]) for _, f in probe.frames] == [0, 1, 2, 3, 4]
+
+
+def test_beat_time_follows_the_beat_source(registry, store):
+    runner, probe = beat_runner(registry, store, "off", lambda r, n: n >= 3)
+    runner.load_playlist(playlist(store, ("triggered", 100.0), name="Q"), quantize=False)
+    runner.run()
+    for (_, frame), state in zip(probe.frames[1:], probe.states[1:]):
+        assert int(frame.data[0, 0, 2]) == min(255, round((state.beat.beat + state.beat.phase) * 10))
+
+
+def test_trigger_and_fallback_bpm_are_checked(registry):
+    runner = Runner(registry, FanOut([NullSink()]))
+    for slot in (-1, 16, True, 1.5):
+        with pytest.raises(ValueError):
+            runner.trigger(slot)
+    with pytest.raises(ValueError):
+        runner.trigger(0, 1.5)
+    with pytest.raises(ValueError):
+        runner.set_fallback_bpm(5.0)

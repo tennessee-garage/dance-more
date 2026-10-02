@@ -170,6 +170,22 @@ function LiveParams() {
     </div>`;
 }
 
+const TRIGGER_PADS = 8; // slots 0-7 here; all 16 are open to the API, MIDI and OSC
+
+/** Pads for an animation that declares `triggers=True`: each fires its slot
+ *  on press. What a slot does is the animation's choice. */
+function TriggerPads({ live }) {
+  const id = currentAnimationId.value;
+  const meta = animationList.value?.animations.find((a) => a.id === id);
+  if (!meta?.triggers) return null;
+  return html`
+    <div class="live-params trigger-pads" aria-label="Triggers">
+      <span class="row-label" title="Hits for this animation; what each one does is up to it">Triggers</span>
+      ${Array.from({ length: TRIGGER_PADS }, (_, slot) => html`
+        <button class="pad" disabled=${!live} onPointerDown=${() => command("trigger", { slot, velocity: 1 })}>${slot + 1}</button>`)}
+    </div>`;
+}
+
 function Progress({ state }) {
   const elapsed = state?.elapsed_s;
   const remaining = state?.remaining_s;
@@ -208,6 +224,7 @@ function TransportBar() {
         <${ConnectionBadge} />
       </div>
       <${LiveParams} />
+      <${TriggerPads} live=${live} />
       <${LayerControls} state=${state} live=${live} />
       <${ShowControls} state=${state} live=${live} />
       <${Progress} state=${state} />

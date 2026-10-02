@@ -78,6 +78,11 @@ class Hold(BaseModel):
     on: bool
 
 
+class TriggerHit(BaseModel):
+    slot: int = Field(ge=0, le=15, description="What it means is the playing animation's choice.")
+    velocity: float = Field(default=1.0, ge=0, le=1)
+
+
 # ---- show controls ----
 
 
@@ -166,6 +171,11 @@ def transport_router(ctx: AppContext) -> APIRouter:
         """Stop the countdown so what is playing plays until released, or let
         it run on from where it stood: at zero it moves on as usual."""
         return queued(lambda: runner.hold(body.on))
+
+    @router.post("/transport/trigger", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
+    def trigger(body: TriggerHit) -> Queued:
+        """A hit for the playing animations, as `ctx.triggers` on the next frame."""
+        return queued(lambda: runner.trigger(body.slot, body.velocity))
 
     @router.post("/transport/goto", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
     def goto(body: Goto) -> Queued:

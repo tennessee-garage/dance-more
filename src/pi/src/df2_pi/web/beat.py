@@ -31,6 +31,7 @@ class BeatSettings(BaseModel):
     multiplier: Multiplier = Field(description="1/2x, 1x or 2x the source's tempo.")
     offset_ms: float = Field(description="Read the music this much later than each frame's latch: the rest of the way to the LEDs.")
     launch_quantum: Quantum = Field(description="goto/next/previous/loads/one-offs wait for the next beat or bar line.")
+    fallback_bpm: float = Field(description="The tempo ctx.t_beats runs at while there is no beat source.")
 
 
 class BeatChanges(BaseModel):
@@ -41,6 +42,7 @@ class BeatChanges(BaseModel):
     multiplier: Multiplier = None
     offset_ms: float = Field(default=None, ge=-500, le=500)
     launch_quantum: Quantum = None
+    fallback_bpm: float = Field(default=None, ge=20, le=300)
 
 
 class BeatInfoOut(BaseModel):

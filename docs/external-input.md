@@ -145,6 +145,9 @@ default.
 - **MIDI clock** is in the code (24 PPQN, Start / Continue / Stop / Song
   Position) and arrives as a choice here with MIDI input (#131).
 
+**Tempo without a source** (default 120 BPM) is what beat-locked
+animations run at whenever there is no beat, so they still move sensibly.
+
 Live controls: **Resync** makes the next beat a downbeat, **−10 / +10 ms**
 nudge the beat earlier or later on the floor, and **½× / 1× / 2×** halve or
 double the tempo for animations.

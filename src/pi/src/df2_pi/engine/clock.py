@@ -205,6 +205,11 @@ class FrameClock:
 
     # ---- the loop -----------------------------------------------------------------
 
+    def now(self) -> float:
+        """The clock's own timebase (`perf_counter` unless injected): what
+        `FrameInfo.deadline` is measured on."""
+        return self._now()
+
     def run(self, latch: Callable[[], None] | None = None) -> Iterator[FrameInfo]:
         """Yield a tick per frame. Between one tick and the next, the body
         prepares that frame; when it hands control back, the clock waits

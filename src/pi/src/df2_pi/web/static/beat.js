@@ -111,6 +111,12 @@ export function BeatSection() {
           <${NumberField} label="Beats per bar" value=${s.beats_per_bar} min="1" max="16" onCommit=${(v) => change({ beats_per_bar: v })} />
           <${NumberField} label="Latency offset (ms)" value=${s.offset_ms} min="-500" max="500" onCommit=${(v) => change({ offset_ms: v })} />
         </div>`}
+      <div class="ext-row">
+        <${NumberField}
+          label="Tempo without a source (BPM)" value=${s.fallback_bpm} min="20" max="300"
+          onCommit=${(v) => change({ fallback_bpm: v })}
+        />
+      </div>
       <div class="ext-field">
         <span class="label">Quantize launches</span>
         <${RadioRow} label="Quantize launches" options=${QUANTA} value=${s.launch_quantum} onPick=${(v) => change({ launch_quantum: v })} />
@@ -118,6 +124,7 @@ export function BeatSection() {
       <p class="ext-note">
         The latency offset reads the music that much later than each frame goes out, for the time it takes to
         reach the LEDs: tune it by eye until the floor lands on the kick. Beats per bar is also Link's quantum.
+        Beat-locked animations run at the tempo without a source whenever there is no beat.
       </p>
       ${error && html`<div class="command-error" role="alert">${error}</div>`}
     </section>`;
