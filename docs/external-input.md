@@ -71,6 +71,9 @@ thin lines and text disappear between the rings.
 
 ## TouchDesigner
 
+**[touchdesigner.md](touchdesigner.md) is a step-by-step guide**: pictures,
+the control block, the HTTP API and tempo, with networks to build. In short:
+
 Use a **DMX Out CHOP** (Art-Net or sACN) at the floor's IP.
 
 - **Tile / grid:** Resize the TOP to 8×8 (tile) or W×H (grid), then **TOP to

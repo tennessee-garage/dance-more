@@ -17,6 +17,7 @@ placeholders to be resolved as the design firms up.
 | [tile-bus-protocol.md](tile-bus-protocol.md) | Tile Bus (Row Controller ↔ Tile) command protocol: frame format, command set, timing |
 | [tile-effects.md](tile-effects.md) | `SET_EFFECT` ids and parameters: tile-local effects over host pixel data, and why they exist |
 | [external-input.md](external-input.md) | Driving the floor from a media server (Resolume, TouchDesigner) over Art-Net / sACN: modes, universes, orientation, source and takeover |
+| [touchdesigner.md](touchdesigner.md) | A step-by-step guide for TouchDesigner: pictures, the DMX control block, the HTTP API and Ableton Link, with an example show |
 | [animations.md](animations.md) | Writing animations for the Pi driver: the contract, the two frame formats, the cell model, edges and the edge graph, params, the authoring loop |
 | [hardware-tile.md](hardware-tile.md) | Tile: wood frame, acrylic, WS2815 LEDs, ATtiny3226, connectors |
 | [hardware-row-controller.md](hardware-row-controller.md) | Row controller: Xiao RP2350, dual RS-485 buses, connectors |
