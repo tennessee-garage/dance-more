@@ -94,14 +94,17 @@ class Palette:
         return f"Palette({self.name!r}, {self.hex()})"
 
 
-def palette_param(**kwargs: Any) -> Param:
-    """The param an animation declares to opt in: "floor" (the default)
-    follows the active palette; the others are the built-in library."""
+def palette_param(default: str = FLOOR, **kwargs: Any) -> Param:
+    """The param an animation declares to opt in: "floor" (the default
+    unless the animation's look needs a particular scheme) follows the
+    active palette; the others are the built-in library."""
     from df2_pi.animation.meta import Param  # here, not at the top: the animation package imports this module
 
+    if default != FLOOR and default not in LIBRARY:
+        raise ValueError(f"palette_param default must be {FLOOR!r} or a built-in palette, got {default!r}")
     kwargs.setdefault("label", "Palette")
     kwargs.setdefault("help", "floor: whatever the floor's palette is set to")
-    return Param(str, default=FLOOR, choices=[FLOOR, *LIBRARY], **kwargs)
+    return Param(str, default=default, choices=[FLOOR, *LIBRARY], **kwargs)
 
 
 def choice(ctx, name: str) -> Palette:

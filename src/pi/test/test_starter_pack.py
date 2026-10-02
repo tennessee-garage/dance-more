@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline"}
 
 
 @pytest.fixture(scope="module")
@@ -247,6 +247,32 @@ def test_palette_opt_ins_follow_the_floor_palette_or_a_named_one(registry):
 
     waves = registry["waves"].start(params={"spread": 0.0, "hue_spread": 0.0, "hue": 0.0, "shape": "square"}).render(palette=mine).frame  # square: full at beat 0
     assert {tuple(c) for c in waves.flat.tolist()} == {(0, 255, 0)}  # the floor palette's first stop, everywhere
+
+
+def test_waterline_draws_a_surface_over_fading_depths(registry):
+    run = registry["waterline"].start(seed=1)
+    for _ in range(90):
+        frame = run.render().frame
+    level = frame.data.max(axis=-1).astype(int)  # (rows, cols), row 0 the bottom
+    heights = run.state["y"]
+    for col, y in enumerate(heights):
+        top = int(np.floor(y)) + 2
+        assert (level[top:, col] == 0).all()  # above the surface: dark
+        assert level[0, col] == 0  # the bottom row: faded to black
+        assert level[int(np.round(y)), col] > level[0, col]
+
+
+def test_waterline_cohesion_holds_neighbours_together(registry):
+    def spread(cohesion):
+        run = registry["waterline"].start(seed=3, params={"cohesion": cohesion})
+        gaps = []
+        for _ in range(900):
+            run.render()
+            gaps.append(np.abs(np.diff(run.state["y"])).max())
+        return np.percentile(gaps, 90)
+
+    loose, tight = spread(0.0), spread(1.0)
+    assert tight < 0.6 and loose > 2 * tight
 
 
 def test_lightning_bolts_run_along_edges(registry):

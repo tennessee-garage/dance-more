@@ -36,6 +36,7 @@ one part of the API:
 | [`stripes.py`](../src/pi/animations/stripes.py) | tile | A v1 port that keeps v1's look: a fade built in linear light and encoded with `gamma.from_linear()` |
 | [`waves.py`](../src/pi/animations/waves.py) | pixel | Phase maps: a `tempo` waveform run across `df2_pi.phase` offsets - the console-style effect in one line |
 | [`video.py`](../src/pi/animations/video.py) | pixel | Real footage: clips from `df2-pi video import`, blended frame to frame (below) |
+| [`waterline.py`](../src/pi/animations/waterline.py) | tile | A little physics per tile column: springs, a saturating pull between neighbours, kicks - motion that is never quite periodic |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
