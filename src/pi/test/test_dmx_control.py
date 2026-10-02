@@ -25,7 +25,7 @@ def block(**values) -> bytes:
     """A control block: every channel at 0 except those named (by offset)."""
     data = bytearray(WIDTH)
     names = {"dimmer": 0, "strobe": 1, "source": 2, "mix": 3, "bank": 4, "program": 5, "speed": 6,
-             "macro1": 7, "macro2": 8, "red": 11, "green": 12, "blue": 13, "tint": 14, "bump": 15, "hold": 16}
+             "macro1": 7, "macro2": 8, "red": 11, "green": 12, "blue": 13, "tint": 14, "bump": 15, "hold": 16, "palette": 17}
     for name, value in values.items():
         data[names[name]] = value
     return bytes(data)
@@ -114,6 +114,19 @@ def test_silence_releases_a_hold_the_desk_applied_but_not_one_it_did_not(rig):
     clock.t += 3.0
     control.poll()
     runner.hold.assert_not_called()
+
+
+def test_palette_picks_by_the_books_order_and_only_on_change(rig):
+    control, runner, source, store, _ = rig
+    book = MagicMock()
+    book.names.return_value = ["rainbow", "fire", "mine"]
+    control.palettes = book
+    control.handle(block(palette=2))  # first packet: a trigger, so nothing
+    book.activate.assert_not_called()
+    control.handle(block(palette=1))
+    control.handle(block(palette=9))  # no such palette: ignored
+    control.handle(block(palette=2))
+    assert [c.args for c in book.activate.call_args_list] == [("fire",), ("mine",)]
 
 
 def test_bank_and_program_load_a_playlist_by_name_order_and_go_to_an_entry(rig):

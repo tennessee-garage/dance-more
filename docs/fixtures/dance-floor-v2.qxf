@@ -86,7 +86,20 @@
   <Capability Min="0" Max="127">Run (the playlist advances)</Capability>
   <Capability Min="128" Max="255">Hold (the playing entry plays on)</Capability>
  </Channel>
- <Mode Name="Control 17ch">
+ <Channel Name="Palette">
+  <Group Byte="0">Colour</Group>
+  <Capability Min="0" Max="0">rainbow</Capability>
+  <Capability Min="1" Max="1">fire</Capability>
+  <Capability Min="2" Max="2">ice</Capability>
+  <Capability Min="3" Max="3">ocean</Capability>
+  <Capability Min="4" Max="4">sunset</Capability>
+  <Capability Min="5" Max="5">forest</Capability>
+  <Capability Min="6" Max="6">neon</Capability>
+  <Capability Min="7" Max="7">candy</Capability>
+  <Capability Min="8" Max="8">night</Capability>
+  <Capability Min="9" Max="255">User palettes, by name</Capability>
+ </Channel>
+ <Mode Name="Control 18ch">
   <Channel Number="0">Master dimmer</Channel>
   <Channel Number="1">Strobe</Channel>
   <Channel Number="2">Source</Channel>
@@ -104,6 +117,7 @@
   <Channel Number="14">Tint amount</Channel>
   <Channel Number="15">Bump</Channel>
   <Channel Number="16">Hold</Channel>
+  <Channel Number="17">Palette</Channel>
  </Mode>
  <Physical>
   <Bulb Type="LED" Lumens="0" ColourTemperature="0"/>
