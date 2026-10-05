@@ -1,20 +1,22 @@
 """Comet Train: comets nose to tail along every edge, pulsing across the floor and turning as one.
 
 Every edge running one way - every horizontal side, or every vertical
-one - carries a comet: a near-white head at the edge's far end and a tail
-in a palette colour behind it, fading to black by the 15th LED. Each fills
-its edge, so along each line the head of one comet sits at the tail of the
-next.
+one - carries a comet: a near-white head and a tail in a palette colour
+behind it, fading to black by the 15th LED. A comet is as long as an edge,
+so along each line the head of one comet sits at the tail of the next.
 
-On every pulse (a beat, or a few) the whole train surges forward one tile
-side, slamming into place and then holding until the next pulse. Comets
-run off the far side of the floor and new ones come in from the near side.
+On every pulse (a beat, or a few) the whole train surges a few LEDs
+forward, slamming into place and holding until the next pulse. Comets run
+off the far side of the floor and new ones come in from the near side.
 
-Now and then a pulse turns them instead: every comet runs round the tile
-corner its head is sitting at and comes to rest on the edge leading away
-at 90 degrees, so a horizontal flow suddenly pulses into a vertical one.
-All of them turn at once, the same way - up or down if they were running
-across, left or right if they were running up or down.
+The step divides a tile side, so every few pulses the heads land exactly
+on the tile corners. Now and then, from a corner, the next pulse turns
+them instead: each head swings round the corner onto the edge leading
+away at 90 degrees and runs along it, LED by LED, the tail following it
+round, until the whole comet lies on the new edge. All of them turn at
+once, the same way - up or down if they were running across, left or
+right if they were running up or down - so a horizontal flow suddenly
+pulses into a vertical one.
 
 The floor is treated as a window onto an endless lattice of comets, which
 is what makes the turn work. Every grid line has two lanes, one either
@@ -24,10 +26,12 @@ in two lanes: the lane on the inside of the turn takes the inside lane
 out. Comets turned off the floor go; edges that would be fed from off the
 floor get new comets, sliding in from the side.
 
-Between pulses the floor is exactly one comet per edge, so the state is
-just which way they run and a palette position for each one; a pulse is
-planned as one path per comet - its edge, then the edge it is going to,
-with -1 for LEDs off the floor - and drawn by sliding the head along it.
+The state is which way the comets run, how far past the corners their
+heads are (`offset`), and a palette position for each comet, kept by the
+edge it set out from - including a ring of edges just off the floor, so a
+comet half way on keeps its colour. Each pulse is drawn as one path per
+comet - the edge it set out from, then the edge it is heading for, with -1
+for LEDs off the floor - with the head slid along it.
 """
 
 import numpy as np
@@ -38,56 +42,63 @@ from df2_pi.palette import choice, palette_param
 from df2_pi.pixels import PixelFrame
 
 WHITE = 0.8  # how far the head is pushed from its colour towards white
-EASE = 3  # the move eases out: 1 - (1 - x)^EASE, so it leaves fast and lands soft
+EASE = 3  # a step eases out: 1 - (1 - x)^EASE, so it leaves fast and lands soft
 
 
 @animation(
     name="Comet Train",
-    description="Comets nose to tail on every edge, pulsing across the floor on the beat and now and then turning 90 degrees together.",
+    description="Comets nose to tail on every edge, pulsing across the floor on the beat and now and then turning a corner together.",
     author="df2",
     format="pixel",
     tags=["edges", "rhythm", "palette"],
     sync="beat",
     params={
         "tail": Param(int, default=14, min=1, max=14, label="Tail length (LEDs)", help="Behind the head: 14 makes each comet a whole tile side, 15 LEDs", role="scale"),
+        "step": Param(int, default=3, choices=[1, 3, 5, 15], label="LEDs per pulse", help="Divides a tile side, so the heads keep landing on the corners"),
         "beats": Param(float, default=1.0, choices=[0.5, 1.0, 2.0, 4.0], label="Beats per pulse"),
-        "move": Param(float, default=0.3, min=0.05, max=1.0, label="Move time", help="The part of each pulse spent moving: short slams into place, 1 never stops"),
-        "turns": Param(float, default=0.25, min=0.0, max=1.0, label="Turn chance", help="The chance each pulse turns the comets 90 degrees instead of carrying on", role="variation", macro=1),
+        "move": Param(float, default=0.3, min=0.05, max=1.0, label="Step time", help="The part of each pulse spent stepping: short slams into place, 1 never stops"),
+        "turns": Param(float, default=0.3, min=0.0, max=1.0, label="Turn chance", help="The chance, each time the heads reach the tile corners, that the next pulse turns them", role="variation", macro=1),
+        "turn_time": Param(float, default=0.9, min=0.2, max=1.0, label="Turn time", help="The part of a pulse a turn takes, the comets running round the corner at an even pace"),
         "palette": palette_param(),
-        "drift": Param(float, default=0.05, min=0.0, max=0.5, label="Colour drift", help="How far round the palette each pulse's new comets move on"),
+        "drift": Param(float, default=0.05, min=0.0, max=0.5, label="Colour drift", help="How far round the palette each new line of comets moves on"),
         "variety": Param(float, default=0.15, min=0.0, max=1.0, label="Colour variety", help="How much new comets' colours differ from each other"),
     },
 )
 def render(previous: PixelFrame, ctx) -> PixelFrame:
     geo = ctx.geometry
-    n = geo.leds_per_side
     p = ctx.params
     state = ctx.state
     if not state:
         state["leds"] = {axis: _lane_leds(geo, axis) for axis in Axis}
         state["axis"] = Axis.X if ctx.rng.random() < 0.5 else Axis.Y
         state["dir"] = 1 if ctx.rng.random() < 0.5 else -1
+        state["offset"] = 0  # LEDs the heads are past the corners
         state["base"] = ctx.rng.random()
         lanes, edges = state["leds"][state["axis"]].shape[:2]
-        # As if it had been running: each comet a pulse's drift behind the one ahead of it.
-        behind = np.arange(edges) if state["dir"] < 0 else np.arange(edges)[::-1]
-        state["u"] = state["base"] - p["drift"] * np.broadcast_to(behind, (lanes, edges)) + _jitter(ctx, (lanes, edges))
+        # As if it had been running: each comet an edge's drift behind the one ahead of it.
+        behind = np.arange(-1, edges + 1)[:: state["dir"]] + 1  # 0 at the side they come in from
+        state["u"] = state["base"] - p["drift"] * np.broadcast_to(behind, (lanes + 2, edges + 2)) + _jitter(ctx, (lanes + 2, edges + 2))
         state["pulse"] = None
 
     position = ctx.t_beats / p["beats"]
     pulse = int(np.floor(position))
     if pulse != state["pulse"]:
         if state["pulse"] is not None:
-            _arrive(state)
+            _finish(ctx, state["move"])
         state["pulse"] = pulse
         turn = 0
-        if ctx.rng.random() < p["turns"]:
+        if state["offset"] == 0 and ctx.rng.random() < p["turns"]:
             turn = 1 if ctx.rng.random() < 0.5 else -1
         state["move"] = _plan(ctx, turn)
 
-    progress = min((position - pulse) / p["move"], 1.0)
-    head = (n - 1) + n * (1.0 - (1.0 - progress) ** EASE)  # along a 2n-LED path: the end of one edge to the end of the next
-    return _draw(ctx, state["move"], head)
+    move = state["move"]
+    x = position - pulse
+    if move["turn"]:
+        progress = min(x / p["turn_time"], 1.0)  # an even run round the corner
+    else:
+        progress = 1.0 - (1.0 - min(x / p["move"], 1.0)) ** EASE
+    head = move["from"] + (move["to"] - move["from"]) * progress
+    return _draw(ctx, move, head)
 
 
 def _lane_leds(geo, axis: Axis) -> np.ndarray:
@@ -101,9 +112,10 @@ def _lane_leds(geo, axis: Axis) -> np.ndarray:
 
 
 def _plan(ctx, turn: int) -> dict:
-    """One pulse: where every comet on (or about to come onto) the floor
-    goes. `turn` is 0 to carry on, or the direction (+1 / -1) along the
-    other axis to turn to."""
+    """One pulse. `turn` is 0 to carry on, or the direction (+1 / -1)
+    along the other axis to turn to. Every comet on, or partly on, the floor
+    gets a path: the edge it set out from, then the edge it is heading for.
+    Its head is at `n - 1 + offset` along that path and moves to `to`."""
     state = ctx.state
     axis, d = state["axis"], state["dir"]
     src = state["leds"][axis]
@@ -113,7 +125,7 @@ def _plan(ctx, turn: int) -> dict:
     dst = state["leds"][to_axis]
     to_lanes, to_edges = dst.shape[:2]
 
-    moves = []  # (source lane, source edge, destination lane, destination edge)
+    routes = []  # (source lane, edge, destination lane, edge), all within a ring of edges round the floor
     for i in range(-1, lanes + 1):
         for e in range(-1, edges + 1):
             if turn == 0:
@@ -125,37 +137,49 @@ def _plan(ctx, turn: int) -> dict:
                 out_side = -d if side == turn else d
                 j = 2 * corner if out_side > 0 else 2 * corner - 1
                 f = line if turn > 0 else line - 1
-            on_src = 0 <= i < lanes and 0 <= e < edges
-            on_dst = 0 <= j < to_lanes and 0 <= f < to_edges
-            if on_src or on_dst:
-                moves.append((i, e, j, f, on_src, on_dst))
+            if -1 <= j <= to_lanes and -1 <= f <= to_edges:
+                routes.append((i, e, j, f))
 
-    state["base"] += ctx.params["drift"]
     none = np.full(n, -1)
     paths, u = [], []
-    for i, e, j, f, on_src, on_dst in moves:
+    for i, e, j, f in routes:
+        on_src = 0 <= i < lanes and 0 <= e < edges
+        on_dst = 0 <= j < to_lanes and 0 <= f < to_edges
+        if not (on_src or on_dst):
+            continue
         before = (src[i, e] if d > 0 else src[i, e][::-1]) if on_src else none
         after = (dst[j, f] if to_dir > 0 else dst[j, f][::-1]) if on_dst else none
         paths.append(np.concatenate([before, after]))
-        u.append(state["u"][i, e] if on_src else state["base"] + _jitter(ctx, ()))
-    arriving = np.array([(j, f) for _, _, j, f, _, on_dst in moves if on_dst]).reshape(-1, 2)
+        u.append(state["u"][i + 1, e + 1])
+    start = n - 1 + state["offset"]
     return {
         "paths": np.array(paths),
         "u": np.array(u, dtype=np.float64),
-        "arriving": arriving,
-        "keep": np.array([m[5] for m in moves]),
+        "routes": routes,
+        "turn": turn,
         "axis": to_axis,
         "dir": to_dir,
         "shape": (to_lanes, to_edges),
+        "from": start,
+        "to": 2 * n - 1 if turn else min(start + ctx.params["step"], 2 * n - 1),
     }
 
 
-def _arrive(state: dict) -> None:
-    """The pulse is over: every comet is on its new edge."""
-    move = state["move"]
-    u = np.zeros(move["shape"])
-    u[move["arriving"][:, 0], move["arriving"][:, 1]] = move["u"][move["keep"]]
-    state["u"], state["axis"], state["dir"] = u, move["axis"], move["dir"]
+def _finish(ctx, move: dict) -> None:
+    """The pulse is over. If the heads reached the next corners, every
+    comet now sets out from the edge it was heading for."""
+    state = ctx.state
+    n = state["leds"][Axis.X].shape[2]
+    offset = int(round(move["to"])) - (n - 1)
+    if offset < n:
+        state["offset"] = offset
+        return
+    lanes, edges = move["shape"]
+    state["base"] += ctx.params["drift"]
+    u = state["base"] + _jitter(ctx, (lanes + 2, edges + 2))  # for edges fed from beyond the ring: new comets
+    for i, e, j, f in move["routes"]:
+        u[j + 1, f + 1] = state["u"][i + 1, e + 1]
+    state["u"], state["axis"], state["dir"], state["offset"] = u, move["axis"], move["dir"], 0
 
 
 def _jitter(ctx, shape):

@@ -315,11 +315,12 @@ def test_lightning_comes_down_and_forks_late(registry):
 
 
 def test_comet_train_rests_with_one_comet_on_every_edge_running_one_way(registry):
-    """Between pulses (a pulse is 15 frames at the fallback 120 bpm), each
-    edge running the comets' way holds one: a near-white head at its
-    leading end and `tail` LEDs fading behind it; the other way is dark."""
+    """Between pulses (a pulse is 15 frames at the fallback 120 bpm), with
+    a whole tile side per pulse, each edge running the comets' way holds
+    one: a near-white head at its leading end and `tail` LEDs fading behind
+    it; the other way is dark."""
     geo = default_geometry()
-    run = registry["comet_train"].start(seed=0, params={"tail": 6, "turns": 0.5})
+    run = registry["comet_train"].start(seed=0, params={"tail": 6, "turns": 0.5, "step": 15})
     axes = set()
     for f in range(150):
         frame = run.render().frame
@@ -342,16 +343,51 @@ def test_comet_train_rests_with_one_comet_on_every_edge_running_one_way(registry
 def test_comet_train_turns_every_comet_onto_its_own_edge(registry):
     """A turn maps lanes to lanes: no two comets land on the same edge, and
     every edge the comets now run along is filled."""
-    run = registry["comet_train"].start(seed=1, params={"turns": 1.0})
+    run = registry["comet_train"].start(seed=1, params={"turns": 1.0, "step": 15})
     axes = []
     for f in range(15 * 6):
         run.render()
         if f % 15 == 0:
             move = run.state["move"]
-            landing = [tuple(edge) for edge in move["arriving"].tolist()]
+            lanes, edges = move["shape"]
+            landing = [(j, f) for _, _, j, f in move["routes"] if 0 <= j < lanes and 0 <= f < edges]
             assert len(landing) == len(set(landing)) == 128
             axes.append(move["axis"])
     assert all(a is not b for a, b in zip(axes, axes[1:]))  # every pulse a turn
+
+
+def test_comet_train_steps_a_few_leds_a_pulse(registry):
+    """Each pulse moves every head three LEDs along its line; new heads
+    only appear where comets come in, at the start of the line."""
+    geo = default_geometry()
+    run = registry["comet_train"].start(seed=2, params={"turns": 0.0, "step": 3})
+    heads = []
+    for f in range(15 * 6):
+        frame = run.render().frame
+        if f % 15 == 14:
+            heads.append(np.flatnonzero(frame.flat.min(axis=-1) > 200))
+    axis, d = run.state["axis"], run.state["dir"]
+    for lane in range(2 * (geo.tile_rows if axis.value == "x" else geo.tile_cols)):
+        rail = geo.rails(axis, lane)
+        if d < 0:
+            rail = rail[::-1]  # in the way the comets run
+        along = [set(np.flatnonzero(np.isin(rail, h)).tolist()) for h in heads]
+        for before, after in zip(along, along[1:]):
+            moved = {i + 3 for i in before if i + 3 < len(rail)}
+            assert moved <= after and all(i < 3 for i in after - moved)
+
+
+def test_comet_train_turns_round_the_corner_led_by_led(registry):
+    """A turn is not one jump: the new way fills in over most of a pulse."""
+    run = registry["comet_train"].start(seed=3, params={"turns": 1.0, "step": 15})
+    run.render()  # the first pulse sets off
+    move = run.state["move"]
+    assert move["turn"]
+    geo = default_geometry()
+    new = np.concatenate([e.flat_leds for e in geo.edges if e.axis is move["axis"]])
+    counts = [int(run.render().frame.flat[new].any(axis=-1).sum()) for _ in range(14)]
+    assert all(0 < b - a <= 2 * 128 for a, b in zip(counts, counts[1:12]))  # an LED or so per comet per frame
+    assert counts[-1] == 128 * 15  # then every comet is round
 
 
 def test_seeding_a_fresh_database_gets_the_whole_pack(registry):
