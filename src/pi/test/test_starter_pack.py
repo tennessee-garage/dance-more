@@ -10,11 +10,12 @@ import pytest
 
 from df2_pi.animation import AnimationRegistry, default_animations_dir
 from df2_pi.animation.loader import MODULE_PREFIX
+from df2_pi.edges import Axis
 from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline", "comet_train"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline", "comet_train", "switchyard"}
 
 
 @pytest.fixture(scope="module")
@@ -388,6 +389,45 @@ def test_comet_train_turns_round_the_corner_led_by_led(registry):
     counts = [int(run.render().frame.flat[new].any(axis=-1).sum()) for _ in range(14)]
     assert all(0 < b - a <= 2 * 128 for a, b in zip(counts, counts[1:12]))  # an LED or so per comet per frame
     assert counts[-1] == 128 * 15  # then every comet is round
+
+
+def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane(registry):
+    run = registry["switchyard"].start(seed=4, params={"interval": 10.0, "switches": 2})
+    phases = []
+    for _ in range(30 * 60):
+        run.render()
+        state = run.state
+        if not phases or phases[-1] != (state["phase"], len(state["saved"])):
+            phases.append((state["phase"], len(state["saved"])))
+        lanes = [key for key, _ in state["segment"]["keys"] if key is not None]
+        assert len(lanes) == len(set(lanes))  # no two comets heading for one lane
+        assert set(lanes) == {(link, side) for link in state["flows"] for side in (1, -1)}  # and none left empty
+    assert phases == [("train", 0), ("build", 1), ("build", 2), ("unwind", 1), ("train", 0)]
+    assert state["routes"] == {}
+    assert set(state["flows"].values()) in ({1}, {-1}) and len({link[0] for link in state["flows"]}) == 1  # uniform again
+
+
+def test_a_switch_jogs_the_lines_it_crosses_and_feeds_the_lines_it_starved(registry):
+    """Comets running east, switched north at the corner (3, 4): the column
+    above swaps at every corner, and the edges east of the switch are fed
+    from a link of comets born at the corner below."""
+    import random
+
+    sy = sys.modules[MODULE_PREFIX + "switchyard"]
+    lattice = sy.Lattice(default_geometry())
+    state = {"flows": {link: 1 for link in lattice.links(Axis.X)}, "routes": {}, "fronts": []}
+    sy.switch(state, lattice, (3, 4), "W", "N")
+    while state["fronts"]:
+        j, come = state["fronts"].pop()
+        state["fronts"] += sy._arrive(state, lattice, j, come, random.Random(0))
+
+    assert state["routes"][((3, 4), "W")] == "N"
+    assert state["flows"][("v", 4, 2)] == 1 and state["routes"][((3, 4), "S")] == "E"  # the feed, from (2, 4)
+    for r in range(4, lattice.rows + 1):  # every line above jogs north at column line 4
+        assert state["routes"][((r, 4), "W")] == "N" and state["routes"][((r, 4), "S")] == "E"
+    assert all(j[0] >= 3 for j, _ in state["routes"])  # the lines below carry straight on
+    vertical = {link for link in state["flows"] if link[0] == "v"}
+    assert vertical == {("v", 4, r) for r in range(2, lattice.rows)}
 
 
 def test_seeding_a_fresh_database_gets_the_whole_pack(registry):

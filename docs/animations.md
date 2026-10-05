@@ -38,6 +38,7 @@ one part of the API:
 | [`video.py`](../src/pi/animations/video.py) | pixel | Real footage: clips from `df2-pi video import`, blended frame to frame (below) |
 | [`waterline.py`](../src/pi/animations/waterline.py) | tile | A little physics per tile column: springs, a saturating pull between neighbours, kicks - motion that is never quite periodic |
 | [`comet_train.py`](../src/pi/animations/comet_train.py) | pixel | Every edge one way as `rails` lanes, stepped on the beat; the floor as a window onto an endless lattice, so a 90° turn is a lane-to-lane map with comets entering and leaving at the sides |
+| [`switchyard.py`](../src/pi/animations/switchyard.py) | pixel | Comet Train on a lattice of corners and links: a flow per link and a route per corner, so turns can be thrown one corner at a time and the floor re-routes round them. Experimental |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
