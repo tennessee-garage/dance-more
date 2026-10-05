@@ -23,7 +23,7 @@ from df2_pi.pixels import PixelFrame
     description="Comets running round the floor's edge.",
     author="df2",
     format="pixel",
-    tags=["edges", "rhythm"],
+    tags=["edges", "rhythm", "palette"],
     params={
         "comets": Param(int, default=3, min=1, max=12, label="Comets", role="density"),
         "speed": Param(float, default=120.0, min=10.0, max=480.0, label="LEDs per second", curve="log"),

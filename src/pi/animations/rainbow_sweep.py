@@ -27,7 +27,7 @@ BEATS_PER_SWEEP = 8  # two bars of 4/4 at Speed 1
     description="A hue gradient that sweeps diagonally across the floor, pumping on the beat.",
     author="garth",
     format="tile",
-    tags=["ambient", "colour"],
+    tags=["ambient", "colour", "pump"],
     params={
         "speed": Param(float, default=1.0, min=0.1, max=5.0, label="Speed"),
         "saturation": Param(float, default=1.0, min=0.0, max=1.0, label="Saturation", macro=1),

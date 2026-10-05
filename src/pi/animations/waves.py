@@ -37,7 +37,7 @@ from df2_pi.tempo import SHAPES, lfo
     description="A waveform run across the floor in phase: waves, rings, sweeps, chases. On the beat.",
     author="df2",
     format="pixel",
-    tags=["rhythm", "geometric"],
+    tags=["rhythm", "geometric", "palette"],
     sync="beat",
     params={
         "map": Param(str, default="radial", choices=list(phase.MAPS), label="Phase map", macro=1),

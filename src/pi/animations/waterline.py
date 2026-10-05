@@ -48,7 +48,7 @@ KICK = (2.0, 4.5)  # rows/s
     description="The water's surface across the floor, tile by tile, bobbing and settling, with the depths fading below.",
     author="df2",
     format="tile",
-    tags=["ambient", "water"],
+    tags=["ambient", "water", "palette"],
     params={
         "level": Param(float, default=3.6, min=0.5, max=6.5, label="Water level (rows)"),
         "swell": Param(float, default=0.5, min=0.0, max=1.0, label="Swell", help="How rough: the waves' strength and how often the surface is kicked", role="intensity", macro=1),
