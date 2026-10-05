@@ -14,7 +14,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline", "comet_train"}
 
 
 @pytest.fixture(scope="module")
@@ -312,6 +312,46 @@ def test_lightning_comes_down_and_forks_late(registry):
             assert all(b <= a for a, b in zip(fork_rows, fork_rows[1:]))
     assert min(fork_points) > 0.2  # nothing forks in the top fifth of a bolt
     assert np.median(fork_points) > 0.65  # and most fork in its last third
+
+
+def test_comet_train_rests_with_one_comet_on_every_edge_running_one_way(registry):
+    """Between pulses (a pulse is 15 frames at the fallback 120 bpm), each
+    edge running the comets' way holds one: a near-white head at its
+    leading end and `tail` LEDs fading behind it; the other way is dark."""
+    geo = default_geometry()
+    run = registry["comet_train"].start(seed=0, params={"tail": 6, "turns": 0.5})
+    axes = set()
+    for f in range(150):
+        frame = run.render().frame
+        if f % 15 != 14:
+            continue
+        move = run.state["move"]
+        axes.add(move["axis"])
+        for edge in geo.edges:
+            leds = edge.flat_leds if move["dir"] > 0 else edge.flat_leds[::-1]  # head last
+            level = frame.flat[leds].max(axis=-1).astype(int)
+            if edge.axis is not move["axis"]:
+                assert not level.any()
+                continue
+            assert frame.flat[leds[-1]].min() > 200  # the head, near white
+            assert (np.diff(level[-7:-1]) > 0).all()  # the tail brightening towards it
+            assert not level[:-7].any()  # and nothing further back
+    assert len(axes) == 2  # it turned
+
+
+def test_comet_train_turns_every_comet_onto_its_own_edge(registry):
+    """A turn maps lanes to lanes: no two comets land on the same edge, and
+    every edge the comets now run along is filled."""
+    run = registry["comet_train"].start(seed=1, params={"turns": 1.0})
+    axes = []
+    for f in range(15 * 6):
+        run.render()
+        if f % 15 == 0:
+            move = run.state["move"]
+            landing = [tuple(edge) for edge in move["arriving"].tolist()]
+            assert len(landing) == len(set(landing)) == 128
+            axes.append(move["axis"])
+    assert all(a is not b for a, b in zip(axes, axes[1:]))  # every pulse a turn
 
 
 def test_seeding_a_fresh_database_gets_the_whole_pack(registry):
