@@ -3,42 +3,47 @@
 It opens as Comet Train (comet_train.py): a comet on every edge running
 one way, nose to tail, pulsing a few LEDs on each beat and now and then all
 turning a corner together. After a while (Interval) the turns stop being
-all at once. Instead one corner, on one line, throws a switch: from then
-on every comet reaching that corner on that line turns there.
+all at once. Instead one corner throws a switch: the stream through it
+turns there, for good, and the floor re-routes round it so that no two
+streams ever cross. Say everything runs right and the switch at the
+middle corner turns up:
 
-The rest of the floor re-routes around it:
+- Below the switch, nothing changes.
+- Above and to the left, each line turns up one corner before the line
+  below it, so as not to cross that line's upward stream: a diagonal of
+  turns running up and left from the switch.
+- Above and to the right, the lines have lost their supply. Each is fed
+  from the top: a stream coming down a column and turning right one corner
+  before the line below it - a diagonal running up and right. The edge just
+  after the switch is left empty, between the stream going up and the
+  first one coming down.
 
-- Lines the turned stream never reaches carry on as they were.
-- Where the turned stream reaches the next corner and another stream is
-  crossing it, they swap: the crossing comets turn onto the new heading
-  and the turned stream takes their place. So a turn north jogs every line
-  above it up by one at that corner, all the way to the floor's edge. The
-  swap spreads at comet speed, one corner per tile side, as the first
-  turned comet gets there.
-- The edges after the switch have lost their supply, so they get a feed
-  made from nothing: comets born at the corner behind the switch, which
-  run in and turn to fill them.
+Every Interval another switch is thrown, up to Switches of them, each
+re-routing the map it lands in, so it builds into a map of currents. Then
+they come out again in reverse order, one per Interval, until the floor is
+uniform and it is Comet Train once more.
 
-Every Interval another switch is thrown, up to Switches of them, building a
-map of currents. Then they come out again in reverse order, one per
-Interval, until the floor is uniform and it is Comet Train once more.
+The map. The floor is a lattice of tile corners (junctions) joined by
+links, each link one tile side of both lanes of a grid line (adjacent tiles
+don't share LEDs, so each grid line has two lanes, as in Comet Train). The
+map gives every junction one way in and one way out, and the streams are
+paths through it that never share a junction, entering and leaving at the
+floor's edges. Comets move a whole link per segment, from one corner to
+the next. At each corner a comet goes out by that corner's way out, the
+inside lane taking the inside lane on a turn. That is true even as the
+map changes: whatever arrives at a corner leaves by its new way out, so a
+switch, or one coming out, re-routes every comet at once without making or
+losing any mid-floor. New comets only come in at the floor's edges.
 
-How it works: the floor is a lattice of tile corners (junctions) joined by
-links, each link one tile side of both lanes of a grid line (adjacent
-tiles don't share LEDs, so every grid line has two lanes, as in Comet
-Train). Each link has a flow, +1, -1 or none, and each junction a route
-from the ways in to the ways out, straight unless a switch or a swap says
-otherwise. Comets move a whole link per segment, from one corner to the
-next, as Comet Train does; at each corner every comet takes its junction's
-route, the inside lane taking the inside lane on a turn. A comet whose
-route has nowhere to go ends there; a link flowing out of a junction that
-nothing routes into gets new comets, born at that corner - which is also
-how comets come in from the sides of the floor. The routes are a
-one-to-one map at every junction, so no two comets ever land on one edge.
-
-Throwing a switch saves the map first, so taking it out is putting the
-saved map back; comets on links the old map doesn't use end at their next
-corner.
+Throwing a switch (`switch`): the stream turns and runs straight to the
+floor's edge. Any stream it would cross turns the same way one corner
+earlier, which is itself a switch, so this recurses into the diagonal.
+Then the pieces of streams that were cut off are fed (`_feed`), nearest
+the switch first: each from the side, by a stream laid from the floor's
+edge through junctions nothing live is using. A switch that leaves the
+map inconsistent - a stream running into another head on, nowhere to feed
+from - is not thrown, nor is one that would send comets back the way they
+came, going in or coming out; another corner is tried.
 """
 
 import numpy as np
@@ -54,12 +59,15 @@ EASE = 3  # a step eases out: 1 - (1 - x)^EASE
 OPP = {"N": "S", "S": "N", "E": "W", "W": "E"}
 SIDEWAYS = {"N": "EW", "S": "EW", "E": "NS", "W": "NS"}
 OUT = {"E": 1, "W": -1, "N": 1, "S": -1}  # the flow of a link leaving a junction this way
-AXIS = {"E": Axis.X, "W": Axis.X, "N": Axis.Y, "S": Axis.Y}
+
+
+class Blocked(Exception):
+    """A switch that cannot be laid without streams meeting."""
 
 
 @animation(
     name="Switchyard",
-    description="Comet Train until the corners throw switches: one by one the flow turns for good at a corner and the floor re-routes round it, then the switches come out again.",
+    description="Comet Train until the corners throw switches: one by one a stream turns for good and the floor re-routes round it into a map of currents, then the switches come out again.",
     author="df2",
     format="pixel",
     tags=["edges", "rhythm", "palette", "experimental"],
@@ -72,7 +80,7 @@ AXIS = {"E": Axis.X, "W": Axis.X, "N": Axis.Y, "S": Axis.Y}
         "beats": Param(float, default=1.0, choices=[0.5, 1.0, 2.0, 4.0], label="Beats per pulse"),
         "move": Param(float, default=0.3, min=0.05, max=1.0, label="Step time", help="The part of each pulse spent stepping: short slams into place, 1 never stops"),
         "turns": Param(float, default=0.3, min=0.0, max=1.0, label="Turn chance", help="While it runs as Comet Train: the chance, each time the heads reach the corners, that they all turn", role="variation"),
-        "turn_time": Param(float, default=0.9, min=0.2, max=1.0, label="Turn time", help="The part of a pulse an all-together turn takes"),
+        "turn_time": Param(float, default=0.9, min=0.2, max=1.0, label="Turn time", help="The part of a pulse a turn takes - all together, or a switch going in or out"),
         "palette": palette_param(),
         "drift": Param(float, default=0.05, min=0.0, max=0.5, label="Colour drift", help="How far round the palette each new line of comets moves on"),
         "variety": Param(float, default=0.15, min=0.0, max=1.0, label="Colour variety", help="How much new comets' colours differ from each other"),
@@ -83,8 +91,7 @@ def render(previous: PixelFrame, ctx) -> PixelFrame:
     state = ctx.state
     if not state:
         _start(ctx)
-    lattice = state["lattice"]
-    n = lattice.n
+    n = state["lattice"].n
     state["clock"] += ctx.dt
 
     position = ctx.t_beats / p["beats"]
@@ -126,28 +133,21 @@ class Lattice:
             for axis in Axis
         }
 
-    def links(self, axis: Axis) -> list:
-        if axis is Axis.X:
-            return [("h", r, c) for r in range(self.rows + 1) for c in range(self.cols)]
-        return [("v", c, r) for c in range(self.cols + 1) for r in range(self.rows)]
+    def junctions(self):
+        return [(r, c) for r in range(self.rows + 1) for c in range(self.cols + 1)]
+
+    def next(self, j, way: str):
+        """The junction one link from `j` going `way`, or None off the floor."""
+        r, c = j
+        r, c = {"E": (r, c + 1), "W": (r, c - 1), "N": (r + 1, c), "S": (r - 1, c)}[way]
+        return (r, c) if 0 <= r <= self.rows and 0 <= c <= self.cols else None
 
     def link(self, j, way: str):
         """The link leaving junction `j` going `way`, or None off the floor."""
+        if self.next(j, way) is None:
+            return None
         r, c = j
-        if way == "E":
-            return ("h", r, c) if c < self.cols else None
-        if way == "W":
-            return ("h", r, c - 1) if c >= 1 else None
-        if way == "N":
-            return ("v", c, r) if r < self.rows else None
-        return ("v", c, r - 1) if r >= 1 else None
-
-    def ahead(self, link, flow: int):
-        """The junction a link's comets are heading for, and the way they come into it."""
-        kind, line, k = link
-        if kind == "h":
-            return ((line, k + 1), "W") if flow > 0 else ((line, k), "E")
-        return ((k + 1, line), "S") if flow > 0 else ((k, line), "N")
+        return {"E": ("h", r, c), "W": ("h", r, c - 1), "N": ("v", c, r), "S": ("v", c, r - 1)}[way]
 
     def leds(self, link, side: int, flow: int):
         """One lane of a link, in the order its comets travel, or None off the floor."""
@@ -157,6 +157,15 @@ class Lattice:
         if not 0 <= lane < len(rails):
             return None
         return rails[lane, k] if flow > 0 else rails[lane, k][::-1]
+
+    def uniform(self, axis: Axis, sign: int) -> dict:
+        """The map with every line running one way: junction -> (way in, way out)."""
+        go = _way(axis, sign)
+        return {j: (OPP[go], go) for j in self.junctions()}
+
+
+def _way(axis: Axis, sign: int) -> str:
+    return ("E" if sign > 0 else "W") if axis is Axis.X else ("N" if sign > 0 else "S")
 
 
 def _lane(come: str, go: str, side: int) -> int:
@@ -168,8 +177,107 @@ def _lane(come: str, go: str, side: int) -> int:
     return -d if side == turn else d
 
 
-def _way(axis: Axis, sign: int) -> str:
-    return ("E" if sign > 0 else "W") if axis is Axis.X else ("N" if sign > 0 else "S")
+# ---- the map ------------------------------------------------------------------------------------
+
+
+def live(lattice, paths: dict, j) -> bool:
+    """Whether the stream through `j` traces back to the floor's edge."""
+    seen = set()
+    while j not in seen:
+        seen.add(j)
+        come = paths[j][0]
+        back = lattice.next(j, come)
+        if back is None:
+            return True
+        if back not in paths or paths[back][1] != OPP[come]:
+            return False  # cut off
+        j = back
+    return False  # a loop
+
+
+def switch(lattice, paths: dict, j, go: str, _depth: int = 0) -> None:
+    """The stream through junction `j` turns `go` there and runs straight
+    to the floor's edge. Any live stream it would cross turns the same way
+    a junction earlier, recursively. Leaves cut-off pieces for `_feed`."""
+    if _depth > lattice.rows + lattice.cols or paths[j][0] == go:
+        raise Blocked
+    k = j
+    while (k := lattice.next(k, go)) is not None:
+        if k not in paths or not live(lattice, paths, k):
+            continue
+        come = paths[k][0]
+        if come == go:
+            raise Blocked  # a stream coming the other way, head on
+        if come in SIDEWAYS[go]:
+            back = lattice.next(k, come)
+            if back is not None and back in paths and paths[back][1] == OPP[come]:
+                switch(lattice, paths, back, go, _depth + 1)
+            # else it comes in from the floor's edge right here: the run cuts it off
+    paths[j] = (paths[j][0], go)
+    k = j
+    while (k := lattice.next(k, go)) is not None:
+        paths[k] = (OPP[go], go)
+
+
+def _feed(lattice, paths: dict, origin, prefer: str) -> None:
+    """Re-supply every cut-off piece of stream, nearest `origin` first: from
+    the side, preferably `prefer`, by a stream laid in from the floor's edge
+    through junctions no live stream uses. Raises Blocked if one can't be."""
+    for _ in range(len(paths) + 1):
+        starts = []
+        for j, (come, _) in paths.items():
+            back = lattice.next(j, come)
+            if back is not None and (back not in paths or paths[back][1] != OPP[come]) and not live(lattice, paths, j):
+                starts.append(j)
+        if not starts:
+            return
+        f = min(starts, key=lambda j: (abs(j[0] - origin[0]) + abs(j[1] - origin[1]), j))
+        go = paths[f][1]
+        options = []
+        for side in SIDEWAYS[go]:
+            walk, g = [], f
+            while (g := lattice.next(g, side)) is not None:
+                if g in paths and live(lattice, paths, g):
+                    break
+                walk.append(g)
+            else:
+                options.append((side != prefer, side, walk))
+        if not options:
+            raise Blocked
+        _, side, walk = min(options)
+        paths[f] = (side, go)
+        for g in walk:
+            paths[g] = (side, OPP[side])
+    raise Blocked
+
+
+def consistent(lattice, paths: dict) -> bool:
+    """Every stream runs from the floor's edge to the floor's edge, never
+    stopping mid-floor, never doubling back."""
+    for j, (come, go) in paths.items():
+        if come == go or not live(lattice, paths, j):
+            return False
+        ahead = lattice.next(j, go)
+        if ahead is not None and (ahead not in paths or paths[ahead][0] != OPP[go]):
+            return False
+    return True
+
+
+def throw(lattice, paths: dict, j, go: str) -> dict:
+    """The map with a switch at `j` turning `go`, re-routed round it.
+    Raises Blocked if it can't be done cleanly."""
+    paths = dict(paths)
+    switch(lattice, paths, j, go)
+    _feed(lattice, paths, j, prefer=go)
+    if not consistent(lattice, paths):
+        raise Blocked
+    return paths
+
+
+def reverses(before: dict, after: dict) -> bool:
+    """Whether changing map sends any comet back the way it came: arriving
+    at a corner from the way that is now its way out."""
+    return any(j in after and after[j][1] == come for j, (come, _) in before.items())
 
 
 # ---- the run ----------------------------------------------------------------------------------
@@ -181,13 +289,12 @@ def _start(ctx) -> None:
     lattice = state["lattice"] = Lattice(ctx.geometry)
     state["axis"] = Axis.X if ctx.rng.random() < 0.5 else Axis.Y
     state["dir"] = 1 if ctx.rng.random() < 0.5 else -1
-    state["flows"] = {link: state["dir"] for link in lattice.links(state["axis"])}  # the map
-    state["routes"] = {}  # (junction, way in) -> way out, or None to end there; straight when absent
-    state["on"] = dict(state["flows"])  # the flows the comets are on now
+    state["map"] = lattice.uniform(state["axis"], state["dir"])  # the map for the next segment
+    state["on"] = state["map"]  # the map the comets are on now
     state["base"] = ctx.rng.random()
     state["u"] = {}
     along = lattice.cols if state["axis"] is Axis.X else lattice.rows
-    for link in state["on"]:
+    for link in _flows(lattice, state["on"]):
         k = link[2]  # how far along the floor, in the flow's axis
         age = k if state["dir"] > 0 else along - 1 - k
         for side in (1, -1):  # as if it had been running: each comet a drift older than the one behind it
@@ -196,11 +303,20 @@ def _start(ctx) -> None:
     state["clock"] = 0.0
     state["next"] = p["interval"]
     state["saved"] = []  # the map before each switch
-    state["fronts"] = []  # (junction, way in) where a turned stream arrives next
-    state["switched"] = []  # (junction, way in, way out) of each switch, for the curious
+    state["switched"] = []  # (junction, way) of each switch in
     state["offset"] = 0
     state["pulse"] = None
     state["segment"] = None
+
+
+def _flows(lattice, paths: dict) -> dict:
+    """link -> +1 / -1 for every link a stream runs along."""
+    flows = {}
+    for j, (_, go) in paths.items():
+        link = lattice.link(j, go)
+        if link is not None:
+            flows[link] = OUT[go]
+    return flows
 
 
 def _at_corner(ctx) -> None:
@@ -209,162 +325,90 @@ def _at_corner(ctx) -> None:
     state = ctx.state
     p = ctx.params
     lattice = state["lattice"]
-    fronts, state["fronts"] = state["fronts"], []
-    for j, come in fronts:  # the first turned comets arrive now: the swap happens as they do
-        state["fronts"] += _arrive(state, lattice, j, come, ctx.rng)
     due = state["clock"] >= state["next"]
+    changed = False
 
     if state["phase"] == "train":
         if not due:
             if ctx.rng.random() < p["turns"]:
-                turn = 1 if ctx.rng.random() < 0.5 else -1
-                axis = Axis.Y if state["axis"] is Axis.X else Axis.X
-                go = _way(axis, turn)
-                state["axis"], state["dir"] = axis, turn
-                state["flows"] = {link: turn for link in lattice.links(axis)}
-                state["segment"] = _segment(ctx, lambda j, come: go, turn=True)
-                return
+                state["axis"] = Axis.Y if state["axis"] is Axis.X else Axis.X
+                state["dir"] = 1 if ctx.rng.random() < 0.5 else -1
+                state["map"] = lattice.uniform(state["axis"], state["dir"])
+                changed = True
         else:
             state["phase"] = "build"
-    if state["phase"] == "build" and due and not state["fronts"]:
+    if state["phase"] == "build" and due:
         if len(state["saved"]) < p["switches"] and _throw(ctx):
             state["next"] = state["clock"] + p["interval"]
+            changed = True
         else:
             state["phase"] = "unwind"
     if state["phase"] == "unwind" and due:
         if state["saved"]:
-            state["flows"], state["routes"] = state["saved"].pop()
+            state["map"] = state["saved"].pop()
             state["switched"].pop()
-            state["fronts"] = []
+            changed = True
         state["next"] = state["clock"] + p["interval"]
         if not state["saved"]:
             state["phase"] = "train"
-
-    routes = state["routes"]
-    state["segment"] = _segment(ctx, lambda j, come: routes.get((j, come), OPP[come]))
-
-
-def _route(state, j, come):
-    return state["routes"].get((j, come), OPP[come])
+    state["segment"] = _segment(ctx, turn=changed)
 
 
 def _throw(ctx) -> bool:
-    """Throw a switch: one corner on one line where the comets turn from now
-    on. False if there is nowhere left to throw one."""
+    """Throw a switch at a corner where a stream runs straight, re-routing
+    the map round it. False if no corner will take one."""
     state = ctx.state
     lattice = state["lattice"]
-    flows = state["flows"]
-    candidates = []
-    for link, flow in flows.items():
-        j, come = lattice.ahead(link, flow)
-        if _route(state, j, come) != OPP[come] or lattice.link(j, OPP[come]) is None:
-            continue  # only where comets go straight on, and onto the floor
-        for go in SIDEWAYS[come]:
-            out = lattice.link(j, go)
-            if out is not None and out not in flows:
-                interior = lattice.link(j, OPP[go]) is not None  # room behind for the feed
-                candidates.append((not interior, j, come, go))
-    if not candidates:
-        return False
-    best = [c for c in candidates if c[0] == min(c[0] for c in candidates)]
-    _, j, come, go = best[ctx.rng.randrange(len(best))]
-    state["saved"].append((dict(flows), dict(state["routes"])))
-    state["switched"].append((j, come, go))
-    switch(state, lattice, j, come, go)
-    return True
-
-
-def switch(state, lattice, j, come, go) -> None:
-    """Comets coming into junction `j` from `come` turn to `go`, for good.
-    The edges they used to carry on to are fed from the far side: comets
-    born at the next corner back, turning in."""
-    flows, routes = state["flows"], state["routes"]
-    straight, behind = OPP[come], OPP[go]
-    out = lattice.link(j, go)
-    routes[(j, come)] = go
-    flows[out] = OUT[go]
-    feed = lattice.link(j, behind)
-    if feed is not None and flows.get(feed, -OUT[behind]) == -OUT[behind]:
-        flows[feed] = -OUT[behind]  # into j: where nothing else feeds it, comets are born at its far end
-        routes[(j, behind)] = straight
-    state["fronts"].append(lattice.ahead(out, OUT[go]))
-
-
-def _arrive(state, lattice, j, come, rng) -> list:
-    """A turned stream reaches junction `j` from `come`. If another stream
-    crosses here, they swap: it turns to carry on the turned stream's way,
-    and the turned stream takes its place. Returns where to look next."""
-    flows, routes = state["flows"], state["routes"]
-    ahead = OPP[come]
-    for cross in SIDEWAYS[come]:
-        into, onto = lattice.link(j, cross), lattice.link(j, OPP[cross])
-        if into is not None and onto is not None and flows.get(into) == -OUT[cross] and _route(state, j, cross) == OPP[cross]:
-            routes[(j, come)] = OPP[cross]
-            return _onward(state, lattice, j, cross, ahead, rng)
-    return _onward(state, lattice, j, come, ahead, rng)
-
-
-def _onward(state, lattice, j, come, go, rng) -> list:
-    """Send the stream coming into `j` from `come` out `go`: off the floor,
-    onto an empty link (and on to the next corner), or onto a link only
-    births were feeding. Blocked, it turns aside onto an empty link if
-    there is one, or ends at this corner."""
-    flows, routes = state["flows"], state["routes"]
-    out = lattice.link(j, go)
-    if out is None:
-        routes[(j, come)] = go
-        return []
-    if out not in flows:
-        routes[(j, come)] = go
-        flows[out] = OUT[go]
-        return [lattice.ahead(out, OUT[go])]
-    if flows[out] == OUT[go] and not _fed(state, lattice, j, go):
-        routes[(j, come)] = go
-        return []
-    aside = [w for w in SIDEWAYS[come] if lattice.link(j, w) is not None and lattice.link(j, w) not in flows]
-    if aside:
-        w = aside[rng.randrange(len(aside))]
-        routes[(j, come)] = w
-        flows[lattice.link(j, w)] = OUT[w]
-        return [lattice.ahead(lattice.link(j, w), OUT[w])]
-    routes[(j, come)] = None
-    return []
-
-
-def _fed(state, lattice, j, go) -> bool:
-    """Whether a stream into `j` is routed out `go`."""
-    for come in OPP:
-        link = lattice.link(j, come)
-        if come != go and link is not None and state["flows"].get(link) == -OUT[come] and _route(state, j, come) == go:
-            return True
+    paths = state["map"]
+    candidates = [
+        (j, go)
+        for j, (come, out) in paths.items()
+        if come == OPP[out] and 0 < j[0] < lattice.rows and 0 < j[1] < lattice.cols  # straight, and not on the floor's edge
+        for go in SIDEWAYS[out]
+    ]
+    ctx.rng.shuffle(candidates)
+    for j, go in candidates:
+        try:
+            new = throw(lattice, paths, j, go)
+        except Blocked:
+            continue
+        if reverses(paths, new) or reverses(new, paths):
+            continue  # going in or coming out, comets would have to turn back on themselves
+        state["saved"].append(paths)
+        state["switched"].append((j, go))
+        state["map"] = new
+        return True
     return False
 
 
-def _segment(ctx, route, turn: bool = False) -> dict:
-    """One tile side of travel: every comet from the link it is on to the
-    one its next corner routes it to (or to nothing), and new comets for
-    links nothing is routed into. Paths are 2n flat LEDs, -1 off the floor."""
+def _segment(ctx, turn: bool = False) -> dict:
+    """One tile side of travel. Every comet arrives at the corner ahead and
+    leaves by its way out in the new map (or ends, off the floor's edge);
+    links nothing arrives for get new comets. Paths are 2n flat LEDs, -1
+    off the floor."""
     state = ctx.state
     lattice = state["lattice"]
     n = lattice.n
-    new = state["flows"]
+    new = state["map"]
+    flows = _flows(lattice, new)
     none = np.full(n, -1)
     paths, u, keys = [], [], []
     fed = set()
-    for link, flow in state["on"].items():
-        j, come = lattice.ahead(link, flow)
-        go = route(j, come)
-        out = lattice.link(j, go) if go is not None else None
-        if out is not None and (new.get(out) != OUT[go] or out in fed):
-            out = None  # nowhere to go: it ends at the corner
+    for j, (_, go_was) in state["on"].items():
+        link = lattice.link(j, go_was)
+        if link is None:
+            continue
+        ahead = lattice.next(j, go_was)
+        come = OPP[go_was]
+        go = new[ahead][1] if ahead in new else None
+        out = lattice.link(ahead, go) if go is not None and go != come else None
         if out is not None:
             fed.add(out)
         for side in (1, -1):
-            before = lattice.leds(link, side, flow)
+            before = lattice.leds(link, side, OUT[go_was])
             colour = state["u"].get((link, side), state["base"])
-            if out is None:
-                key, after = None, None
-            else:
+            key = after = None
+            if out is not None:
                 key = (out, _lane(come, go, side))
                 after = lattice.leds(out, key[1], OUT[go])
             if before is not None or after is not None:
@@ -372,10 +416,10 @@ def _segment(ctx, route, turn: bool = False) -> dict:
                 u.append(colour)
             keys.append((key, colour))
     state["base"] += ctx.params["drift"]
-    for link, flow in new.items():
+    for link, flow in flows.items():
         if link in fed:
             continue
-        for side in (1, -1):
+        for side in (1, -1):  # new comets, coming in at the floor's edge (or where the map changed under nothing)
             colour = state["base"] + _jitter(ctx)
             after = lattice.leds(link, side, flow)
             if after is not None:
@@ -386,6 +430,8 @@ def _segment(ctx, route, turn: bool = False) -> dict:
         "paths": np.array(paths).reshape(-1, 2 * n),
         "u": np.array(u, dtype=np.float64),
         "keys": keys,
+        "flows": flows,
+        "born": [link for link in flows if link not in fed],
         "turn": turn,
     }
 
@@ -393,7 +439,7 @@ def _segment(ctx, route, turn: bool = False) -> dict:
 def _commit(state) -> None:
     """The segment is over: every comet is on its new link."""
     state["u"] = {key: colour for key, colour in state["segment"]["keys"] if key is not None}
-    state["on"] = dict(state["flows"])
+    state["on"] = state["map"]
     state["offset"] = 0
 
 

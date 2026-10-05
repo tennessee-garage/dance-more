@@ -392,42 +392,52 @@ def test_comet_train_turns_round_the_corner_led_by_led(registry):
 
 
 def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane(registry):
+    """Every lane a stream runs along gets exactly one comet each tile side,
+    and new comets only come in at the floor's edges - never mid-floor, not
+    even as a switch goes in or comes out."""
+    sy = sys.modules[MODULE_PREFIX + "switchyard"]
     run = registry["switchyard"].start(seed=4, params={"interval": 10.0, "switches": 2})
     phases = []
     for _ in range(30 * 60):
         run.render()
-        state = run.state
+        state, lattice, segment = run.state, run.state["lattice"], run.state["segment"]
         if not phases or phases[-1] != (state["phase"], len(state["saved"])):
             phases.append((state["phase"], len(state["saved"])))
-        lanes = [key for key, _ in state["segment"]["keys"] if key is not None]
+            assert sy.consistent(lattice, state["map"])
+        lanes = [key for key, _ in segment["keys"] if key is not None]
         assert len(lanes) == len(set(lanes))  # no two comets heading for one lane
-        assert set(lanes) == {(link, side) for link in state["flows"] for side in (1, -1)}  # and none left empty
+        assert set(lanes) == {(link, side) for link in segment["flows"] for side in (1, -1)}  # and none left empty
+        for link in segment["born"]:
+            kind, line, k = link
+            assert line in (0, lattice.rows if kind == "h" else lattice.cols) or k in (0, (lattice.cols if kind == "h" else lattice.rows) - 1)
+        if phases[-1] == ("train", 0) and len(phases) > 1:
+            assert set(state["map"].values()) in ({(w, sy.OPP[w])} for w in "NESW")  # uniform again
+            break
     assert phases == [("train", 0), ("build", 1), ("build", 2), ("unwind", 1), ("train", 0)]
-    assert state["routes"] == {}
-    assert set(state["flows"].values()) in ({1}, {-1}) and len({link[0] for link in state["flows"]}) == 1  # uniform again
 
 
-def test_a_switch_jogs_the_lines_it_crosses_and_feeds_the_lines_it_starved(registry):
-    """Comets running east, switched north at the corner (3, 4): the column
-    above swaps at every corner, and the edges east of the switch are fed
-    from a link of comets born at the corner below."""
-    import random
-
+def test_a_switch_splits_the_flow_ahead_into_two_fans_of_turns(registry):
+    """Everything running east, switched north at the middle corner: the
+    lines above turn north one corner earlier each (a diagonal up and to the
+    left), the lines cut off to the right are fed from the top, each turning
+    east a corner before the line below (a diagonal up and to the right),
+    the edge just after the switch is left empty, and below is untouched."""
     sy = sys.modules[MODULE_PREFIX + "switchyard"]
     lattice = sy.Lattice(default_geometry())
-    state = {"flows": {link: 1 for link in lattice.links(Axis.X)}, "routes": {}, "fronts": []}
-    sy.switch(state, lattice, (3, 4), "W", "N")
-    while state["fronts"]:
-        j, come = state["fronts"].pop()
-        state["fronts"] += sy._arrive(state, lattice, j, come, random.Random(0))
-
-    assert state["routes"][((3, 4), "W")] == "N"
-    assert state["flows"][("v", 4, 2)] == 1 and state["routes"][((3, 4), "S")] == "E"  # the feed, from (2, 4)
-    for r in range(4, lattice.rows + 1):  # every line above jogs north at column line 4
-        assert state["routes"][((r, 4), "W")] == "N" and state["routes"][((r, 4), "S")] == "E"
-    assert all(j[0] >= 3 for j, _ in state["routes"])  # the lines below carry straight on
-    vertical = {link for link in state["flows"] if link[0] == "v"}
-    assert vertical == {("v", 4, r) for r in range(2, lattice.rows)}
+    r0, c0 = 4, 4
+    paths = sy.throw(lattice, lattice.uniform(Axis.X, 1), (r0, c0), "N")
+    for (r, c), way in paths.items():
+        if r < r0:
+            expected = ("W", "E")
+        elif c <= c0:  # upper left: east, then north from the diagonal
+            k = (r - r0) + (c - c0)
+            expected = ("W", "E") if k < 0 else ("W", "N") if k == 0 else ("S", "N")
+        else:  # upper right: down from the top, then east from the diagonal
+            m = (r - r0) - (c - c0 - 1)
+            expected = ("N", "S") if m > 0 else ("N", "E") if m == 0 else ("W", "E")
+        assert way == expected, ((r, c), way, expected)
+    assert len(paths) == len(lattice.junctions())
+    assert ("h", r0, c0) not in sy._flows(lattice, paths)  # the edge after the switch
 
 
 def test_seeding_a_fresh_database_gets_the_whole_pack(registry):
