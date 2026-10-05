@@ -177,7 +177,8 @@ button.icon.hold.active {
 .beat-lamp.one { border-color: var(--muted); }
 .beat-lamp.on { background: var(--accent); border-color: var(--accent); }
 .beat-lamp.one.on { background: var(--warn); border-color: var(--warn); }
-button.beat-tap { padding: 4px 14px; font-weight: 700; }
+/* Tapped in quick succession: without touch-action, iOS Safari takes two taps as a double-tap zoom. */
+button.beat-tap { padding: 4px 14px; font-weight: 700; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 .trigger-pads { align-items: center; gap: 6px; }
 .palette-bar { align-items: center; }
 .osc-recent { margin-top: 8px; font-size: 12px; }
