@@ -37,6 +37,7 @@ one part of the API:
 | [`waves.py`](../src/pi/animations/waves.py) | pixel | Phase maps: a `tempo` waveform run across `df2_pi.phase` offsets - the console-style effect in one line |
 | [`video.py`](../src/pi/animations/video.py) | pixel | Real footage: clips from `df2-pi video import`, blended frame to frame (below) |
 | [`waterline.py`](../src/pi/animations/waterline.py) | tile | A little physics per tile column: springs, a saturating pull between neighbours, kicks - motion that is never quite periodic |
+| [`comet_train.py`](../src/pi/animations/comet_train.py) | pixel | Every edge one way as `rails` lanes, stepped on the beat; the floor as a window onto an endless lattice, so a 90° turn is a lane-to-lane map with comets entering and leaving at the sides |
 | [`_template.py`](../src/pi/animations/_template.py) | — | A commented skeleton. Underscore-prefixed, so the loader skips it. |
 
 ## 1. The contract
