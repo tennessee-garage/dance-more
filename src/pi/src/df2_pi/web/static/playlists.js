@@ -10,6 +10,7 @@ import { html } from "htm/preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { computed, signal } from "@preact/signals";
 import { ParamControls } from "./params.js";
+import { BLEND_MODES } from "./show.js";
 import { animationList, command, runnerState } from "./state.js";
 
 const PARAMS_SAVE_MS = 400; // a param edit is saved once the control has been still this long
@@ -222,25 +223,106 @@ function PlaylistHeader({ playlist }) {
     </div>`;
 }
 
-/** An entry's params, edited with the animation's own controls and saved a
- *  moment after the last change (not on every step of a drag). */
-function EntryParams({ playlistId, entry }) {
-  const specs = specsFor(entry.animation_id);
-  const [values, setValues] = useState(entry.resolved_params);
+/** An animation's params, edited with its own controls and saved with
+ *  `save(params)` a moment after the last change (not on every step of a
+ *  drag). `resolved` is what it plays with now. */
+function ParamsEditor({ animationId, resolved, save, macros = true }) {
+  const specs = specsFor(animationId);
+  const [values, setValues] = useState(resolved);
   const timer = useRef(null);
-  useEffect(() => setValues(entry.resolved_params), [entry]);
+  useEffect(() => setValues(resolved), [resolved]);
   useEffect(() => () => clearTimeout(timer.current), []);
   if (!specs || Object.keys(specs).length === 0) return html`<p class="muted">No parameters.</p>`;
   const change = (name, value) => {
     const next = { ...values, [name]: value };
     setValues(next);
     clearTimeout(timer.current);
-    timer.current = setTimeout(
-      async () => landed(await api("PATCH", `api/playlists/${playlistId}/entries/${entry.id}`, { params: next })),
-      PARAMS_SAVE_MS,
-    );
+    timer.current = setTimeout(() => save(next), PARAMS_SAVE_MS);
   };
-  return html`<${ParamControls} specs=${specs} values=${values} onChange=${change} />`;
+  return html`<${ParamControls} specs=${specs} values=${values} onChange=${change} macros=${macros} />`;
+}
+
+function BlendSelect({ mode, onChange }) {
+  return html`
+    <select class="blend" value=${mode} aria-label="Blend mode" title="How the layer combines with the animation under it" onChange=${(e) => onChange(e.currentTarget.value)}>
+      ${BLEND_MODES.map(([value, label, help]) => html`<option value=${value} title=${help}>${label}</option>`)}
+    </select>`;
+}
+
+function AmountSlider({ amount, onChange }) {
+  const [shown, setShown] = useState(amount);
+  useEffect(() => setShown(amount), [amount]);
+  return html`
+    <span class="amount" title="How much of the layer: 0 leaves the animation under it untouched">
+      <input
+        type="range" min="0" max="1" step="0.01" value=${shown} aria-label="Layer amount"
+        onInput=${(e) => setShown(parseFloat(e.currentTarget.value))}
+        onChange=${(e) => onChange(parseFloat(e.currentTarget.value))}
+      />
+      <span class="num">${Math.round(shown * 100)}%</span>
+    </span>`;
+}
+
+/** An entry's layer, in the entry's box: what it is, how it blends, its
+ *  params behind its summary, and removing it. */
+function EntryLayer({ entry, patch }) {
+  const [open, setOpen] = useState(false);
+  const layer = entry.layer;
+  // A PATCH sends the whole layer: change one field, keep the rest.
+  const change = (fields) => patch({ layer: { animation_id: layer.animation_id, params: layer.params, mode: layer.mode, amount: layer.amount, ...fields } });
+  return html`
+    <div class="entry-layer">
+      <div class="entry-line">
+        <span class="layer-tag">Layer</span>
+        <span class="entry-name">
+          ${layer.unresolved
+            ? html`<span class="unresolved" title=${`${layer.error}: the entry plays without it`}>${layer.animation_id}</span>`
+            : layer.animation.name}
+          ${layer.warnings.length > 0 && html`<span class="marker warn" title=${layer.warnings.join("\n")}>!</span>`}
+        </span>
+        <${BlendSelect} mode=${layer.mode} onChange=${(mode) => change({ mode })} />
+        <${AmountSlider} amount=${layer.amount} onChange=${(amount) => change({ amount })} />
+        <button class="icon-small danger" onClick=${() => patch({ layer: null })} title="Remove the layer" aria-label="Remove the layer">×</button>
+      </div>
+      ${!layer.unresolved && html`
+        <button class="link params-summary" onClick=${() => setOpen(!open)} aria-expanded=${open}>${paramSummary(layer.params)}</button>`}
+      ${open && html`
+        <div class="entry-params">
+          <${ParamsEditor} animationId=${layer.animation_id} resolved=${layer.resolved_params} save=${(params) => change({ params })} macros=${false} />
+        </div>`}
+    </div>`;
+}
+
+/** Picking a layer for an entry: the same picker as adding an entry, with
+ *  how it blends in place of a duration. */
+function LayerPicker({ patch, onDone }) {
+  const animations = animationList.value?.animations ?? [];
+  const [animationId, setAnimationId] = useState("");
+  const [values, setValues] = useState({});
+  const [mode, setMode] = useState("add");
+  const [amount, setAmount] = useState(1);
+  const animation = animations.find((a) => a.id === animationId);
+  const add = async () => {
+    if (await patch({ layer: { animation_id: animationId, params: values, mode, amount } })) onDone();
+  };
+  return html`
+    <div class="entry-layer layer-picker">
+      <div class="entry-line">
+        <span class="layer-tag">Layer</span>
+        <select value=${animationId} onChange=${(e) => { setAnimationId(e.currentTarget.value); setValues({}); }} aria-label="Animation to layer">
+          <option value="">Choose an animation…</option>
+          ${animations.map((a) => html`<option value=${a.id}>${a.name}</option>`)}
+        </select>
+        <${BlendSelect} mode=${mode} onChange=${setMode} />
+        <${AmountSlider} amount=${amount} onChange=${setAmount} />
+        <button onClick=${add} disabled=${!animationId}>Add</button>
+        <button onClick=${onDone}>Cancel</button>
+      </div>
+      ${animation && Object.keys(animation.params).length > 0 && html`
+        <div class="entry-params">
+          <${ParamControls} specs=${animation.params} values=${values} onChange=${(name, v) => setValues({ ...values, [name]: v })} macros=${false} />
+        </div>`}
+    </div>`;
 }
 
 /** Elapsed and remaining on the playing row: the one thing here that
@@ -254,10 +336,15 @@ function EntryProgress() {
 
 function EntryRow({ playlistId, entry, index, drag, loaded }) {
   const [open, setOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
   const current = loaded && entry.id === playingEntryId.value;
   const playing = current && !oneOff.value;
   const resumes = current && oneOff.value;
-  const patch = async (fields) => landed(await api("PATCH", `api/playlists/${playlistId}/entries/${entry.id}`, fields));
+  const patch = async (fields) => {
+    const detail = await api("PATCH", `api/playlists/${playlistId}/entries/${entry.id}`, fields);
+    landed(detail);
+    return detail;
+  };
   const remove = async () => landed(await api("DELETE", `api/playlists/${playlistId}/entries/${entry.id}`));
   const row = useRef(null);
   const classes = ["entry"];
@@ -296,10 +383,22 @@ function EntryRow({ playlistId, entry, index, drag, loaded }) {
       </div>
       ${playing && html`<div class="entry-sub"><${EntryProgress} /></div>`}
       ${!entry.unresolved && html`
-        <button class="link params-summary" onClick=${() => setOpen(!open)} aria-expanded=${open}>
-          ${paramSummary(entry.params)}
-        </button>`}
-      ${open && html`<div class="entry-params"><${EntryParams} playlistId=${playlistId} entry=${entry} /></div>`}
+        <div class="entry-links">
+          <button class="link params-summary" onClick=${() => setOpen(!open)} aria-expanded=${open}>
+            ${paramSummary(entry.params)}
+          </button>
+          ${!entry.layer && !picking && html`
+            <button class="link add-layer" onClick=${() => setPicking(true)} title="Run another animation over this one while it plays">+ Add layer</button>`}
+        </div>`}
+      ${open && html`
+        <div class="entry-params">
+          <${ParamsEditor}
+            animationId=${entry.animation_id} resolved=${entry.resolved_params}
+            save=${(params) => patch({ params })}
+          />
+        </div>`}
+      ${entry.layer && html`<${EntryLayer} entry=${entry} patch=${patch} />`}
+      ${!entry.layer && picking && html`<${LayerPicker} patch=${patch} onDone=${() => setPicking(false)} />`}
     </li>`;
 }
 

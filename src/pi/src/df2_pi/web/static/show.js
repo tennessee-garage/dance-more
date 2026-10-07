@@ -112,7 +112,7 @@ export function ShowControls({ state, live }) {
     </div>`;
 }
 
-const BLEND_MODES = [
+export const BLEND_MODES = [
   ["add", "Add", "Light on light"],
   ["max", "Max", "The brighter of the two"],
   ["multiply", "Multiply", "A mask: black hides, white shows"],

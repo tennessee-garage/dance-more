@@ -170,8 +170,10 @@ being defined in the tile firmware, so treat this as plumbing for now.
 
 **Layers.** Any animation can also run as a *layer* over whatever is playing
 (the Layer button in the Animations tab), composited with add, max, multiply
-or mix. Nothing changes for the author, with one exception: tile effects
-belong to the base animation, so a layer's `send_effect` writes are dropped.
+or mix. A playlist entry can carry one of its own too (*+ Add layer* in the
+Playlists tab): it plays, and crossfades, with its entry. Nothing changes for
+the author, with one exception: tile effects belong to the base animation,
+so a layer's `send_effect` writes are dropped.
 
 **The beat.** With a beat source running (Ableton Link, tap tempo; see
 [external-input.md](external-input.md#beat-sync)) `ctx.beat` says where the

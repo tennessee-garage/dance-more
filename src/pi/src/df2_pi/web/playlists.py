@@ -8,6 +8,11 @@
     POST            /api/playlists/{id}/startup
     GET/PATCH       /api/settings     brightness, rotation, strobe_max_hz, default_entry_duration, startup_playlist
 
+An entry can carry a `layer`: another animation composited over it while
+it plays, `{"animation_id", "params", "mode", "amount"}`. Send it with the
+entry, or PATCH `layer` (null removes it); it is served resolved the same
+way as the entry.
+
 A playlist is always served RESOLVED: each entry with its animation's name,
 format and period when the registry knows it, `unresolved` and the reason
 when it does not - never dropped - and the full params it would play with,
@@ -30,7 +35,8 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from df2_pi.engine.overlays import STROBE_MAX_HZ_LIMIT
-from df2_pi.playlists.store import DuplicatePlaylistName, Playlist, ResolvedEntry
+from df2_pi.playlists.store import DuplicatePlaylistName, Playlist, ResolvedEntry, ResolvedLayer
+from df2_pi.web.transport import BlendMode
 
 if TYPE_CHECKING:
     from df2_pi.web.app import AppContext
@@ -40,6 +46,26 @@ class AnimationRef(BaseModel):
     name: str
     format: str
     period: float | None
+
+
+class LayerInfo(BaseModel):
+    animation_id: str
+    mode: BlendMode
+    amount: float
+    params: dict[str, Any] = Field(description="The stored overrides: only what differs from the animation's defaults.")
+    resolved_params: dict[str, Any] = Field(description="What it plays with.")
+    warnings: list[str]
+    animation: AnimationRef | None = Field(description="Null when the animation is missing or failed to load.")
+    unresolved: bool = Field(description="Not played (the entry still is).")
+    error: str | None
+
+
+class EntryLayer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    animation_id: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    mode: BlendMode = Field(default="add", description="add: light on light; max: the brighter; multiply: a mask; mix: replace.")
+    amount: float = Field(default=1.0, ge=0, le=1, description="0 is the entry untouched; 1 is the full blend.")
 
 
 class EntryInfo(BaseModel):
@@ -55,6 +81,7 @@ class EntryInfo(BaseModel):
     unresolved: bool
     error: str | None = Field(description="Why it is unresolved.")
     playable: bool = Field(description="Enabled and resolved: the runner plays it.")
+    layer: LayerInfo | None = Field(default=None, description="An animation composited over this one while it plays.")
 
 
 class PlaylistSummary(BaseModel):
@@ -98,6 +125,7 @@ class NewEntry(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     position: int | None = Field(default=None, ge=0, description="Omitted: appended.")
     enabled: bool = True
+    layer: EntryLayer | None = None
 
 
 class EntryChanges(BaseModel):
@@ -107,6 +135,7 @@ class EntryChanges(BaseModel):
         default=None, description="Replaces the overrides wholesale. Changing animation_id without it clears them."
     )
     enabled: bool | None = None
+    layer: EntryLayer | None = Field(default=None, description="Replaces the layer; null removes it.")
 
 
 class Move(BaseModel):
@@ -187,6 +216,23 @@ def playlists_router(ctx: AppContext) -> APIRouter:
             unresolved=resolved.unresolved,
             error=resolved.error,
             playable=resolved.playable,
+            layer=layer_info(resolved.layer) if resolved.layer is not None else None,
+        )
+
+    def layer_info(resolved: ResolvedLayer) -> LayerInfo:
+        layer, definition = resolved.layer, resolved.definition
+        return LayerInfo(
+            animation_id=layer.animation_id,
+            mode=layer.mode,
+            amount=layer.amount,
+            params=dict(layer.params),
+            resolved_params=dict(resolved.params),
+            warnings=list(resolved.warnings),
+            animation=None
+            if definition is None
+            else AnimationRef(name=definition.meta.name, format=definition.meta.format, period=definition.meta.period),
+            unresolved=definition is None,
+            error=resolved.error,
         )
 
     def detail(pid: int) -> PlaylistDetail:
@@ -273,7 +319,13 @@ def playlists_router(ctx: AppContext) -> APIRouter:
     def add_entry(pid: int, body: NewEntry) -> PlaylistDetail:
         try:
             store().add_entry(
-                pid, body.animation_id, duration_s=body.duration_s, params=body.params, position=body.position, enabled=body.enabled
+                pid,
+                body.animation_id,
+                duration_s=body.duration_s,
+                params=body.params,
+                position=body.position,
+                enabled=body.enabled,
+                layer=body.layer.model_dump() if body.layer is not None else None,
             )
         except KeyError as exc:
             raise not_found(exc) from exc
@@ -284,7 +336,7 @@ def playlists_router(ctx: AppContext) -> APIRouter:
     @router.patch("/playlists/{pid}/entries/{entry_id}", response_model=PlaylistDetail)
     def update_entry(pid: int, entry_id: int, body: EntryChanges) -> PlaylistDetail:
         entry = owned_entry(pid, entry_id)
-        changes = body.model_dump(exclude_unset=True)
+        changes = body.model_dump(exclude_unset=True)  # a layer sent as null stays in, as None: remove it
         if "animation_id" in changes and changes["animation_id"] != entry.animation_id and "params" not in changes:
             changes["params"] = {}  # the old animation's overrides mean nothing to the new one
         try:
