@@ -16,9 +16,10 @@ velocity, moved by forces rather than drawn from a curve:
 
 The surface is drawn across the two rows it sits between, in proportion,
 so it glides between tile rows rather than jumping. Below it the water is a
-second colour from the same palette, dimmer, fading to black at the bottom
-row; above it is dark. Up and down are as displayed (row 0 nearest the Pi
-is the bottom); the floor-rotation setting turns it.
+second colour from the same palette, dimmer, fading toward black at the
+bottom row - which is still lit, just dimmest; above it is dark. Up and
+down are as displayed (row 0 nearest the Pi is the bottom); the
+floor-rotation setting turns it.
 """
 
 import math
@@ -81,7 +82,8 @@ def render(previous: TileFrame, ctx) -> TileFrame:
     y = state["y"][None, :]  # (1, cols)
     line = np.clip(1.0 - np.abs(r - y), 0.0, 1.0)  # the surface, shared between the two rows it sits on
     under = np.clip(y - r, 0.0, 1.0)  # how much of the row is below the surface
-    fade = np.clip(r / np.maximum(y, 1e-6), 0.0, 1.0) ** 0.6  # black at the bottom row, brightest just under the surface
+    # Brightest just under the surface, fading to black just below the floor - so the bottom row is the dimmest water, not none.
+    fade = np.clip((r + 1.0) / (y + 1.0), 0.0, 1.0) ** 0.6
     water = (1.0 - line) * under * fade
     colour = line[..., None] * surface + water[..., None] * depths
 
