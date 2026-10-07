@@ -178,58 +178,68 @@ const PARAM_INTERVAL_MS = 66; // ~15 Hz per param: a dragged slider streams, the
 
 /** Why the running animation last refused a param, by name. */
 export const paramErrors = signal({});
+/** Why the layer's animation last refused a param, by name. */
+export const layerParamErrors = signal({});
 
-const pendingParams = new Map(); // name -> the latest value not yet sent
-const lastSent = new Map(); // name -> when it was last sent (performance.now)
-const busy = new Set(); // names with a send scheduled or in flight
+/** A setter for live params, POSTing to `api/transport/${route}` and
+ *  recording refusals in `errors`. Calls are coalesced per param: at most
+ *  one POST per PARAM_INTERVAL_MS, one at a time (so they cannot arrive out
+ *  of order), always carrying the latest value - the end of a drag is always
+ *  what lands. */
+function paramSetter(route, errors) {
+  const pending = new Map(); // name -> the latest value not yet sent
+  const lastSent = new Map(); // name -> when it was last sent (performance.now)
+  const busy = new Set(); // names with a send scheduled or in flight
 
-/** Set one param of the running animation. Calls are coalesced per param:
- *  at most one POST per PARAM_INTERVAL_MS, one at a time (so they cannot
- *  arrive out of order), always carrying the latest value - the end of a
- *  drag is always what lands. */
-export function setLiveParam(name, value) {
-  pendingParams.set(name, value);
-  if (!busy.has(name)) scheduleParam(name);
-}
-
-function scheduleParam(name) {
-  busy.add(name);
-  const wait = Math.max(0, (lastSent.get(name) ?? -Infinity) + PARAM_INTERVAL_MS - performance.now());
-  setTimeout(() => sendParam(name), wait);
-}
-
-async function sendParam(name) {
-  const value = pendingParams.get(name);
-  pendingParams.delete(name);
-  lastSent.set(name, performance.now());
-  try {
-    const response = await fetch("api/transport/params", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ [name]: value }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (response.ok) {
-      if (name in paramErrors.value) {
-        const { [name]: _, ...rest } = paramErrors.value;
-        paramErrors.value = rest;
-      }
-    } else {
-      const body = await response.json().catch(() => ({}));
-      const detail = body.detail;
-      if (detail && typeof detail === "object" && "param" in detail) {
-        paramErrors.value = { ...paramErrors.value, [detail.param]: detail.message };
-      } else {
-        commandError.value = `params: ${typeof detail === "string" ? detail : `HTTP ${response.status}`}`;
-      }
-    }
-  } catch (exc) {
-    commandError.value = `params: ${exc.message}`;
+  function schedule(name) {
+    busy.add(name);
+    const wait = Math.max(0, (lastSent.get(name) ?? -Infinity) + PARAM_INTERVAL_MS - performance.now());
+    setTimeout(() => send(name), wait);
   }
-  busy.delete(name);
-  if (pendingParams.has(name)) scheduleParam(name); // moved again while this was in flight
-  else pollSoon();
+
+  async function send(name) {
+    const value = pending.get(name);
+    pending.delete(name);
+    lastSent.set(name, performance.now());
+    try {
+      const response = await fetch(`api/transport/${route}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ [name]: value }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (response.ok) {
+        if (name in errors.value) {
+          const { [name]: _, ...rest } = errors.value;
+          errors.value = rest;
+        }
+      } else {
+        const body = await response.json().catch(() => ({}));
+        const detail = body.detail;
+        if (detail && typeof detail === "object" && "param" in detail) {
+          errors.value = { ...errors.value, [detail.param]: detail.message };
+        } else {
+          commandError.value = `${route}: ${typeof detail === "string" ? detail : `HTTP ${response.status}`}`;
+        }
+      }
+    } catch (exc) {
+      commandError.value = `${route}: ${exc.message}`;
+    }
+    busy.delete(name);
+    if (pending.has(name)) schedule(name); // moved again while this was in flight
+    else pollSoon();
+  }
+
+  return (name, value) => {
+    pending.set(name, value);
+    if (!busy.has(name)) schedule(name);
+  };
 }
+
+/** Set one param of the running animation. */
+export const setLiveParam = paramSetter("params", paramErrors);
+/** Set one param of the layer's animation. */
+export const setLayerParam = paramSetter("layer_params", layerParamErrors);
 
 // ---- animations ----------------------------------------------------------
 // The registry changes only on a reload, so this is fetched when needed,

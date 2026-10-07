@@ -298,6 +298,7 @@ All are `POST` to `http://<floor>:8000/api/…` with a JSON body.
 | `transport/blackout` | `{"on": true}` | Black out the floor |
 | `transport/trigger` | `{"slot": 3, "velocity": 1.0}` | A hit for animations that react to triggers (Ripple drops a ring) |
 | `transport/layer` | `{"id": "stardust", "mode": "add", "amount": 0.6}` | Run a second animation over whatever plays |
+| `transport/layer_params` | `{"stars": 120}` | Change the layered animation's parameters live |
 | `transport/clear_layer` | - | Remove it |
 | `transport/reset_show` | - | Strobe, tint, hue, saturation, speed and freeze back to normal |
 | `palettes/active` | `{"name": "ocean"}` | Change the floor palette |
