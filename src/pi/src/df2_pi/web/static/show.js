@@ -4,8 +4,9 @@
 // at rest and no layer.
 
 import { html } from "htm/preact";
-import { useDraft } from "./params.js";
-import { command, streamCommand } from "./state.js";
+import { useEffect } from "preact/hooks";
+import { ParamControls, useDraft } from "./params.js";
+import { animationList, command, layerParamErrors, setLayerParam, streamCommand } from "./state.js";
 
 /** A slider that streams `send(value)` while dragged and shows the server's
  *  value otherwise. Values are strings, as the DOM's are, so a poll never
@@ -118,26 +119,43 @@ const BLEND_MODES = [
   ["mix", "Mix", "Replace, faded in by the amount"],
 ];
 
-/** The layer, when there is one: how it blends, and removing it. */
+/** The layer, when there is one: how it blends, its animation's own
+ *  params, and removing it (and them). */
 export function LayerControls({ state, live }) {
   const layer = state?.layer;
+  const id = layer?.animation?.[0] ?? null;
+  useEffect(() => { layerParamErrors.value = {}; }, [id]);
   if (!layer) return null;
+  const specs = animationList.value?.animations.find((a) => a.id === id)?.params;
   return html`
     <div class="live-params layer-controls" aria-label="Layer">
       <span class="row-label" title="An animation running over whatever plays">Layer</span>
-      <div class="param-controls">
-        <div class="param">
-          <div class="param-head"><span class="label">Animation</span></div>
-          <span class="layer-name">${layer.animation[1]}</span>
+      <div class="layer-body">
+        <div class="param-controls">
+          <div class="param">
+            <div class="param-head"><span class="label">Animation</span></div>
+            <span class="layer-name">${layer.animation[1]}</span>
+          </div>
+          <${LayerMode} mode=${layer.mode} live=${live} />
+          <${ShowSlider}
+            label="Amount" value=${layer.amount} min="0" max="1" step="0.01" live=${live}
+            format=${(v) => `${Math.round(v * 100)}%`} send=${(v) => streamCommand("layer_blend", { amount: v })}
+          />
+          <div class="show-buttons">
+            <button disabled=${!live} onClick=${() => command("clear_layer")}>Remove</button>
+          </div>
         </div>
-        <${LayerMode} mode=${layer.mode} live=${live} />
-        <${ShowSlider}
-          label="Amount" value=${layer.amount} min="0" max="1" step="0.01" live=${live}
-          format=${(v) => `${Math.round(v * 100)}%`} send=${(v) => streamCommand("layer_blend", { amount: v })}
-        />
-        <div class="show-buttons">
-          <button disabled=${!live} onClick=${() => command("clear_layer")}>Remove</button>
-        </div>
+        ${specs && Object.keys(specs).length > 0 && html`
+          <div class="layer-params" aria-label="Layer animation parameters">
+            <${ParamControls}
+              key=${id}
+              specs=${specs}
+              values=${layer.params ?? {}}
+              errors=${layerParamErrors.value}
+              onChange=${setLayerParam}
+              macros=${false}
+            />
+          </div>`}
       </div>
     </div>`;
 }

@@ -995,6 +995,30 @@ def test_blend_changes_do_not_restart_the_layer_and_clear_removes_it(registry, s
     assert probe.states[3].layer.amount == 0.0 and probe.states[4].layer is None
 
 
+def test_layer_params_tune_the_layer_without_restarting_it_or_touching_the_base(registry, store):
+    def script(runner, n):
+        if n == 2:
+            runner.set_layer_params(level=40)
+        return n >= 4
+
+    runner, probe, _ = make_runner(registry, store, until=script)
+    runner.play_animation("a")
+    runner.set_layer("b", mode="mix")
+    runner.run()
+    assert reds(probe) == [20, 20, 40, 40]
+    assert probe.states[-1].layer.params == {"level": 40} and probe.states[-1].params == {"level": 10}
+
+
+def test_layer_params_with_no_layer_or_a_bad_value_change_nothing(registry, store, caplog):
+    runner, probe, _ = make_runner(registry, store, stop_after=2)
+    runner.play_animation("a")
+    runner.set_layer_params(level=40)  # no layer: ignored
+    runner.set_layer("b", mode="mix")
+    runner.set_layer_params(nope=1)  # unknown: rejected, logged
+    runner.run()
+    assert reds(probe) == [20, 20] and "set_layer_params rejected" in caplog.text
+
+
 def test_a_layers_effects_are_dropped_and_logged_once(registry, store, caplog):
     runner, probe, _ = make_runner(registry, store, stop_after=3)
     runner.play_animation("a")

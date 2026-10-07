@@ -600,6 +600,10 @@ button.layer.active {
   border-color: var(--accent);
 }
 .layer-name { font-size: 13px; line-height: 22px; }
+/* The blend controls, then the layer animation's own params under them -
+   in the one row, so Remove reads as removing all of it. */
+.layer-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.layer-params { border-top: 1px dashed var(--border); padding-top: 8px; }
 .layer-controls select {
   padding: 4px 6px;
   font: inherit;

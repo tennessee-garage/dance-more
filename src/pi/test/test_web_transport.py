@@ -373,6 +373,37 @@ def test_a_bad_param_is_422_naming_it_and_never_reaches_the_runner(mocked, body,
     runner.set_params.assert_not_called()
 
 
+def layering_solid(runner) -> None:
+    """Make the mocked runner report `solid` as the layer."""
+    from df2_pi.engine.runner import LayerState
+
+    runner.state = dataclasses.replace(runner.state, layer=LayerState(("solid", "Solid"), {"level": 1, "mode": "up"}, "add", 1.0))
+
+
+def test_layer_params_reach_set_layer_params_coerced(mocked):
+    client, runner = mocked
+    layering_solid(runner)
+    response = client.post("/api/transport/layer_params", json={"level": 7.0})
+    assert response.status_code == 200, response.text
+    runner.set_layer_params.assert_called_once_with(level=7)
+    assert type(runner.set_layer_params.call_args.kwargs["level"]) is int
+    runner.set_params.assert_not_called()  # not the animation underneath
+
+
+def test_a_bad_layer_param_is_422_naming_it(mocked):
+    client, runner = mocked
+    layering_solid(runner)
+    response = client.post("/api/transport/layer_params", json={"level": 300})
+    assert response.status_code == 422 and response.json()["detail"]["param"] == "level"
+    runner.set_layer_params.assert_not_called()
+
+
+def test_layer_params_with_no_layer_is_409(mocked):
+    client, runner = mocked
+    assert client.post("/api/transport/layer_params", json={"level": 7}).status_code == 409
+    runner.set_layer_params.assert_not_called()
+
+
 def test_params_while_idle_is_409(mocked):
     client, runner = mocked
     runner.state = dataclasses.replace(runner.state, animation=("_idle", "Idle"))
@@ -411,7 +442,7 @@ def test_openapi_documents_that_commands_are_asynchronous(mocked):
     schema = client.get("/openapi.json").json()
     assert "next frame boundary" in schema["info"]["description"]
     commands = {path: ops["post"] for path, ops in schema["paths"].items() if path.startswith("/api/transport/")}
-    assert len(commands) == 25  # 14 transport + 8 show controls + 3 layer
+    assert len(commands) == 26  # 14 transport + 8 show controls + 4 layer
     for path, op in commands.items():
         assert "next frame boundary" in op["description"], path
     assert {"RunnerState", "TelemetrySnapshot", "Percentiles", "ShowState", "LayerState"} <= set(schema["components"]["schemas"])

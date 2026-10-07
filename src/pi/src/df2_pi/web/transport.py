@@ -243,6 +243,11 @@ def transport_router(ctx: AppContext) -> APIRouter:
         definition = ctx.registry.get(playing[0]) if playing else None
         if definition is None:
             raise HTTPException(409, "the running animation has no parameters to set")
+        coerced = coerce_params(definition, body)
+        return queued(lambda: runner.set_params(**coerced))
+
+    def coerce_params(definition, body: dict[str, Any]) -> dict[str, Any]:
+        """`body` coerced through `definition`'s Param specs; a 422 naming the param if one won't go."""
         specs = definition.meta.params
         coerced: dict[str, Any] = {}
         for name, value in body.items():
@@ -255,7 +260,7 @@ def transport_router(ctx: AppContext) -> APIRouter:
                 coerced[name] = spec.coerce(value)
             except (TypeError, ValueError) as exc:
                 raise HTTPException(422, {"param": name, "message": str(exc)}) from exc
-        return queued(lambda: runner.set_params(**coerced))
+        return coerced
 
     @router.post("/transport/blackout", response_model=Queued, tags=["transport"], description=ASYNC_NOTE)
     def blackout(body: Blackout) -> Queued:
@@ -320,6 +325,25 @@ def transport_router(ctx: AppContext) -> APIRouter:
         except (TypeError, ValueError) as exc:
             raise HTTPException(422, str(exc)) from exc
         return queued(lambda: runner.set_layer(body.id, params, body.mode, body.amount))
+
+    @router.post(
+        "/transport/layer_params",
+        response_model=Queued,
+        tags=["layer"],
+        description=ASYNC_NOTE,
+        responses={
+            409: {"description": "There is no layer"},
+            422: {"description": 'A param is unknown or out of range: `detail` is `{"param": name, "message": why}`'},
+        },
+    )
+    def set_layer_params(body: dict[str, Any]) -> Queued:
+        """Live-tune the layer's animation, as `transport/params` does the one underneath."""
+        layer = runner.state.layer
+        definition = ctx.registry.get(layer.animation[0]) if layer else None
+        if definition is None:
+            raise HTTPException(409, "there is no layer")
+        coerced = coerce_params(definition, body)
+        return queued(lambda: runner.set_layer_params(**coerced))
 
     @router.post("/transport/layer_blend", response_model=Queued, tags=["layer"], description=ASYNC_NOTE)
     def layer_blend(body: LayerBlend) -> Queued:

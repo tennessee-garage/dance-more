@@ -181,7 +181,7 @@ function TextInput({ name, spec, value, edit, release, onChange }) {
 
 const CONTROLS = { slider: Slider, number: NumberInput, select: Select, switch: Switch, text: TextInput };
 
-function ParamControl({ name, spec, value, error, onChange }) {
+function ParamControl({ name, spec, value, error, onChange, macros }) {
   const [shown, edit, release] = useDraft(value);
   const Control = CONTROLS[controlFor(spec)];
   const reset = () => {
@@ -193,7 +193,7 @@ function ParamControl({ name, spec, value, error, onChange }) {
     <div class=${error ? "param has-error" : "param"} title=${spec.help ?? ""}>
       <div class="param-head">
         <span class="label">${spec.label ?? name}</span>
-        ${spec.macro != null && html`<span class="macro" title=${`External controls reach this as macro ${spec.macro}`}>M${spec.macro}</span>`}
+        ${macros && spec.macro != null && html`<span class="macro" title=${`External controls reach this as macro ${spec.macro}`}>M${spec.macro}</span>`}
         <button
           class="reset" disabled=${same(shown, spec.default)} onClick=${reset}
           title=${`Reset to ${spec.default}`} aria-label=${`Reset ${spec.label ?? name}`}
@@ -205,8 +205,10 @@ function ParamControl({ name, spec, value, error, onChange }) {
 }
 
 /** One control per spec, in declaration order. `values` fills each (the
- *  default where a name is missing); `errors` is {name: message}. */
-export function ParamControls({ specs, values = {}, errors = {}, onChange }) {
+ *  default where a name is missing); `errors` is {name: message}. `macros`
+ *  false hides which macro external controls reach a param as - for the
+ *  layer, which they don't reach. */
+export function ParamControls({ specs, values = {}, errors = {}, onChange, macros = true }) {
   return html`
     <div class="param-controls">
       ${Object.entries(specs).map(([name, spec]) => html`
@@ -215,6 +217,7 @@ export function ParamControls({ specs, values = {}, errors = {}, onChange }) {
           value=${values[name] ?? spec.default}
           error=${errors[name]}
           onChange=${onChange}
+          macros=${macros}
         />`)}
     </div>`;
 }
