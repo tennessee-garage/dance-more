@@ -8,6 +8,7 @@ import time
 import numpy as np
 import pytest
 
+from df2_pi import streams
 from df2_pi.animation import AnimationRegistry, default_animations_dir
 from df2_pi.animation.loader import MODULE_PREFIX
 from df2_pi.edges import Axis
@@ -395,7 +396,6 @@ def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane
     """Every lane a stream runs along gets exactly one comet each tile side,
     and new comets only come in at the floor's edges - never mid-floor, not
     even as a switch goes in or comes out."""
-    sy = sys.modules[MODULE_PREFIX + "switchyard"]
     run = registry["switchyard"].start(seed=4, params={"interval": 10.0, "switches": 2})
     phases = []
     for _ in range(30 * 60):
@@ -403,7 +403,7 @@ def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane
         state, lattice, segment = run.state, run.state["lattice"], run.state["segment"]
         if not phases or phases[-1] != (state["phase"], len(state["saved"])):
             phases.append((state["phase"], len(state["saved"])))
-            assert sy.consistent(lattice, state["map"])
+            assert streams.consistent(lattice, state["map"])
         lanes = [key for key, _ in segment["keys"] if key is not None]
         assert len(lanes) == len(set(lanes))  # no two comets heading for one lane
         assert set(lanes) == {(link, side) for link in segment["flows"] for side in (1, -1)}  # and none left empty
@@ -411,7 +411,7 @@ def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane
             kind, line, k = link
             assert line in (0, lattice.rows if kind == "h" else lattice.cols) or k in (0, (lattice.cols if kind == "h" else lattice.rows) - 1)
         if phases[-1] == ("train", 0) and len(phases) > 1:
-            assert set(state["map"].values()) in ({(w, sy.OPP[w])} for w in "NESW")  # uniform again
+            assert set(state["map"].values()) in ({(w, streams.OPP[w])} for w in "NESW")  # uniform again
             break
     assert phases == [("train", 0), ("build", 1), ("build", 2), ("unwind", 1), ("train", 0)]
 
@@ -433,10 +433,9 @@ def test_a_switch_splits_the_flow_ahead_into_two_fans_of_turns(registry):
     left), the lines cut off to the right are fed from the top, each turning
     east a corner before the line below (a diagonal up and to the right),
     the edge just after the switch is left empty, and below is untouched."""
-    sy = sys.modules[MODULE_PREFIX + "switchyard"]
-    lattice = sy.Lattice(default_geometry())
+    lattice = streams.Lattice(default_geometry())
     r0, c0 = 4, 4
-    paths = sy.throw(lattice, lattice.uniform(Axis.X, 1), (r0, c0), "N")
+    paths = streams.throw(lattice, lattice.uniform(Axis.X, 1), (r0, c0), "N")
     for (r, c), way in paths.items():
         if r < r0:
             expected = ("W", "E")
@@ -448,7 +447,7 @@ def test_a_switch_splits_the_flow_ahead_into_two_fans_of_turns(registry):
             expected = ("N", "S") if m > 0 else ("N", "E") if m == 0 else ("W", "E")
         assert way == expected, ((r, c), way, expected)
     assert len(paths) == len(lattice.junctions())
-    assert ("h", r0, c0) not in sy._flows(lattice, paths)  # the edge after the switch
+    assert ("h", r0, c0) not in streams.link_flows(lattice, paths)  # the edge after the switch
 
 
 def test_seeding_a_fresh_database_gets_the_whole_pack(registry):
