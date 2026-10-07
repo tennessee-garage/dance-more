@@ -446,6 +446,11 @@ class Runner:
         amount = None if amount is None else float(amount)
         self._enqueue(lambda: self._do_set_layer_blend(mode, amount))
 
+    def set_layer_params(self, **params: Any) -> None:
+        """Live-tune the layer's animation by param name, as `set_params()`
+        does the one underneath. A no-op when there is no layer."""
+        self._enqueue(lambda: self._do_set_layer_params(params))
+
     def clear_layer(self, animation_id: str | None = None) -> None:
         """Remove the layer - only if it is `animation_id`, when given, so a
         caller can undo its own layer without removing someone else's."""
@@ -1125,6 +1130,17 @@ class Runner:
             self._layer.mode = mode
         if amount is not None:
             self._layer.amount = amount
+
+    def _do_set_layer_params(self, params: dict[str, Any]) -> None:
+        if self._layer is None:
+            return
+        run = self._layer.playing.run
+        merged = dict(run.params)
+        merged.update(params)
+        try:
+            run.set_params(merged)
+        except ValueError as exc:
+            log.warning("set_layer_params rejected: %s", exc)
 
     def _do_clear_layer(self, animation_id: str | None) -> None:
         if self._layer is not None and animation_id in (None, self._layer.playing.definition.id):
