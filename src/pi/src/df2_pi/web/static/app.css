@@ -300,11 +300,13 @@ main {
   min-height: 0;
 }
 
-/* Sized to the floor, not stretched to the row: a long tab would otherwise
-   centre the floor in the extra height and push the controls off-screen. */
+/* The preview's grid cell. The card inside is sized to the floor, not
+   stretched to the row: a long tab would otherwise centre the floor in the
+   extra height. */
+.preview-cell { min-width: 0; }
+
 .preview {
   position: relative;
-  align-self: start;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -410,8 +412,21 @@ main {
 
 .panel {
   flex: 1;
+  min-height: 0;
   padding: var(--gap);
   overflow: auto;
+}
+
+/* Wide: the page is one screen tall. The transport bar and the floor stay
+   in view and a long tab scrolls inside its own panel; the floor shrinks
+   to fit the height left under the transport bar. (Narrow, everything is
+   stacked and the page scrolls as a whole.) */
+@media (min-width: 801px) {
+  #app { height: 100vh; height: 100dvh; min-height: 0; }
+  main { grid-template-rows: minmax(0, 1fr); }
+  .preview-cell { container-type: size; }
+  /* The card's top padding and border, and the strip at its foot. */
+  .preview .floor-frame { width: min(100%, 100cqh - var(--gap) - 46px); }
 }
 
 @media (max-width: 800px) {
