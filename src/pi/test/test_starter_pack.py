@@ -260,8 +260,20 @@ def test_waterline_draws_a_surface_over_fading_depths(registry):
     for col, y in enumerate(heights):
         top = int(np.floor(y)) + 2
         assert (level[top:, col] == 0).all()  # above the surface: dark
-        assert level[0, col] == 0  # the bottom row: faded to black
         assert level[int(np.round(y)), col] > level[0, col]
+        if y >= 2:  # the surface is clear of the bottom two rows
+            assert 0 < level[0, col] < level[int(np.floor(y)) - 1, col]  # the bottom row: the dimmest water, but lit
+
+
+def test_waterline_depths_brightness_reaches_the_bottom_row(registry):
+    def bottom(depth_level):
+        run = registry["waterline"].start(seed=1, params={"depth_level": depth_level, "level": 4.0, "swell": 0.0})
+        for _ in range(30):
+            frame = run.render().frame
+        return frame.data[0].max(axis=-1).astype(int)  # row 0, the bottom
+
+    dim, bright = bottom(0.3), bottom(1.0)
+    assert (dim > 0).all() and (bright > dim).all()
 
 
 def test_waterline_cohesion_holds_neighbours_together(registry):
