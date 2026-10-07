@@ -316,23 +316,23 @@ def test_lightning_comes_down_and_forks_late(registry):
 
 
 def test_comet_train_rests_with_one_comet_on_every_edge_running_one_way(registry):
-    """Between pulses (a pulse is 15 frames at the fallback 120 bpm), with
-    a whole tile side per pulse, each edge running the comets' way holds
-    one: a near-white head at its leading end and `tail` LEDs fading behind
-    it; the other way is dark."""
+    """On each beat (every 15 frames at the fallback 120 bpm), with a whole
+    tile side per pulse, each edge running the comets' way holds one: a
+    near-white head at its leading end and `tail` LEDs fading behind it;
+    the other way is dark."""
     geo = default_geometry()
     run = registry["comet_train"].start(seed=0, params={"tail": 6, "turns": 0.5, "step": 15})
     axes = set()
-    for f in range(150):
+    for f in range(151):
         frame = run.render().frame
-        if f % 15 != 14:
+        if f % 15 != 0 or f == 0:
             continue
-        move = run.state["move"]
-        axes.add(move["axis"])
+        axis, d = run.state["axis"], run.state["dir"]  # where the last pulse left them
+        axes.add(axis)
         for edge in geo.edges:
-            leds = edge.flat_leds if move["dir"] > 0 else edge.flat_leds[::-1]  # head last
+            leds = edge.flat_leds if d > 0 else edge.flat_leds[::-1]  # head last
             level = frame.flat[leds].max(axis=-1).astype(int)
-            if edge.axis is not move["axis"]:
+            if edge.axis is not axis:
                 assert not level.any()
                 continue
             assert frame.flat[leds[-1]].min() > 200  # the head, near white
@@ -386,7 +386,7 @@ def test_comet_train_turns_round_the_corner_led_by_led(registry):
     assert move["turn"]
     geo = default_geometry()
     new = np.concatenate([e.flat_leds for e in geo.edges if e.axis is move["axis"]])
-    counts = [int(run.render().frame.flat[new].any(axis=-1).sum()) for _ in range(14)]
+    counts = [int(run.render().frame.flat[new].any(axis=-1).sum()) for _ in range(15)]  # to the next beat
     assert all(0 < b - a <= 2 * 128 for a, b in zip(counts, counts[1:12]))  # an LED or so per comet per frame
     assert counts[-1] == 128 * 15  # then every comet is round
 
@@ -414,6 +414,17 @@ def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane
             assert set(state["map"].values()) in ({(w, sy.OPP[w])} for w in "NESW")  # uniform again
             break
     assert phases == [("train", 0), ("build", 1), ("build", 2), ("unwind", 1), ("train", 0)]
+
+
+@pytest.mark.parametrize("animation_id", ["comet_train", "switchyard"])
+def test_turns_take_one_beat(registry, animation_id):
+    """A turn runs round the corner over exactly one beat (15 frames at the
+    fallback 120 bpm), even when a pulse is two beats, so it lands on the beat."""
+    run = registry[animation_id].start(seed=0, params={"turns": 1.0, "beats": 2.0, "step": 15})
+    frames = [run.render().frame for _ in range(30)]  # the first pulse: a turn, from the first corner
+    assert (run.state["segment"] if animation_id == "switchyard" else run.state["move"])["turn"]
+    assert all(frames[i] != frames[i + 1] for i in range(14))  # moving for the whole first beat
+    assert all(frame == frames[15] for frame in frames[15:])  # and still from the second
 
 
 def test_a_switch_splits_the_flow_ahead_into_two_fans_of_turns(registry):
