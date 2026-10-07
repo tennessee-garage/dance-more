@@ -84,6 +84,10 @@ show controls. The layer has its own clock, so a base-layer transition
 does not restart it, and it follows the show speed like any animation.
 Effects are the base layer's: a layer's effect writes are dropped, and
 logged once. A layer that raises is logged and removed; the base plays on.
+A playlist ENTRY can carry a layer of its own (`ResolvedEntry.layer`): it
+starts with the entry, is composited onto that entry's frame - so it
+crossfades with it - and ends with it, under the layer above, which
+belongs to no entry.
 
 Rotation. The floor-rotation setting turns the picture in 90-degree
 steps so the canonical "up" can face whichever way the venue needs. It is
@@ -199,6 +203,7 @@ class RunnerState:
     # The playing entry's id: stable when the entries are reordered, which
     # its index (a position in the runner's loaded copy) is not.
     entry_id: int | None = None
+    entry_layer: tuple[str, str] | None = None  # (id, name) of the playing entry's own layer
     rotation: int = 0  # degrees clockwise: 0, 90, 180 or 270
     show: ShowState = ShowState()
     layer: LayerState | None = None
@@ -237,6 +242,7 @@ class _Playing:
     started_t: float
     duration_s: float | None  # None: until told otherwise
     entry: ResolvedEntry | None = None
+    layer: _Layer | None = None  # the entry's own layer, if it has one
     effects_written: set[int] = field(default_factory=set)
     # The animation's own clock: advances by the wall step times the show speed.
     anim_t: float = 0.0
@@ -735,6 +741,16 @@ class Runner:
         layer = self._layer
         if layer is None:
             return base
+        frame = self._layered(layer, base, t)
+        if frame is None:
+            self._layer = None
+            return base
+        self.clock.mark("layer")
+        return frame
+
+    def _layered(self, layer: _Layer, base: Frame, t: float) -> Frame | None:
+        """`base` with `layer` rendered and composited over it, or None if
+        the layer raised (logged; the caller removes it)."""
         speed = self.overlays.speed
         playing = layer.playing
         try:
@@ -748,14 +764,11 @@ class Runner:
             )
         except AnimationError as exc:
             log.error("layer %s failed and was removed:\n%s", playing.definition.id, "".join(traceback.format_exception(exc)))
-            self._layer = None
-            return base
+            return None
         if rendered.effects and not layer.warned_effects:
             layer.warned_effects = True
             log.warning("layer %s writes tile effects; effects belong to the base layer, so they are dropped", playing.definition.id)
-        frame = composite(base, rendered.frame, layer.mode, layer.amount)
-        self.clock.mark("layer")
-        return frame
+        return composite(base, rendered.frame, layer.mode, layer.amount)
 
     def _show(self, frame: Frame, t: float) -> Frame:
         shown = self.overlays.apply(frame, t)
@@ -814,7 +827,15 @@ class Runner:
         if playing.entry is not None:
             self._strikes.pop(playing.entry.entry.id, None)  # consecutive means consecutive
         self.clock.mark("render")
-        return rendered.frame
+        frame = rendered.frame
+        if playing.layer is not None:  # the entry's own layer: on its frame, so it fades with it
+            layered = self._layered(playing.layer, frame, t)
+            if layered is None:
+                playing.layer = None
+            else:
+                frame = layered
+                self.clock.mark("layer")
+        return frame
 
     def _crossfade(self, incoming: Frame, t: float, effects: dict[int, Effect]) -> Frame:
         outgoing = self._outgoing
@@ -927,8 +948,18 @@ class Runner:
         assert entry.definition is not None
         run = entry.definition.start(self.geometry, entry.params, fps=self.fps, seed=self._rng.getrandbits(32))
         self._current = _Playing(entry.definition, run, t, entry.entry.duration_s, entry)
+        layer = entry.layer
+        if layer is not None and layer.definition is not None:
+            layer_run = layer.definition.start(self.geometry, layer.params, fps=self.fps, seed=self._rng.getrandbits(32))
+            self._current.layer = _Layer(_Playing(layer.definition, layer_run, t, None), layer.layer.mode, layer.layer.amount)
         self._ended = False
-        log.info("playing %s (%s) for %.1f s", entry.definition.id, entry.definition.meta.name, entry.entry.duration_s)
+        log.info(
+            "playing %s (%s) for %.1f s%s",
+            entry.definition.id,
+            entry.definition.meta.name,
+            entry.entry.duration_s,
+            f", layered with {layer.definition.id}" if self._current.layer else "",
+        )
 
     def _reshuffle(self) -> None:
         self._rng.shuffle(self._cycle)
@@ -999,7 +1030,8 @@ class Runner:
         self._paused_at = None
         self._timer_t += gap  # the pause has already been made up below
         layered = self._layer.playing if self._layer is not None else None
-        for playing in (self._current, self._outgoing, self._one_off, layered):
+        entry_layers = [p.layer.playing for p in (self._current, self._outgoing) if p is not None and p.layer is not None]
+        for playing in (self._current, self._outgoing, self._one_off, layered, *entry_layers):
             if playing is not None:
                 playing.started_t += gap
                 if playing.last_t is not None:
@@ -1231,6 +1263,9 @@ class Runner:
             one_off=self._one_off is not None,
             timer_held=self._timer_held,
             entry_id=entry_id,
+            entry_layer=(playing.layer.playing.definition.id, playing.layer.playing.definition.meta.name)
+            if playing is not None and playing.layer is not None
+            else None,
             rotation=ROTATIONS[self._quarter_turns],
             show=self.overlays.state(),
             layer=self._layer_state(),
