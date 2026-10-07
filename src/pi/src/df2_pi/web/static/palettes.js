@@ -6,10 +6,11 @@
 import { html } from "htm/preact";
 import { signal } from "@preact/signals";
 import { useState } from "preact/hooks";
-import { runnerState } from "./state.js";
+import { animationList, runnerState } from "./state.js";
 
 const MIN_STOPS = 2;
 const MAX_STOPS = 8;
+const FLOOR = "floor"; // a palette param's value for "the floor's palette" (palette.py)
 
 /** {active, palettes: [{name, stops, builtin}]} from /api/palettes, or {unavailable}. */
 export const paletteList = signal(null);
@@ -58,9 +59,21 @@ function gradient(stops) {
   return `background: linear-gradient(to right, ${list}); background: linear-gradient(in srgb-linear to right, ${list});`;
 }
 
+/** Whether `id`, playing with `params`, takes its colours from the floor's
+ *  palette: it has a palette param (one offering "floor") set to "floor". */
+function followsFloor(id, params) {
+  const specs = animationList.value?.animations.find((a) => a.id === id)?.params;
+  if (!specs || !params) return false;
+  return Object.entries(specs).some(([name, spec]) => spec.choices?.includes(FLOOR) && params[name] === FLOOR);
+}
+
+/** The floor palette's chips, shown only while what is playing (or the layer
+ *  over it) follows the floor palette - otherwise they would change nothing. */
 export function PaletteBar({ live }) {
   const list = paletteList.value;
+  const state = runnerState.value;
   if (!list || list.unavailable) return null;
+  if (!followsFloor(state?.animation?.[0], state?.params) && !followsFloor(state?.layer?.animation?.[0], state?.layer?.params)) return null;
   const active = activeName();
   return html`
     <div class="live-params palette-bar" aria-label="Palette">
