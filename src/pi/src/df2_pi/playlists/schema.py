@@ -54,6 +54,11 @@ MIGRATIONS: list[str] = [
     );
     INSERT INTO schema_version (version) VALUES (0);
     """,
+    # 1 -> 2: an entry can carry a layer - another animation over it, as JSON
+    # {"animation_id", "params", "mode", "amount"}; NULL for none
+    """
+    ALTER TABLE playlist_entry ADD COLUMN layer_json TEXT;
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

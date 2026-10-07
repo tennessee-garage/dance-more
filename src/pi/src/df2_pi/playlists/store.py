@@ -21,6 +21,12 @@ duration_s=None)` fills in the `default_entry_duration` setting AT WRITE
 TIME and the row is always concrete; changing the setting later affects
 new entries only.
 
+Layers: an entry can carry a LAYER - a second animation composited over
+it (`pixels.composite()`: a blend mode and an amount), with its own params
+stored the same way. It plays and crossfades with its entry. A layer whose
+animation is missing resolves with an error and a warning, and the entry
+plays without it.
+
 Parameters: `params` holds only the keys that DIFFER from the animation's
 defaults, so changing a default in the file propagates to existing
 playlists. With a registry attached, values are validated against the
@@ -51,6 +57,7 @@ from df2_pi.animation.loader import AnimationDef
 from df2_pi.animation.registry import AnimationRegistry
 from df2_pi.engine.overlays import STROBE_MAX_HZ_LIMIT
 from df2_pi.geometry import ROTATIONS
+from df2_pi.pixels import BLEND_MODES
 from df2_pi.playlists.schema import migrate
 
 log = logging.getLogger(__name__)
@@ -122,6 +129,16 @@ def _now() -> str:
 
 
 @dataclass(frozen=True)
+class EntryLayer:
+    """An animation composited over an entry for as long as it plays."""
+
+    animation_id: str
+    params: Mapping[str, Any]  # overrides, as for an entry
+    mode: str = "add"  # one of pixels.BLEND_MODES
+    amount: float = 1.0  # 0..1
+
+
+@dataclass(frozen=True)
 class Entry:
     id: int
     playlist_id: int
@@ -130,6 +147,7 @@ class Entry:
     duration_s: float
     params: Mapping[str, Any]
     enabled: bool
+    layer: EntryLayer | None = None
 
 
 @dataclass(frozen=True)
@@ -146,6 +164,18 @@ class Playlist:
 
 
 @dataclass(frozen=True)
+class ResolvedLayer:
+    """An entry's layer bound to its animation, as `ResolvedEntry` is; an
+    unresolved one (`definition` None, `error` why) is simply not played."""
+
+    layer: EntryLayer
+    definition: AnimationDef | None
+    params: Mapping[str, Any]
+    error: str | None = None
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ResolvedEntry:
     """An entry bound to its animation, or marked unresolved with the
     reason. `params` is the full resolved dict (defaults plus the stored
@@ -156,6 +186,7 @@ class ResolvedEntry:
     params: Mapping[str, Any]
     error: str | None = None
     warnings: tuple[str, ...] = ()
+    layer: ResolvedLayer | None = None
 
     @property
     def unresolved(self) -> bool:
@@ -184,6 +215,22 @@ class PlayLogEntry:
     playlist_id: int | None
     duration_s: float | None
     outcome: str
+
+
+def _clamped(definition: AnimationDef, overrides: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """The animation's defaults with stored `overrides` on top, each
+    clamped to its spec, and a warning for each one clamped or ignored."""
+    params = definition.meta.defaults()
+    warnings = []
+    for key, value in overrides.items():
+        spec = definition.meta.params.get(key)
+        if spec is None:
+            warnings.append(f"{key!r} is not a parameter of {definition.id!r}; ignored")
+            continue
+        params[key], warning = spec.clamp(value)
+        if warning:
+            warnings.append(f"{key}: {warning}")
+    return params, warnings
 
 
 # ---- the store ------------------------------------------------------------------------
@@ -359,11 +406,13 @@ class PlaylistStore:
         position: int | None = None,
         *,
         enabled: bool = True,
+        layer: EntryLayer | Mapping[str, Any] | None = None,
     ) -> Entry:
         """Append (or insert at `position`, shifting the rest down) an
         entry. `duration_s=None` takes the `default_entry_duration`
         setting now; `params` are reduced to the keys differing from the
-        animation's defaults when the registry knows it."""
+        animation's defaults when the registry knows it. `layer` is an
+        `EntryLayer` or a mapping of its fields (`animation_id` required)."""
         pid = playlist if isinstance(playlist, int) else playlist.id
         if not animation_id or not animation_id.isidentifier():
             raise ValueError(f"animation_id must be a module stem, got {animation_id!r}")
@@ -372,6 +421,7 @@ class PlaylistStore:
         if duration_s <= 0:
             raise ValueError(f"duration_s must be positive, got {duration_s}")
         overrides = self._diff_params(animation_id, params or {})
+        layer_json = self._layer_json(layer)
         with self._conn() as conn:
             self._playlist_row(conn, pid)
             count = conn.execute(
@@ -384,9 +434,9 @@ class PlaylistStore:
             else:
                 self._shift_down(conn, pid, position)
             cur = conn.execute(
-                "INSERT INTO playlist_entry (playlist_id, position, animation_id, duration_s, params_json, enabled)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (pid, position, animation_id, float(duration_s), json.dumps(overrides, sort_keys=True), int(enabled)),
+                "INSERT INTO playlist_entry (playlist_id, position, animation_id, duration_s, params_json, enabled, layer_json)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (pid, position, animation_id, float(duration_s), json.dumps(overrides, sort_keys=True), int(enabled), layer_json),
             )
             self._touch(conn, pid)
             return self._entry_from_row(conn.execute("SELECT * FROM playlist_entry WHERE id = ?", (cur.lastrowid,)).fetchone())
@@ -399,9 +449,10 @@ class PlaylistStore:
             return self._entry_from_row(row)
 
     def update_entry(self, entry: Entry | int, **fields: Any) -> Entry:
-        """Change animation_id / duration_s / params / enabled. `params`
-        replaces the overrides wholesale (and is diffed against defaults)."""
-        allowed = {"animation_id", "duration_s", "params", "enabled"}
+        """Change animation_id / duration_s / params / enabled / layer.
+        `params` replaces the overrides wholesale (and is diffed against
+        defaults); `layer` replaces the layer, and None removes it."""
+        allowed = {"animation_id", "duration_s", "params", "enabled", "layer"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"cannot update {sorted(unknown)}; allowed: {sorted(allowed)}")
@@ -422,6 +473,8 @@ class PlaylistStore:
             values["params_json"] = json.dumps(self._diff_params(animation_id, fields["params"] or {}), sort_keys=True)
         if "enabled" in fields:
             values["enabled"] = int(bool(fields["enabled"]))
+        if "layer" in fields:
+            values["layer_json"] = self._layer_json(fields["layer"])
         if not values:
             return current
         assignments = ", ".join(f"{k} = ?" for k in values)
@@ -485,20 +538,26 @@ class PlaylistStore:
                 )
                 resolved.append(ResolvedEntry(entry, None, dict(entry.params), error=error))
                 continue
-            params = definition.meta.defaults()
-            warnings = []
-            for key, value in entry.params.items():
-                spec = definition.meta.params.get(key)
-                if spec is None:
-                    warnings.append(f"{key!r} is not a parameter of {entry.animation_id!r}; ignored")
-                    continue
-                params[key], warning = spec.clamp(value)
-                if warning:
-                    warnings.append(f"{key}: {warning}")
+            params, warnings = _clamped(definition, entry.params)
             for warning in warnings:
                 log.warning("playlist %r entry %d (%s): %s", pl.name, entry.position, entry.animation_id, warning)
-            resolved.append(ResolvedEntry(entry, definition, params, warnings=tuple(warnings)))
+            layer = None
+            if entry.layer is not None:
+                layer = self._resolve_layer(entry.layer, registry)
+                for warning in (*layer.warnings, *([f"layer not played: {layer.error}"] if layer.error else [])):
+                    log.warning("playlist %r entry %d (%s) layer %s: %s", pl.name, entry.position, entry.animation_id, entry.layer.animation_id, warning)
+            resolved.append(ResolvedEntry(entry, definition, params, warnings=tuple(warnings), layer=layer))
         return ResolvedPlaylist(pl, tuple(resolved))
+
+    @staticmethod
+    def _resolve_layer(layer: EntryLayer, registry: AnimationRegistry) -> ResolvedLayer:
+        definition = registry.get(layer.animation_id)
+        if definition is None:
+            load_error = registry.errors.get(layer.animation_id)
+            error = f"failed to load: {load_error.message}" if load_error else "no such animation"
+            return ResolvedLayer(layer, None, dict(layer.params), error=error)
+        params, warnings = _clamped(definition, layer.params)
+        return ResolvedLayer(layer, definition, params, warnings=tuple(warnings))
 
     # ---- settings ---------------------------------------------------------------------------
 
@@ -653,6 +712,27 @@ class PlaylistStore:
                 out[key] = value
         return out
 
+    def _layer_json(self, layer: EntryLayer | Mapping[str, Any] | None) -> str | None:
+        """A layer validated for storing - its params diffed as an entry's
+        are - as the layer_json column holds it; None for no layer."""
+        if layer is None:
+            return None
+        fields = dict(vars(layer)) if isinstance(layer, EntryLayer) else dict(layer)
+        unknown = set(fields) - {"animation_id", "params", "mode", "amount"}
+        if unknown:
+            raise ValueError(f"a layer has animation_id, params, mode and amount; not {sorted(unknown)}")
+        animation_id = fields.get("animation_id")
+        if not animation_id or not str(animation_id).isidentifier():
+            raise ValueError(f"a layer's animation_id must be a module stem, got {animation_id!r}")
+        mode = fields.get("mode", "add")
+        if mode not in BLEND_MODES:
+            raise ValueError(f"a layer's mode must be one of {BLEND_MODES}, got {mode!r}")
+        amount = float(fields.get("amount", 1.0))
+        if not 0.0 <= amount <= 1.0:
+            raise ValueError(f"a layer's amount must be in 0..1, got {amount}")
+        params = self._diff_params(animation_id, fields.get("params") or {})
+        return json.dumps({"animation_id": animation_id, "params": params, "mode": mode, "amount": amount}, sort_keys=True)
+
     @staticmethod
     def _playlist_row(conn: sqlite3.Connection, id_or_name: int | str) -> sqlite3.Row:
         if isinstance(id_or_name, int):
@@ -691,6 +771,13 @@ class PlaylistStore:
         except ValueError:
             log.warning("entry %d has malformed params_json %r; ignoring", row["id"], row["params_json"])
             params = {}
+        layer = None
+        if row["layer_json"] is not None:
+            try:
+                fields = json.loads(row["layer_json"])
+                layer = EntryLayer(fields["animation_id"], dict(fields.get("params", {})), fields.get("mode", "add"), float(fields.get("amount", 1.0)))
+            except (ValueError, TypeError, KeyError, AttributeError):
+                log.warning("entry %d has malformed layer_json %r; ignoring", row["id"], row["layer_json"])
         return Entry(
             id=row["id"],
             playlist_id=row["playlist_id"],
@@ -699,6 +786,7 @@ class PlaylistStore:
             duration_s=row["duration_s"],
             params=params,
             enabled=bool(row["enabled"]),
+            layer=layer,
         )
 
     @staticmethod
