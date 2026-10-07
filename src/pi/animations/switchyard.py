@@ -80,7 +80,6 @@ class Blocked(Exception):
         "beats": Param(float, default=1.0, choices=[0.5, 1.0, 2.0, 4.0], label="Beats per pulse"),
         "move": Param(float, default=0.3, min=0.05, max=1.0, label="Step time", help="The part of each pulse spent stepping: short slams into place, 1 never stops"),
         "turns": Param(float, default=0.3, min=0.0, max=1.0, label="Turn chance", help="While it runs as Comet Train: the chance, each time the heads reach the corners, that they all turn", role="variation"),
-        "turn_time": Param(float, default=0.9, min=0.2, max=1.0, label="Turn time", help="The part of a pulse a turn takes - all together, or a switch going in or out"),
         "palette": palette_param(),
         "drift": Param(float, default=0.05, min=0.0, max=0.5, label="Colour drift", help="How far round the palette each new line of comets moves on"),
         "variety": Param(float, default=0.15, min=0.0, max=1.0, label="Colour variety", help="How much new comets' colours differ from each other"),
@@ -109,7 +108,8 @@ def render(previous: PixelFrame, ctx) -> PixelFrame:
 
     x = position - pulse
     if state["segment"]["turn"]:
-        progress = min(x / p["turn_time"], 1.0)  # an even run round the corner
+        # An even run round the corner, landing on the next beat (or the next pulse, if that comes sooner).
+        progress = min(x * max(p["beats"], 1.0), 1.0)
     else:
         progress = 1.0 - (1.0 - min(x / p["move"], 1.0)) ** EASE
     head = state["from"] + (state["to"] - state["from"]) * progress

@@ -416,6 +416,16 @@ def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane
     assert phases == [("train", 0), ("build", 1), ("build", 2), ("unwind", 1), ("train", 0)]
 
 
+def test_switchyard_turns_take_one_beat(registry):
+    """A turn runs round the corner over exactly one beat (15 frames at the
+    fallback 120 bpm), even when a pulse is two beats, so it lands on the beat."""
+    run = registry["switchyard"].start(seed=0, params={"turns": 1.0, "beats": 2.0})
+    frames = [run.render().frame for _ in range(30)]  # the first pulse: a turn, from the first corner
+    assert run.state["segment"]["turn"]
+    assert all(frames[i] != frames[i + 1] for i in range(14))  # moving for the whole first beat
+    assert all(frame == frames[15] for frame in frames[15:])  # and still from the second
+
+
 def test_a_switch_splits_the_flow_ahead_into_two_fans_of_turns(registry):
     """Everything running east, switched north at the middle corner: the
     lines above turn north one corner earlier each (a diagonal up and to the
