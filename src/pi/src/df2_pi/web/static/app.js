@@ -383,7 +383,7 @@ function App() {
   return html`
     <${TransportBar} />
     <main>
-      <${Preview} />
+      <div class="preview-cell"><${Preview} /></div>
       <${Tabs} />
     </main>`;
 }
