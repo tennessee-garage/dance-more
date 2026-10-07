@@ -16,7 +16,7 @@ from df2_pi.pixels import PixelFrame, TileFrame, default_geometry
 from df2_pi.playlists import PlaylistStore
 
 FRAMES = 90
-PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline", "comet_train", "switchyard"}
+PACK = {"solid", "rainbow_sweep", "checkerboard", "plasma", "ripple", "lightning", "chase", "seams", "comet_squares", "vortex", "twin_peaks", "spiral", "stardust", "stripes", "waves", "video", "waterline", "comet_train", "switchyard", "switchyard_flow"}
 
 
 @pytest.fixture(scope="module")
@@ -392,11 +392,12 @@ def test_comet_train_turns_round_the_corner_led_by_led(registry):
     assert counts[-1] == 128 * 15  # then every comet is round
 
 
-def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane(registry):
+@pytest.mark.parametrize("animation_id", ["switchyard", "switchyard_flow"])
+def test_switchyard_throws_switches_then_takes_them_out_never_doubling_up_a_lane(registry, animation_id):
     """Every lane a stream runs along gets exactly one comet each tile side,
     and new comets only come in at the floor's edges - never mid-floor, not
     even as a switch goes in or comes out."""
-    run = registry["switchyard"].start(seed=4, params={"interval": 10.0, "switches": 2})
+    run = registry[animation_id].start(seed=4, params={"interval": 10.0, "switches": 2})
     phases = []
     for _ in range(30 * 60):
         run.render()
@@ -425,6 +426,18 @@ def test_turns_take_one_beat(registry, animation_id):
     assert (run.state["segment"] if animation_id == "switchyard" else run.state["move"])["turn"]
     assert all(frames[i] != frames[i + 1] for i in range(14))  # moving for the whole first beat
     assert all(frame == frames[15] for frame in frames[15:])  # and still from the second
+
+
+def test_switchyard_flow_glides_at_its_speed_and_flashes_on_the_beat(registry):
+    run = registry["switchyard_flow"].start(seed=2, params={"speed": 45.0, "low": 0.2, "turns": 0.0})
+    peaks, heads = [], []
+    for _ in range(60):
+        peaks.append(int(run.render().frame.data.max()))
+        heads.append(run.state["head"])
+    steps = np.diff(heads) % 15  # LEDs per frame, across the corners too
+    np.testing.assert_allclose(steps, 45.0 / 30)  # never stops
+    assert peaks[15] > 240 and peaks[30] > 240  # on the beat (15 frames at the fallback 120 bpm): full
+    assert peaks[12] < 0.4 * peaks[15]  # and dimmed towards Between pulses before it
 
 
 def test_a_switch_splits_the_flow_ahead_into_two_fans_of_turns(registry):
