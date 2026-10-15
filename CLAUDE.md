@@ -80,8 +80,9 @@ computer, connect USB, flash, carry back, reseat, re-power. Don't retry a
 hardware test immediately after an upload — wait to be told it's back.
 
 Pi one-time setup: serial console **disabled** (`raspi-config nonint
-do_serial_cons 1`) or a getty holds the UART; chain 1 additionally needs
-`dtoverlay=uart2-pi5,ctsrts` in `/boot/firmware/config.txt`.
+do_serial_cons 1`) or a getty holds the UART; the two chains need
+`dtparam=uart0=on` and `dtoverlay=uart2-pi5` in `/boot/firmware/config.txt`
+— **no `ctsrts`** (see the list below).
 
 ## Things that will waste your time if you don't know them
 
@@ -102,6 +103,9 @@ Each is documented where it bites — this is just the index:
   `src/common/tile_bus_protocol/protocol.h` (firmware) and `FloorGeometry`
   (host) — don't reintroduce literal 60/180/1448s. Tile Bus's 1-byte `LEN`
   caps a side at 20 LEDs at 3 bytes/LED; a `static_assert` enforces it.
+- **`ctsrts` on the UART overlays takes the XDIR pins (GPIO17/GPIO7) away
+  from the GPIO driver**, and on kernel 6.18+ `df2-pi` then dies at startup
+  with `lgpio.error: 'unexpected error'`. `src/pi/README.md` "Two-chain topology".
 - **Use `/dev/ttyAMA0`, never `/dev/serial0`** — on a Pi 5 that symlink is the
   SoC's internal console UART, not the header. `row_bus.py` docstring.
 - **Never release RS-485 direction with `serial.flush()`** — `tcdrain()`

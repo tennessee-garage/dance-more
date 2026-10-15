@@ -83,12 +83,20 @@ on chain 0, rows 1,3,5,7 on chain 1.
 | TX / RX | GPIO14 / GPIO15 | GPIO4 / GPIO5 |
 | XDIR | GPIO17 (`RTS0`) | GPIO7 (`RTS2`) |
 
-Needs both UARTs enabled in `/boot/firmware/config.txt`:
+Needs both UARTs enabled in `/boot/firmware/config.txt`, **without**
+`ctsrts`:
 
 ```
-dtoverlay=uart0-pi5,ctsrts
-dtoverlay=uart2-pi5,ctsrts
+dtparam=uart0=on
+dtoverlay=uart2-pi5
 ```
+
+XDIR sits on each UART's RTS pin, but `RowBus` drives it as a plain GPIO.
+`ctsrts` muxes those pins to the UART, and since kernel 6.18 (Raspberry Pi
+OS trixie) the pin controller then refuses the GPIO claim: `df2-pi` exits at
+startup with `lgpio.error: 'unexpected error'`, and `pinctrl get 7` shows
+`GPIO7 = RTS2`. Bookworm's 6.12 kernel let the claim through, so `ctsrts`
+used to appear to work.
 
 Row addresses stay global (`0x00`–`0x07`) — only the wiring is partitioned,
 so row controller firmware is unaware there is more than one chain. `Floor`
