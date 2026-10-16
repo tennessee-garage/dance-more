@@ -11,6 +11,7 @@ placeholders to be resolved as the design firms up.
 
 | Document | Covers |
 | --- | --- |
+| [getting-started.md](getting-started.md) | Setting up the repo to run and test locally: the host with no floor, firmware tests and builds, the simulators |
 | [architecture.md](architecture.md) | System overview, control hierarchy, block diagram, key counts |
 | [communication.md](communication.md) | Bus topologies, RS-485 layering, addressing, SENSE auto-mapping protocol |
 | [row-bus-protocol.md](row-bus-protocol.md) | Row Bus (Pi ↔ Row Controller) command protocol: frame format, command set, timing |
