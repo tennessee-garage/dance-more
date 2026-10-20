@@ -19,9 +19,11 @@ from .row_bus import DEFAULT_BAUDRATE, DEFAULT_XDIR_PIN, RowBus
 
 # Chain 0 is the Pi's uart0 (GPIO14/15) with direction on RTS0 (GPIO17).
 # Chain 1 is uart2 (GPIO4/5) with direction on RTS2 (GPIO7), enabled by
-# `dtoverlay=uart2-pi5,ctsrts`. Both direction pins moved onto the UARTs'
-# own RTS lines in the two-chain hat revision so the kernel's RS-485 mode
-# can eventually drive them with hardware timing.
+# `dtoverlay=uart2-pi5` - without `ctsrts`, which muxes the pin to the UART
+# so RowBus can't claim it as a GPIO (README "Two-chain topology"). Both
+# direction pins moved onto the UARTs' own RTS lines in the two-chain hat
+# revision so the kernel's RS-485 mode can eventually drive them with
+# hardware timing.
 CHAIN0_PORT = "/dev/ttyAMA0"
 CHAIN0_XDIR_PIN = 17
 CHAIN1_PORT = "/dev/ttyAMA2"
