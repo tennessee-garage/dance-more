@@ -6,3 +6,5 @@ venv/
 .venv/
 build/
 dist/
+# Throwaway database + midi.yaml for the admin UI preview (.claude/launch.json).
+.ui-preview/

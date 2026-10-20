@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "df2-ui",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["DF2_DB=src/pi/.ui-preview/df2.sqlite3", "src/pi/.venv/bin/df2-pi", "serve", "--no-hardware", "--host", "127.0.0.1", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}
