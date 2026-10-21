@@ -181,6 +181,39 @@ def test_unresolved_entries_are_served_with_the_error_not_dropped(client):
     assert client.get("/api/playlists").json()[0]["entry_count"] == 2
 
 
+def test_an_entry_layer_is_added_served_resolved_changed_and_removed(client):
+    pid = make(client)["id"]
+    entry = add(client, pid, layer={"animation_id": "solid", "params": {"level": 10, "mode": "down"}, "mode": "max", "amount": 0.5})["entries"][0]
+    layer = entry["layer"]
+    assert {k: layer[k] for k in ("animation_id", "mode", "amount", "params", "unresolved", "error")} == {
+        "animation_id": "solid", "mode": "max", "amount": 0.5, "params": {"mode": "down"}, "unresolved": False, "error": None,
+    }
+    assert layer["resolved_params"] == {"level": 10, "mode": "down"} and layer["animation"]["name"] == "Solid"
+    assert add(client, pid)["entries"][1]["layer"] is None
+
+    url = f"/api/playlists/{pid}/entries/{entry['id']}"
+    changed = client.patch(url, json={"layer": {"animation_id": "pixel", "mode": "mix"}}).json()["entries"][0]["layer"]
+    assert (changed["animation_id"], changed["mode"], changed["amount"], changed["animation"]["name"]) == ("pixel", "mix", 1.0, "Pixel")
+    assert client.patch(url, json={"duration_s": 5}).json()["entries"][0]["layer"]["animation_id"] == "pixel"  # kept
+    assert client.patch(url, json={"layer": None}).json()["entries"][0]["layer"] is None
+
+
+def test_a_layer_of_a_missing_animation_is_served_unresolved_and_the_entry_still_plays(client):
+    pid = make(client)["id"]
+    entry = add(client, pid, layer={"animation_id": "gone"})["entries"][0]
+    assert entry["playable"] and entry["layer"]["unresolved"] and entry["layer"]["error"] == "no such animation"
+
+
+@pytest.mark.parametrize(
+    "layer",
+    [{"animation_id": "solid", "mode": "screen"}, {"animation_id": "solid", "amount": 2}, {"animation_id": "solid", "params": {"speed": 1}}, {"mode": "add"}],
+)
+def test_a_bad_layer_is_422(client, layer):
+    pid = make(client)["id"]
+    response = client.post(f"/api/playlists/{pid}/entries", json={"animation_id": "solid", "layer": layer})
+    assert response.status_code == 422, response.text
+
+
 def test_an_entry_of_another_playlist_is_404(client):
     a = make(client, "A")["id"]
     b = make(client, "B")["id"]

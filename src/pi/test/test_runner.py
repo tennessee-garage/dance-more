@@ -1019,6 +1019,60 @@ def test_layer_params_with_no_layer_or_a_bad_value_change_nothing(registry, stor
     assert reds(probe) == [20, 20] and "set_layer_params rejected" in caplog.text
 
 
+# ---- entry layers ----
+
+
+def layered_playlist(store, *entries, **kw):
+    """Like `playlist()`, each entry (animation_id, duration, layer or None)."""
+    pl = store.create_playlist(kw.pop("name", "P"), **kw)
+    for animation_id, duration, layer in entries:
+        store.add_entry(pl, animation_id, duration_s=duration, layer=layer)
+    return store.resolve(pl.id)
+
+
+def test_an_entry_layer_plays_with_its_entry_and_ends_with_it(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=6)
+    runner.load_playlist(layered_playlist(store, ("a", 3 * PERIOD, {"animation_id": "b", "mode": "mix"}), ("c", 3 * PERIOD, None), loop=False))
+    runner.run()
+    assert reds(probe) == [20, 20, 20, 30, 30, 30]  # b over a, then c alone
+    assert [s.entry_layer for s in probe.states] == [("b", "B")] * 3 + [None] * 3
+    assert all(s.layer is None for s in probe.states)  # not the runner's own layer
+
+
+def test_an_entry_layer_crossfades_with_its_entry(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=8)
+    runner.load_playlist(
+        layered_playlist(store, ("a", 4 * PERIOD, {"animation_id": "b", "mode": "mix"}), ("c", 8 * PERIOD, None), crossfade_s=3 * PERIOD, loop=False)
+    )
+    runner.run()
+    red = reds(probe)
+    assert red[0] == 20 and red[-1] == 30
+    assert all(20 <= r <= 30 for r in red) and red == sorted(red)  # from b-over-a, never down to a's 10
+
+
+def test_an_entry_layer_is_under_the_runners_layer(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=2)
+    runner.load_playlist(layered_playlist(store, ("a", 5 * PERIOD, {"animation_id": "b", "mode": "mix"})))
+    runner.set_layer("c", mode="mix")
+    runner.run()
+    assert reds(probe) == [30, 30]
+
+
+def test_a_failing_entry_layer_is_removed_and_its_entry_plays_on(registry, store, caplog):
+    runner, probe, _ = make_runner(registry, store, stop_after=3)
+    runner.load_playlist(layered_playlist(store, ("a", 5 * PERIOD, {"animation_id": "crashes", "mode": "mix"})))
+    runner.run()
+    assert reds(probe) == [10, 10, 10] and probe.states[-1].entry_layer is None
+    assert "layer crashes failed and was removed" in caplog.text
+
+
+def test_an_entry_whose_layer_is_missing_plays_without_it(registry, store):
+    runner, probe, _ = make_runner(registry, store, stop_after=2)
+    runner.load_playlist(layered_playlist(store, ("a", 5 * PERIOD, {"animation_id": "gone"})))
+    runner.run()
+    assert reds(probe) == [10, 10] and probe.states[-1].entry_layer is None
+
+
 def test_a_layers_effects_are_dropped_and_logged_once(registry, store, caplog):
     runner, probe, _ = make_runner(registry, store, stop_after=3)
     runner.play_animation("a")

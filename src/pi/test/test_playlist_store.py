@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from df2_pi.animation import AnimationRegistry
-from df2_pi.playlists import DEFAULT_SETTINGS, DuplicatePlaylistName, PlaylistStore, ResolvedPlaylist, default_db_path
+from df2_pi.playlists import DEFAULT_SETTINGS, DuplicatePlaylistName, EntryLayer, PlaylistStore, ResolvedPlaylist, default_db_path
 from df2_pi.playlists.schema import MIGRATIONS, SCHEMA_VERSION, current_version, migrate
 
 SOLID = '''
@@ -267,6 +267,68 @@ def test_unknown_and_broken_animations_resolve_as_unresolved_and_survive(store, 
     (registry.paths[0] / "vanished.py").write_text(textwrap.dedent(SOLID))
     registry.reload()
     assert not store.resolve("P").entries[1].unresolved
+
+
+def test_an_entry_layer_is_stored_with_its_params_diffed_replaced_and_removed(store):
+    pl = store.create_playlist("P")
+    entry = store.add_entry(pl, "solid", layer={"animation_id": "other", "params": {"level": 10, "mode": "down"}, "mode": "mix", "amount": 0.5})
+    assert entry.layer == EntryLayer("other", {"mode": "down"}, "mix", 0.5)  # level 10 is the default
+    assert store.entry(entry.id).layer == entry.layer
+
+    replaced = store.update_entry(entry, layer=EntryLayer("solid", {"level": 99}))
+    assert replaced.layer == EntryLayer("solid", {"level": 99}, "add", 1.0)
+    assert store.update_entry(entry, duration_s=5).layer == replaced.layer  # untouched by other changes
+    assert store.update_entry(entry, layer=None).layer is None
+
+
+@pytest.mark.parametrize(
+    "layer, fragment",
+    [
+        ({"animation_id": "other", "mode": "screen"}, "mode must be one of"),
+        ({"animation_id": "other", "amount": 1.5}, "amount must be in 0..1"),
+        ({"animation_id": "other", "params": {"speed": 2}}, "'speed' is not a parameter of 'other'"),
+        ({"animation_id": "not an id"}, "module stem"),
+        ({"animation_id": "other", "hue": 1}, "not ['hue']"),
+    ],
+)
+def test_a_bad_layer_is_refused(store, layer, fragment):
+    pl = store.create_playlist("P")
+    with pytest.raises(ValueError, match=fragment.replace("[", r"\[").replace("]", r"\]").replace("(", r"\(").replace(".", r"\.")):
+        store.add_entry(pl, "solid", layer=layer)
+    assert store.playlist(pl.id).entries == ()
+
+
+def test_a_layer_resolves_like_an_entry_and_a_missing_one_leaves_the_entry_playable(store, caplog):
+    pl = store.create_playlist("P")
+    store.add_entry(pl, "solid", layer={"animation_id": "other", "params": {"level": 200}, "mode": "max"})
+    store.add_entry(pl, "solid", layer={"animation_id": "gone"})
+    good, missing = store.resolve(pl.id).entries
+    assert good.layer.definition.id == "other" and good.layer.params == {"level": 200, "mode": "up"} and good.layer.error is None
+    assert missing.playable and missing.layer.definition is None and missing.layer.error == "no such animation"
+    assert "layer not played: no such animation" in caplog.text
+
+
+def test_malformed_layer_json_is_ignored_not_fatal(store):
+    pl = store.create_playlist("P")
+    entry = store.add_entry(pl, "solid")
+    with store._conn() as conn:
+        conn.execute("UPDATE playlist_entry SET layer_json = '[1, 2]' WHERE id = ?", (entry.id,))
+    assert store.entry(entry.id).layer is None
+
+
+def test_a_version_1_database_migrates_keeping_its_entries_without_layers(tmp_path, registry):
+    path = tmp_path / "old.sqlite3"
+    conn = sqlite3.connect(path)
+    conn.executescript(f"BEGIN;{MIGRATIONS[0]}UPDATE schema_version SET version = 1;COMMIT;")
+    conn.execute("INSERT INTO playlist (name, created_at, updated_at) VALUES ('Old', 'then', 'then')")
+    conn.execute("INSERT INTO playlist_entry (playlist_id, position, animation_id, duration_s) VALUES (1, 0, 'solid', 30)")
+    conn.commit()
+    conn.close()
+    store = PlaylistStore(path, registry=registry)
+    (entry,) = store.playlist("Old").entries
+    assert (entry.animation_id, entry.duration_s, entry.layer) == ("solid", 30, None)
+    assert store.add_entry(entry.playlist_id, "solid", layer={"animation_id": "other"}).layer.animation_id == "other"
+    store.close()
 
 
 def test_resolve_needs_a_registry():

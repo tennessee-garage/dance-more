@@ -214,7 +214,7 @@ function TransportBar() {
         <div class="readout">
           <${Field} label="Playlist" wide>${playlist}<//>
           <${Field} label="Entry"><span class="num">${position}</span><//>
-          <${Field} label="Animation" wide>${animation}${state?.one_off ? html` <span class="tag">one-off</span>` : ""}<//>
+          <${Field} label="Animation" wide>${animation}${state?.entry_layer ? ` + ${state.entry_layer[1]}` : ""}${state?.one_off ? html` <span class="tag">one-off</span>` : ""}<//>
           <${Field} label="Elapsed"><span class="num">${clock(state?.elapsed_s)}</span><//>
           <${Field} label="Remaining"><span class="num">${clock(state?.remaining_s)}</span>${state?.timer_held ? html` <span class="tag">held</span>` : ""}<//>
           <${Field} label="Frame"><span class="num">${state?.frame ?? DASH}</span><//>

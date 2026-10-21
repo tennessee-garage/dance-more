@@ -832,6 +832,17 @@ button.link {
 button.icon-small { padding: 0 8px; font-size: 16px; line-height: 24px; }
 .params-summary { margin: 4px 0 0 3.2em; font-size: 12px; text-align: left; }
 .entry-params { margin: 8px 0 2px 3.2em; }
+.entry-links { display: flex; align-items: baseline; gap: 12px; }
+.entry-links .add-layer { font-size: 12px; }
+/* An entry's layer, inside the entry's box: indented to its params, set off by a rule. */
+.entry-layer { margin: 6px 0 0 3.2em; padding-top: 6px; border-top: 1px dashed var(--border); }
+.entry-layer .params-summary, .entry-layer .entry-params { margin-left: 0; }
+.entry-layer .entry-line { flex-wrap: wrap; row-gap: 6px; }
+.layer-picker select:first-of-type { flex: 1 1 10em; min-width: 8em; }
+.layer-tag { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.entry-layer .amount { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.entry-layer .amount input { width: 6em; }
+.entry-layer .amount .num { width: 3em; color: var(--muted); }
 
 .add-entry {
   padding: 8px;
